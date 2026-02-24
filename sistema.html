@@ -20,7 +20,7 @@
     <div class="app-container">
         <nav class="sidebar">
             <ul>
-                <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
+                <li class="menu-section">Módulos</li>
                 <li><button onclick="mostrarSecao('secao-titulos', this)" class="menu-btn">📝 Entrada de Títulos</button></li>
                 <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn">🤝 Contratos / Empresas</button></li>                
                 <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn">📄 Empenho</button></li>
@@ -36,29 +36,20 @@
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
                         <h2>Controle de Empenhos</h2>
-                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary">+ Adicionar Minuta</button>
+                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary">+ Adicionar Empenho</button>
                     </div>
-                    <div class="toolbar">
-                        <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
-                        <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
-                    </div>
-                    <div class="controles-tabela">
-                        <label>Exibindo <select id="itensPorPaginaEmpenhos" onchange="mudarTamanhoPaginaEmpenhos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
-                        <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar..." onkeyup="filtrarTabelaEmpenhos()"></div>
-                    </div>
-                    <table id="tabelaEmpenhos" class="tabela-gov">
-                        <thead><tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr></thead>
+                    <table class="tabela-gov">
+                        <thead>
+                            <tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr>
+                        </thead>
                         <tbody id="tbody-empenhos">
-                            <tr><td colspan="7" style="text-align: center;">Carregando dados do Firebase...</td></tr>
+                            <tr><td colspan="7" style="text-align: center;">Carregando dados...</td></tr>
                         </tbody>
                     </table>
-                    <div class="paginacao">
-                        <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
-                    </div>
                 </div>
 
                 <div id="tela-formulario-empenhos" style="display: none;" class="card">
-                    <h2 id="tituloFormEmpenhos">📄 Cadastro de Minuta de Empenho</h2>
+                    <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
                     <form id="formEmpenho">
                         <input type="hidden" id="editIndexEmpenho" value="-1"> 
                         <div class="form-row">
@@ -88,25 +79,44 @@
                 </div>
             </section>
 
-            <section id="secao-contratos" class="secao" style="display: none;">
-                <div class="card"><h2>🤝 Módulo de Contratos</h2><p>Em breve integrado ao Firebase...</p></div>
-            </section>
+            <section id="secao-contratos" class="secao">
+                <div id="tela-lista-contratos" class="card">
+                    <div class="header-lista">
+                        <h2>Gestão de Contratos</h2>
+                        <button onclick="abrirFormularioContrato(false)" class="btn-primary">+ Novo Contrato</button>
+                    </div>
+                    <table class="tabela-gov">
+                        <thead>
+                            <tr><th>Favorecido</th><th>CNPJ</th><th>Contrato</th><th>Vigência</th><th>Valor Global</th><th>Ações</th></tr>
+                        </thead>
+                        <tbody id="tbody-contratos">
+                            <tr><td colspan="6" style="text-align: center;">Carregando contratos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-            <section id="secao-darf" class="secao" style="display: none;">
-                <div class="card"><h2>📊 Módulo DARF</h2><p>Em breve integrado ao Firebase...</p></div>
-            </section>
-
-            <section id="secao-titulos" class="secao" style="display: none;">
-                <div class="card"><h2>📝 Entrada de Títulos</h2><p>Em breve integrado ao Firebase...</p></div>
-            </section>
-
-            <section id="secao-backup" class="secao" style="display: none;">
-                <div class="card">
-                    <h2>Sistema / Backup</h2><hr>
-                    <div style="margin: 20px 0;"><button onclick="exportarBancoDeDados()" class="btn-primary">📥 Fazer Backup Completo do Sistema (.JSON)</button></div>
+                <div id="tela-formulario-contratos" style="display: none;" class="card">
+                    <h2 id="tituloFormContratos">🤝 Cadastro de Contrato</h2>
+                    <form id="formContrato">
+                        <input type="hidden" id="editIndexContrato" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>FAVORECIDO:</label><input type="text" id="nomeEmpresa" required></div>
+                            <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpresa" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Nº CONTRATO:</label><input type="text" id="numContrato"></div>
+                            <div class="form-group flex-1"><label>VIGÊNCIA:</label><input type="date" id="vigenciaContrato"></div>
+                            <div class="form-group flex-1"><label>VALOR GLOBAL:</label><input type="number" id="valorContrato" step="0.01"></div>
+                        </div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
+                            <button type="button" onclick="voltarParaListaContratos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             </section>
-        </main>
+
+            </main>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
