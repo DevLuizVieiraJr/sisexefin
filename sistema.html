@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sis-exefin</title>
+    <title>sis-exefin - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -11,8 +11,8 @@
         <div class="topbar-logo"><span class="icon-logo">🌐</span> sis-exefin</div>
         <div class="topbar-user">
             <span id="nomeUsuarioLogado">👤 Carregando...</span>
-            <span>⚙️ Config</span>
-            <span style="cursor: pointer;" onclick="fazerLogout()">🚪 Sair</span>
+            <span style="cursor: pointer; margin-left: 20px;">⚙️ Config</span>
+            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
@@ -28,7 +28,194 @@
         </nav>
 
         <main class="content">
-            </main>
+
+            <section id="secao-empenhos" class="secao">
+                <h2>📄 Gestão de Minutas de Empenho</h2>
+                
+                <form id="form-empenho" class="grid-form">
+                    <div>
+                        <label>Nº do Processo</label>
+                        <input type="text" id="empenho-processo" placeholder="Ex: 12345/2026" required>
+                    </div>
+                    <div>
+                        <label>Data</label>
+                        <input type="date" id="empenho-data" required>
+                    </div>
+                    <div>
+                        <label>Fornecedor</label>
+                        <input type="text" id="empenho-fornecedor" placeholder="Nome da Empresa" required>
+                    </div>
+                    <div>
+                        <label>Valor (R$)</label>
+                        <input type="number" id="empenho-valor" step="0.01" placeholder="0,00" required>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label>Observações</label>
+                        <input type="text" id="empenho-obs" placeholder="Detalhes adicionais...">
+                    </div>
+                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
+                        <button type="submit" class="btn-salvar">💾 Salvar Empenho</button>
+                    </div>
+                </form>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Processo</th>
+                                <th>Data</th>
+                                <th>Fornecedor</th>
+                                <th>Valor (R$)</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-empenhos">
+                            <tr><td colspan="6" style="text-align: center;">Carregando dados...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+            <section id="secao-contratos" class="secao">
+                <h2>🤝 Cadastro de Contratos e Empresas</h2>
+                
+                <form id="form-contrato" class="grid-form">
+                    <div>
+                        <label>CNPJ / CPF</label>
+                        <input type="text" id="contrato-cnpj" placeholder="00.000.000/0000-00" required>
+                    </div>
+                    <div>
+                        <label>Razão Social</label>
+                        <input type="text" id="contrato-empresa" placeholder="Nome da Empresa" required>
+                    </div>
+                    <div>
+                        <label>Nº do Contrato</label>
+                        <input type="text" id="contrato-numero" placeholder="Ex: 045/2026" required>
+                    </div>
+                    <div>
+                        <label>Fim da Vigência</label>
+                        <input type="date" id="contrato-vigencia" required>
+                    </div>
+                    <div>
+                        <label>Valor Global (R$)</label>
+                        <input type="number" id="contrato-valor" step="0.01" placeholder="0,00" required>
+                    </div>
+                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
+                        <button type="submit" class="btn-salvar">💾 Salvar Contrato</button>
+                    </div>
+                </form>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CNPJ/CPF</th>
+                                <th>Empresa</th>
+                                <th>Contrato</th>
+                                <th>Vigência</th>
+                                <th>Valor Global</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-contratos">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+            <section id="secao-darf" class="secao">
+                <h2>📊 Tabela de Códigos DARF</h2>
+                
+                <form id="form-darf" class="grid-form">
+                    <div>
+                        <label>Código de Receita</label>
+                        <input type="text" id="darf-codigo" placeholder="Ex: 1708" required>
+                    </div>
+                    <div>
+                        <label>Descrição</label>
+                        <input type="text" id="darf-descricao" placeholder="IRRF - Remuneração de Serviços" required>
+                    </div>
+                    <div>
+                        <label>Alíquota (%)</label>
+                        <input type="number" id="darf-aliquota" step="0.01" placeholder="Ex: 1.5" required>
+                    </div>
+                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
+                        <button type="submit" class="btn-salvar">💾 Salvar DARF</button>
+                    </div>
+                </form>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descrição</th>
+                                <th>Alíquota (%)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-darfs">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+            <section id="secao-titulos" class="secao">
+                <h2>📝 Entrada de Títulos (NF/Faturas)</h2>
+                
+                <form id="form-titulo" class="grid-form">
+                    <div>
+                        <label>Nº do Documento (NF)</label>
+                        <input type="text" id="titulo-numero" placeholder="Ex: NF 1234" required>
+                    </div>
+                    <div>
+                        <label>Data de Emissão</label>
+                        <input type="date" id="titulo-emissao" required>
+                    </div>
+                    <div>
+                        <label>Vencimento</label>
+                        <input type="date" id="titulo-vencimento" required>
+                    </div>
+                    <div>
+                        <label>Valor (R$)</label>
+                        <input type="number" id="titulo-valor" step="0.01" placeholder="0,00" required>
+                    </div>
+                    <div>
+                        <label>Contrato Vinculado</label>
+                        <select id="titulo-contrato">
+                            <option value="">Selecione um contrato...</option>
+                            <option value="Avulso">Sem Contrato (Avulso)</option>
+                        </select>
+                    </div>
+                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
+                        <button type="submit" class="btn-salvar">💾 Registrar Título</button>
+                    </div>
+                </form>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Documento</th>
+                                <th>Emissão</th>
+                                <th>Vencimento</th>
+                                <th>Valor (R$)</th>
+                                <th>Contrato</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-titulos">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
