@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SisExeFin - Dashboard</title>
+    <title>Sistema de Execução Financeira</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
-<body style="display: none;" id="corpo-sistema"> <header class="topbar">
-        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
+<body style="display: none;" id="corpo-sistema">
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> Contratos.gov.br / Processamento</div>
         <div class="topbar-user">
             <span id="nomeUsuarioLogado">👤 Carregando...</span>
-            <span style="cursor: pointer; margin-left: 20px;">⚙️ Config</span>
-            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
+            <span>⚙️ Config</span>
+            <span style="cursor: pointer; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
@@ -21,201 +22,68 @@
             <ul>
                 <li class="menu-section">Módulos</li>
                 <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
-                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>                
+                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
                 <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Empenho</button></li>
                 <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
+             
+                <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
+                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauro</button></li>
             </ul>
         </nav>
 
         <main class="content">
-
-            <section id="secao-empenhos" class="secao">
-                <h2>📄 Cadastro de Empenhos</h2>
-                
-                <form id="form-empenho" class="grid-form">
-                    <div>
-                        <label>Nº do Processo</label>
-                        <input type="text" id="empenho-processo" placeholder="Ex: 12345/2026" required>
+            <section id="secao-empenhos" class="secao ativa">
+                <div id="tela-lista-empenhos" class="card">
+                    <div class="header-lista">
+                        <h2>Controle de Empenhos</h2>
+                        <button onclick="abrirFormularioEmpenho()" class="btn-primary">+ Adicionar Minuta</button>
                     </div>
-                    <div>
-                        <label>Data</label>
-                        <input type="date" id="empenho-data" required>
+                    <div class="toolbar">
+                        <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
+                        <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
-                    <div>
-                        <label>Fornecedor</label>
-                        <input type="text" id="empenho-fornecedor" placeholder="Nome da Empresa" required>
+                    <div class="controles-tabela">
+                        <label>Exibindo <select id="itensPorPaginaEmpenhos" onchange="mudarTamanhoPaginaEmpenhos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar..." onkeyup="filtrarTabelaEmpenhos()"></div>
                     </div>
-                    <div>
-                        <label>Valor (R$)</label>
-                        <input type="number" id="empenho-valor" step="0.01" placeholder="0,00" required>
-                    </div>
-                    <div style="grid-column: 1 / -1;">
-                        <label>Observações</label>
-                        <input type="text" id="empenho-obs" placeholder="Detalhes adicionais...">
-                    </div>
-                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
-                        <button type="submit" class="btn-salvar">💾 Salvar Empenho</button>
-                    </div>
-                </form>
-
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Processo</th>
-                                <th>Data</th>
-                                <th>Fornecedor</th>
-                                <th>Valor (R$)</th>
-                                <th>Status</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-empenhos">
-                            <tr><td colspan="6" style="text-align: center;">Carregando dados...</td></tr>
-                        </tbody>
+                    <table id="tabelaEmpenhos" class="tabela-gov">
+                        <thead><tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr></thead>
+                        <tbody id="tbody-empenhos"></tbody>
                     </table>
+                    <div class="paginacao">
+                        <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-empenhos" style="display: none;" class="card">
+                    <h2>Adicionar Minuta de Empenho</h2>
+                    <form id="formEmpenho">
+                        <input type="hidden" id="editIndexEmpenho" value="-1"> 
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>Número do Empenho:</label><input type="text" id="numEmpenho" maxlength="12" required></div>
+                            <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
+                            <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorEmpenho" step="0.01"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>ND:</label><input type="text" id="ndEmpenho" class="somente-numeros" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>Subitem:</label><input type="text" id="subitemEmpenho" class="somente-numeros" maxlength="2"></div>
+                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" class="somente-numeros" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" class="somente-numeros" maxlength="11"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Doc. Origem:</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
+                            <div class="form-group flex-1"><label>OI:</label><input type="text" id="oiEmpenho" maxlength="20"></div>
+                            <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="20"></div>
+                            <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
+                        </div>
+                        <div class="form-group"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
+                        <div class="form-group"><label>Meio:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                        <div class="form-acoes"><button type="submit" class="btn-primary">💾 Salvar</button><button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button></div>
+                    </form>
                 </div>
             </section>
 
-
-            <section id="secao-contratos" class="secao">
-                <h2>🤝 Cadastro de Contratos e Empresas</h2>
-                
-                <form id="form-contrato" class="grid-form">
-                    <div>
-                        <label>CNPJ / CPF</label>
-                        <input type="text" id="contrato-cnpj" placeholder="00.000.000/0000-00" required>
-                    </div>
-                    <div>
-                        <label>Razão Social</label>
-                        <input type="text" id="contrato-empresa" placeholder="Nome da Empresa" required>
-                    </div>
-                    <div>
-                        <label>Nº do Contrato</label>
-                        <input type="text" id="contrato-numero" placeholder="Ex: 045/2026" required>
-                    </div>
-                    <div>
-                        <label>Fim da Vigência</label>
-                        <input type="date" id="contrato-vigencia" required>
-                    </div>
-                    <div>
-                        <label>Valor Global (R$)</label>
-                        <input type="number" id="contrato-valor" step="0.01" placeholder="0,00" required>
-                    </div>
-                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
-                        <button type="submit" class="btn-salvar">💾 Salvar Contrato</button>
-                    </div>
-                </form>
-
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>CNPJ/CPF</th>
-                                <th>Empresa</th>
-                                <th>Contrato</th>
-                                <th>Vigência</th>
-                                <th>Valor Global</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-contratos">
-                            </tbody>
-                    </table>
-                </div>
-            </section>
-
-
-            <section id="secao-darf" class="secao">
-                <h2>📊 Códigos DARF</h2>
-                
-                <form id="form-darf" class="grid-form">
-                    <div>
-                        <label>Código de Receita</label>
-                        <input type="text" id="darf-codigo" placeholder="Ex: 1708" required>
-                    </div>
-                    <div>
-                        <label>Descrição</label>
-                        <input type="text" id="darf-descricao" placeholder="IRRF - Remuneração de Serviços" required>
-                    </div>
-                    <div>
-                        <label>Alíquota (%)</label>
-                        <input type="number" id="darf-aliquota" step="0.01" placeholder="Ex: 1.5" required>
-                    </div>
-                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
-                        <button type="submit" class="btn-salvar">💾 Salvar DARF</button>
-                    </div>
-                </form>
-
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Código</th>
-                                <th>Descrição</th>
-                                <th>Alíquota (%)</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-darfs">
-                            </tbody>
-                    </table>
-                </div>
-            </section>
-
-
-            <section id="secao-titulos" class="secao">
-                <h2>📝 Entrada de Títulos (NF/Faturas)</h2>
-                
-                <form id="form-titulo" class="grid-form">
-                    <div>
-                        <label>Nº do Documento (NF)</label>
-                        <input type="text" id="titulo-numero" placeholder="Ex: NF 1234" required>
-                    </div>
-                    <div>
-                        <label>Data de Emissão</label>
-                        <input type="date" id="titulo-emissao" required>
-                    </div>
-                    <div>
-                        <label>Vencimento</label>
-                        <input type="date" id="titulo-vencimento" required>
-                    </div>
-                    <div>
-                        <label>Valor (R$)</label>
-                        <input type="number" id="titulo-valor" step="0.01" placeholder="0,00" required>
-                    </div>
-                    <div>
-                        <label>Contrato Vinculado</label>
-                        <select id="titulo-contrato">
-                            <option value="">Selecione um contrato...</option>
-                            <option value="Avulso">Sem Contrato (Avulso)</option>
-                        </select>
-                    </div>
-                    <div style="grid-column: 1 / -1; display: flex; align-items: flex-start;">
-                        <button type="submit" class="btn-salvar">💾 Registrar Título</button>
-                    </div>
-                </form>
-
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Documento</th>
-                                <th>Emissão</th>
-                                <th>Vencimento</th>
-                                <th>Valor (R$)</th>
-                                <th>Contrato</th>
-                                <th>Status</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-titulos">
-                            </tbody>
-                    </table>
-                </div>
-            </section>
-
-        </main>
+            </main>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -225,6 +93,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
-
-

@@ -1,5 +1,5 @@
 // ==========================================
-// 0. CONFIGURAÇÃO FIREBASE E CONEXÃO
+// 1. CONEXÃO FIREBASE E SEGURANÇA
 // ==========================================
 const firebaseConfig = {
     apiKey: "AIzaSyDXHpJFnVUR7YCh-3rXvx4yX6zo3a-mR7A",
@@ -13,119 +13,111 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
-
-// Variável global para sabermos quem está logado
 let usuarioLogadoEmail = "";
 
-// ==========================================
-// 1. SEGURANÇA E LOGIN (O Porteiro)
-// ==========================================
+// O Porteiro
 auth.onAuthStateChanged((user) => {
     if (user) {
-        // Usuário válido! Liberar acesso.
         usuarioLogadoEmail = user.email;
         document.getElementById('corpo-sistema').style.display = 'block';
         document.getElementById('nomeUsuarioLogado').innerHTML = `👤 ${usuarioLogadoEmail}`;
-        
-        // Iniciar o sistema
-        mostrarSecao('secao-titulos'); // Mostra a tela inicial
-        carregarEmpenhos();            // Puxa os dados do banco
+        mostrarSecao('secao-empenhos'); // Inicia na tela de Empenhos
+        carregarEmpenhosFirebase();     // Puxa os dados da nuvem
     } else {
-        // Não está logado, volta para a tela de login
         window.location.href = "index.html";
     }
 });
 
-function fazerLogout() {
-    auth.signOut().then(() => {
-        window.location.href = "index.html";
-    });
-}
+function fazerLogout() { auth.signOut(); }
 
 // ==========================================
-// 2. NAVEGAÇÃO DO MENU LATERAL
+// 2. NAVEGAÇÃO DE TELAS
 // ==========================================
 function mostrarSecao(idSecao) {
-    // Esconde todas as secções
     document.querySelectorAll('.secao').forEach(el => el.style.display = 'none');
-    // Mostra apenas a que foi clicada
     document.getElementById(idSecao).style.display = 'block';
 }
 
-// ==========================================
-// 3. SALVAR DADOS NO FIREBASE (EMPENHOS)
-// ==========================================
-document.getElementById('form-empenho').addEventListener('submit', function(e) {
-    e.preventDefault(); // Impede a página de recarregar
-    
-    // Captura os dados digitados
-    const processo = document.getElementById('empenho-processo').value;
-    const data = document.getElementById('empenho-data').value;
-    const fornecedor = document.getElementById('empenho-fornecedor').value;
-    const valor = parseFloat(document.getElementById('empenho-valor').value);
-    const obs = document.getElementById('empenho-obs').value;
+function abrirFormularioEmpenho() {
+    document.getElementById('tela-lista-empenhos').style.display = 'none';
+    document.getElementById('tela-formulario-empenhos').style.display = 'block';
+    document.getElementById('formEmpenho').reset();
+    document.getElementById('editIndexEmpenho').value = "-1"; // Modo Novo
+}
 
-    // Salva no Banco de Dados (Firestore) COM AUDITORIA!
-    db.collection('empenhos').add({
-        processo: processo,
-        data: data,
-        fornecedor: fornecedor,
-        valor: valor,
-        obs: obs,
-        status: "Ativo",
-        // Campos de Auditoria
-        criado_por: usuarioLogadoEmail,
-        criado_em: firebase.firestore.FieldValue.serverTimestamp(),
-        editado_por: "",
-        editado_em: null
-    }).then(() => {
-        alert("Empenho salvo com sucesso no banco de dados!");
-        document.getElementById('form-empenho').reset(); // Limpa o formulário
-    }).catch((error) => {
-        console.error("Erro ao salvar: ", error);
-        alert("Erro ao salvar o empenho.");
-    });
+function voltarParaListaEmpenhos() {
+    document.getElementById('tela-formulario-empenhos').style.display = 'none';
+    document.getElementById('tela-lista-empenhos').style.display = 'block';
+}
+
+// ==========================================
+// 3. CRUD EMPENHOS (COM FIREBASE)
+// ==========================================
+document.getElementById('formEmpenho').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const idEdicao = document.getElementById('editIndexEmpenho').value;
+    
+    // Captura TODOS os teus campos detalhados
+    const dadosEmpenho = {
+        numero: document.getElementById('numEmpenho').value,
+        data: document.getElementById('dataEmpenho').value,
+        valor: parseFloat(document.getElementById('valorEmpenho').value) || 0,
+        nd: document.getElementById('ndEmpenho').value,
+        subitem: document.getElementById('subitemEmpenho').value,
+        ptres: document.getElementById('ptresEmpenho').value,
+        fr: document.getElementById('frEmpenho').value,
+        docOrigem: document.getElementById('docOrigEmpenho').value,
+        oi: document.getElementById('oiEmpenho').value,
+        contrato: document.getElementById('contratoEmpenho').value,
+        cap: document.getElementById('capEmpenho').value,
+        altcred: document.getElementById('altcredEmpenho').value,
+        meio: document.getElementById('meioEmpenho').value
+    };
+
+    if (idEdicao === "-1") {
+        // NOVO REGISTO: Adiciona campos de auditoria
+        dadosEmpenho.criado_por = usuarioLogadoEmail;
+        dadosEmpenho.criado_em = firebase.firestore.FieldValue.serverTimestamp();
+        
+        db.collection('empenhos').add(dadosEmpenho).then(() => {
+            alert("Empenho salvo com sucesso no Firebase!");
+            voltarParaListaEmpenhos();
+        });
+    } else {
+        // EDIÇÃO: Atualiza apenas os dados e auditoria de edição
+        dadosEmpenho.editado_por = usuarioLogadoEmail;
+        dadosEmpenho.editado_em = firebase.firestore.FieldValue.serverTimestamp();
+        
+        db.collection('empenhos').doc(idEdicao).update(dadosEmpenho).then(() => {
+            alert("Empenho atualizado com sucesso!");
+            voltarParaListaEmpenhos();
+        });
+    }
 });
 
-// ==========================================
-// 4. LER E EXIBIR DADOS (EMPENHOS)
-// ==========================================
-function carregarEmpenhos() {
-    // onSnapshot: Fica "escutando" o banco em tempo real
+function carregarEmpenhosFirebase() {
+    // Escuta o banco em tempo real
     db.collection('empenhos').orderBy('criado_em', 'desc').onSnapshot((snapshot) => {
-        const tabela = document.getElementById('tabela-empenhos');
-        tabela.innerHTML = ''; // Limpa a tabela antes de preencher
+        const tbody = document.getElementById('tbody-empenhos'); // Alterei o id no HTML para tbody-empenhos
+        tbody.innerHTML = '';
         
-        if (snapshot.empty) {
-            tabela.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhum empenho cadastrado.</td></tr>';
-            return;
-        }
-
         snapshot.forEach((doc) => {
-            const empenho = doc.data();
+            const emp = doc.data();
+            const id = doc.id;
+            const valorFormatado = emp.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             
-            // Formatar valor para R$
-            const valorFormatado = empenho.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            
-            // Formatar Data (de AAAA-MM-DD para DD/MM/AAAA)
-            let dataFormatada = empenho.data;
-            if(dataFormatada && dataFormatada.includes('-')) {
-                const partes = dataFormatada.split('-');
-                dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
-            }
-
-            // Cria a linha na tabela HTML
-            tabela.innerHTML += `
+            tbody.innerHTML += `
                 <tr>
-                    <td>${empenho.processo}</td>
-                    <td>${dataFormatada}</td>
-                    <td>${empenho.fornecedor}</td>
+                    <td>${emp.numero}</td>
+                    <td>${emp.nd}</td>
+                    <td>${emp.ptres}</td>
+                    <td>${emp.fr}</td>
+                    <td>${emp.contrato}</td>
                     <td>${valorFormatado}</td>
-                    <td><span class="badge-status salvo">${empenho.status}</span></td>
                     <td>
-                        <button class="btn-icon" title="Excluir" onclick="deletarEmpenho('${doc.id}')">🗑️</button>
-                        <br>
-                        <small style="font-size: 10px; color: #888;">Por: ${empenho.criado_por.split('@')[0]}</small>
+                        <button onclick="editarEmpenho('${id}')" class="btn-icon">✏️</button>
+                        <button onclick="deletarEmpenho('${id}')" class="btn-icon" style="color:red;">🗑️</button>
                     </td>
                 </tr>
             `;
@@ -133,9 +125,33 @@ function carregarEmpenhos() {
     });
 }
 
-// Função de exclusão rápida
+function editarEmpenho(id) {
+    db.collection('empenhos').doc(id).get().then((doc) => {
+        if (doc.exists) {
+            const emp = doc.data();
+            abrirFormularioEmpenho();
+            
+            // Preenche o formulário
+            document.getElementById('editIndexEmpenho').value = id; // Guarda o ID do Firebase
+            document.getElementById('numEmpenho').value = emp.numero || '';
+            document.getElementById('dataEmpenho').value = emp.data || '';
+            document.getElementById('valorEmpenho').value = emp.valor || '';
+            document.getElementById('ndEmpenho').value = emp.nd || '';
+            document.getElementById('subitemEmpenho').value = emp.subitem || '';
+            document.getElementById('ptresEmpenho').value = emp.ptres || '';
+            document.getElementById('frEmpenho').value = emp.fr || '';
+            document.getElementById('docOrigEmpenho').value = emp.docOrigem || '';
+            document.getElementById('oiEmpenho').value = emp.oi || '';
+            document.getElementById('contratoEmpenho').value = emp.contrato || '';
+            document.getElementById('capEmpenho').value = emp.cap || '';
+            document.getElementById('altcredEmpenho').value = emp.altcred || '';
+            document.getElementById('meioEmpenho').value = emp.meio || '';
+        }
+    });
+}
+
 function deletarEmpenho(id) {
-    if(confirm("Tem certeza que deseja excluir este empenho permanentemente?")) {
+    if(confirm("Tem certeza que deseja excluir este empenho do banco de dados?")) {
         db.collection('empenhos').doc(id).delete();
     }
 }
