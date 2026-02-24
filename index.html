@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sis-exefin - Acesso Restrito</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body style="background-color: #2b3d51; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
+
+    <div class="card" style="width: 350px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <h2 style="color: #337ab7; margin-bottom: 20px;">🌐 sis-exefin</h2>
+        <p style="margin-bottom: 20px; color: #666; font-size: 14px;">Acesso Restrito ao Sistema</p>
+        
+        <form id="formLogin">
+            <div class="form-group">
+                <input type="email" id="emailLogin" placeholder="E-mail" required style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div class="form-group">
+                <input type="password" id="senhaLogin" placeholder="Senha" required style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;">Entrar no Sistema</button>
+        </form>
+        <p id="msgErroLogin" style="color: red; margin-top: 10px; font-size: 13px; display: none;">Usuário ou senha inválidos.</p>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <script>
+        // ⚠️ COLA AS TUAS CHAVES AQUI TAMBÉM ⚠️
+        const firebaseConfig = {
+            apiKey: "COLA_AQUI_A_TUA_CHAVE",
+            authDomain: "sisexefin.firebaseapp.com",
+            projectId: "sisexefin",
+            storageBucket: "sisexefin.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdefg"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // 1. Verifica se já está logado. Se sim, atira-o logo para o sistema!
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                window.location.href = "sistema.html"; // Redirecionamento Mágico!
+            }
+        });
+
+        // 2. Ação do Botão Entrar
+        document.getElementById('formLogin').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailLogin').value;
+            const senha = document.getElementById('senhaLogin').value;
+            const msgErro = document.getElementById('msgErroLogin');
+
+            auth.signInWithEmailAndPassword(email, senha)
+                .catch((error) => {
+                    msgErro.style.display = 'block';
+                    msgErro.textContent = "Erro: Email ou senha incorretos.";
+                });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sis-exefin</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body style="display: none;" id="corpo-sistema"> <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> sis-exefin</div>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado">👤 Carregando...</span>
+            <span>⚙️ Config</span>
+            <span style="cursor: pointer;" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar">
+            <ul>
+                <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
+                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Minutas de Empenho</button></li>
+                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
+                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
+                <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
+                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauro</button></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <section id="secao-titulos" class="secao ativa">
+                <h2>Bem-vindo ao sis-exefin</h2>
+                <p>Navegue pelo menu lateral para acessar os módulos.</p>
+                </section>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script src="script.js"></script>
+</body>
+</html>
