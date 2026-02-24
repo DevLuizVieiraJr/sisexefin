@@ -28,14 +28,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
     <script>
-        // ⚠️ COLA AS TUAS CHAVES AQUI TAMBÉM ⚠️
+        // As tuas chaves reais do Firebase!
         const firebaseConfig = {
-            apiKey: "COLA_AQUI_A_TUA_CHAVE",
+            apiKey: "AIzaSyDXHpJFnVUR7YCh-3rXvx4yX6zo3a-mR7A",
             authDomain: "sisexefin.firebaseapp.com",
             projectId: "sisexefin",
-            storageBucket: "sisexefin.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdefg"
+            storageBucket: "sisexefin.firebasestorage.app",
+            messagingSenderId: "476004653478",
+            appId: "1:476004653478:web:45aecf0d547f57eee8d767"
         };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -43,7 +43,7 @@
         // 1. Verifica se já está logado. Se sim, atira-o logo para o sistema!
         auth.onAuthStateChanged((user) => {
             if (user) {
-                window.location.href = "sistema.html"; // Redirecionamento Mágico!
+                window.location.href = "sistema"; // Redirecionamento limpo
             }
         });
 
