@@ -3,40 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Execução Financeira</title>
+    <title>SisExeFin - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
-<body style="display: none;" id="corpo-sistema">
+<body style="display: none;" id="corpo-sistema"> 
     <header class="topbar">
-        <div class="topbar-logo"><span class="icon-logo">🌐</span> Contratos.gov.br / Processamento</div>
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
         <div class="topbar-user">
             <span id="nomeUsuarioLogado">👤 Carregando...</span>
-            <span>⚙️ Config</span>
-            <span style="cursor: pointer; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
+            <span style="cursor: pointer; margin-left: 20px;">⚙️ Config</span>
+            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
     <div class="app-container">
         <nav class="sidebar">
             <ul>
-                <li class="menu-section">Módulos</li>
-                <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
-                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
-                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Empenho</button></li>
-                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
-             
+                <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
+                <li><button onclick="mostrarSecao('secao-titulos', this)" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn">🤝 Contratos / Empresas</button></li>                
+                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn">📄 Empenho</button></li>
+                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn">📊 Códigos DARF</button></li>
+                
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauro</button></li>
+                <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn">💾 Backup / Restauro</button></li>
             </ul>
         </nav>
 
         <main class="content">
-            <section id="secao-empenhos" class="secao ativa">
+            <section id="secao-empenhos" class="secao">
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
                         <h2>Controle de Empenhos</h2>
-                        <button onclick="abrirFormularioEmpenho()" class="btn-primary">+ Adicionar Minuta</button>
+                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary">+ Adicionar Minuta</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
@@ -48,7 +48,9 @@
                     </div>
                     <table id="tabelaEmpenhos" class="tabela-gov">
                         <thead><tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr></thead>
-                        <tbody id="tbody-empenhos"></tbody>
+                        <tbody id="tbody-empenhos">
+                            <tr><td colspan="7" style="text-align: center;">Carregando dados do Firebase...</td></tr>
+                        </tbody>
                     </table>
                     <div class="paginacao">
                         <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
@@ -56,7 +58,7 @@
                 </div>
 
                 <div id="tela-formulario-empenhos" style="display: none;" class="card">
-                    <h2>Adicionar Minuta de Empenho</h2>
+                    <h2 id="tituloFormEmpenhos">📄 Cadastro de Minuta de Empenho</h2>
                     <form id="formEmpenho">
                         <input type="hidden" id="editIndexEmpenho" value="-1"> 
                         <div class="form-row">
@@ -65,10 +67,10 @@
                             <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorEmpenho" step="0.01"></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>ND:</label><input type="text" id="ndEmpenho" class="somente-numeros" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>Subitem:</label><input type="text" id="subitemEmpenho" class="somente-numeros" maxlength="2"></div>
-                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" class="somente-numeros" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" class="somente-numeros" maxlength="11"></div>
+                            <div class="form-group flex-1"><label>ND:</label><input type="text" id="ndEmpenho" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>Subitem:</label><input type="text" id="subitemEmpenho" maxlength="2"></div>
+                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" maxlength="11"></div>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>Doc. Origem:</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
@@ -78,18 +80,38 @@
                         </div>
                         <div class="form-group"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
                         <div class="form-group"><label>Meio:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
-                        <div class="form-acoes"><button type="submit" class="btn-primary">💾 Salvar</button><button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button></div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button>
+                        </div>
                     </form>
                 </div>
             </section>
 
-            </main>
+            <section id="secao-contratos" class="secao" style="display: none;">
+                <div class="card"><h2>🤝 Módulo de Contratos</h2><p>Em breve integrado ao Firebase...</p></div>
+            </section>
+
+            <section id="secao-darf" class="secao" style="display: none;">
+                <div class="card"><h2>📊 Módulo DARF</h2><p>Em breve integrado ao Firebase...</p></div>
+            </section>
+
+            <section id="secao-titulos" class="secao" style="display: none;">
+                <div class="card"><h2>📝 Entrada de Títulos</h2><p>Em breve integrado ao Firebase...</p></div>
+            </section>
+
+            <section id="secao-backup" class="secao" style="display: none;">
+                <div class="card">
+                    <h2>Sistema / Backup</h2><hr>
+                    <div style="margin: 20px 0;"><button onclick="exportarBancoDeDados()" class="btn-primary">📥 Fazer Backup Completo do Sistema (.JSON)</button></div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
     <script src="script.js"></script>
 </body>
 </html>
