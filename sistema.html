@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sis-exefin - Dashboard</title>
+    <title>SisExefin - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -20,17 +20,17 @@
         <nav class="sidebar">
             <ul>
                 <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
-                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Minutas de Empenho</button></li>
-                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
-                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
                 <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>                
+                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Empenho</button></li>
+                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
             </ul>
         </nav>
 
         <main class="content">
 
             <section id="secao-empenhos" class="secao">
-                <h2>📄 Gestão de Minutas de Empenho</h2>
+                <h2>📄 Cadastro de Empenhos</h2>
                 
                 <form id="form-empenho" class="grid-form">
                     <div>
@@ -127,7 +127,7 @@
 
 
             <section id="secao-darf" class="secao">
-                <h2>📊 Tabela de Códigos DARF</h2>
+                <h2>📊 Códigos DARF</h2>
                 
                 <form id="form-darf" class="grid-form">
                     <div>
@@ -225,3 +225,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+
