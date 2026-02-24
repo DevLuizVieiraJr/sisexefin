@@ -92,3 +92,50 @@ document.getElementById('form-empenho').addEventListener('submit', function(e) {
 // ==========================================
 function carregarEmpenhos() {
     // onSnapshot: Fica "escutando" o banco em tempo real
+    db.collection('empenhos').orderBy('criado_em', 'desc').onSnapshot((snapshot) => {
+        const tabela = document.getElementById('tabela-empenhos');
+        tabela.innerHTML = ''; // Limpa a tabela antes de preencher
+        
+        if (snapshot.empty) {
+            tabela.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhum empenho cadastrado.</td></tr>';
+            return;
+        }
+
+        snapshot.forEach((doc) => {
+            const empenho = doc.data();
+            
+            // Formatar valor para R$
+            const valorFormatado = empenho.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            
+            // Formatar Data (de AAAA-MM-DD para DD/MM/AAAA)
+            let dataFormatada = empenho.data;
+            if(dataFormatada && dataFormatada.includes('-')) {
+                const partes = dataFormatada.split('-');
+                dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            }
+
+            // Cria a linha na tabela HTML
+            tabela.innerHTML += `
+                <tr>
+                    <td>${empenho.processo}</td>
+                    <td>${dataFormatada}</td>
+                    <td>${empenho.fornecedor}</td>
+                    <td>${valorFormatado}</td>
+                    <td><span class="badge-status salvo">${empenho.status}</span></td>
+                    <td>
+                        <button class="btn-icon" title="Excluir" onclick="deletarEmpenho('${doc.id}')">🗑️</button>
+                        <br>
+                        <small style="font-size: 10px; color: #888;">Por: ${empenho.criado_por.split('@')[0]}</small>
+                    </td>
+                </tr>
+            `;
+        });
+    });
+}
+
+// Função de exclusão rápida
+function deletarEmpenho(id) {
+    if(confirm("Tem certeza que deseja excluir este empenho permanentemente?")) {
+        db.collection('empenhos').doc(id).delete();
+    }
+}
