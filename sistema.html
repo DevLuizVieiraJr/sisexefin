@@ -3,32 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SisExeFin - AMRJ</title>
+    <title>Sistema Local - Processamento 2026</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body style="display: none;" id="corpo-sistema">
     <header class="topbar">
-        <div class="topbar-logo"><span class="icon-logo">🌐</span> Sistema de Execução Financeira</div>
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> Contratos.gov.br / Processamento</div>
         <div class="topbar-user">
             <span id="nomeUsuarioLogado">👤 Carregando...</span>
-            <span style="cursor: pointer; margin-left: 20px;">⚙️ Config</span>
-            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
+            <span style="cursor: pointer;">⚙️ Config</span>
+            <span onclick="fazerLogout()" style="cursor: pointer; color: #ffcccc;">🚪 Sair</span>
         </div>
     </header>
 
     <div class="app-container">
         <nav class="sidebar">
             <ul>
-                <li class="menu-section">Cadastros</li>
-
-                <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
+                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Minutas de Empenho</button></li>
                 <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
-                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Empenho</button></li>
-                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Tributos DARF</button></li>
+                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
+                <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
                 
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauração</button></li>
+                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauro</button></li>
             </ul>
         </nav>
 
@@ -36,8 +35,8 @@
             <section id="secao-empenhos" class="secao ativa">
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
-                        <h2>Controle de Empenho</h2>
-                        <button onclick="abrirFormularioEmpenho()" class="btn-primary">+ Adicionar Empenho</button>
+                        <h2>Minutas de Empenho</h2>
+                        <button onclick="abrirFormularioEmpenho()" class="btn-primary">+ Adicionar Minuta</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
@@ -49,7 +48,7 @@
                     </div>
                     <table id="tabelaEmpenhos" class="tabela-gov">
                         <thead><tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr></thead>
-                        <tbody id="tbody-empenhos"></tbody>
+                        <tbody></tbody>
                     </table>
                     <div class="paginacao">
                         <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
@@ -100,7 +99,7 @@
                     </div>
                     <table id="tabelaDarf" class="tabela-gov">
                         <thead><tr><th>Código</th><th>Aplicação / Descrição</th><th>Total (%)</th><th>Ações</th></tr></thead>
-                        <tbody id="tbody-darf"></tbody>
+                        <tbody></tbody>
                     </table>
                     <div class="paginacao">
                         <button onclick="mudarPaginaDarf(-1)" id="btnAnteriorDarf">Anterior</button><span id="infoPaginaDarf">Página 1</span><button onclick="mudarPaginaDarf(1)" id="btnProximoDarf">Próximo</button>
@@ -146,7 +145,7 @@
                     </div>
                     <table id="tabelaContratos" class="tabela-gov">
                         <thead><tr><th>Favorecido (Empresa)</th><th>CNPJ</th><th>Nº Contrato</th><th>Cód. Receita</th><th>Vigência</th><th>Ações</th></tr></thead>
-                        <tbody id="tbody-contratos"></tbody>
+                        <tbody></tbody>
                     </table>
                     <div class="paginacao">
                         <button onclick="mudarPaginaContratos(-1)" id="btnAnteriorContratos">Anterior</button><span id="infoPaginaContratos">Página 1</span><button onclick="mudarPaginaContratos(1)" id="btnProximoContratos">Próximo</button>
@@ -332,6 +331,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
     <script src="script.js"></script>
 </body>
 </html>
