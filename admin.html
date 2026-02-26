@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Admin - Gestão de Perfis</title>
+</head>
+<body>
+    <h1>Painel de Administração</h1>
+    
+    <div id="painel-perfis" data-permission="acesso_admin">
+        <h2>Criar / Editar Perfil (Role)</h2>
+        <form id="form-perfil">
+            <label>Nome do Perfil (ID único):</label>
+            <input type="text" id="nome-perfil" placeholder="ex: gerente" required><br><br>
+
+            <fieldset>
+                <legend>Permissões Disponíveis:</legend>
+                <label><input type="checkbox" class="permissao-cb" value="acesso_financeiro"> Acesso Financeiro</label><br>
+                <label><input type="checkbox" class="permissao-cb" value="criar_usuario"> Criar Utilizador</label><br>
+                <label><input type="checkbox" class="permissao-cb" value="deletar_item"> Apagar Itens</label><br>
+                <label><input type="checkbox" class="permissao-cb" value="acesso_admin"> Acesso Painel Admin</label>
+            </fieldset><br>
+
+            <button type="submit">💾 Salvar Perfil</button>
+        </form>
+    </div>
+
+    <script type="module" src="admin.js"></script>
+</body>
+</html>
