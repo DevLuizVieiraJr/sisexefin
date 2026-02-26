@@ -3,31 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Local - Processamento 2026</title>
+    <title>SisExeFin - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
-<body style="display: none;" id="corpo-sistema">
+<body style="display: none;" id="corpo-sistema"> 
     <header class="topbar">
-        <div class="topbar-logo"><span class="icon-logo">🌐</span> Contratos.gov.br / Processamento</div>
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
         <div class="topbar-user">
             <span id="nomeUsuarioLogado">👤 Carregando...</span>
-            <span style="cursor: pointer;">⚙️ Config</span>
-            <span onclick="fazerLogout()" style="cursor: pointer; color: #ffcccc;">🚪 Sair</span>
+            <span style="cursor: pointer; margin-left: 20px;">⚙️ Config</span>
+            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
     <div class="app-container">
         <nav class="sidebar">
             <ul>
-                <li class="menu-section">GESTÃO ORÇAMENTÁRIA</li>
-                <li><button onclick="mostrarSecao('secao-empenhos')" class="menu-btn">📄 Minutas de Empenho</button></li>
-                <li><button onclick="mostrarSecao('secao-contratos')" class="menu-btn">🤝 Contratos / Empresas</button></li>
-                <li><button onclick="mostrarSecao('secao-darf')" class="menu-btn">📊 Códigos DARF</button></li>
-                <li><button onclick="mostrarSecao('secao-titulos')" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li class="menu-section">Módulos</li>
+                <li><button onclick="mostrarSecao('secao-titulos', this)" class="menu-btn">📝 Entrada de Títulos</button></li>
+                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn">🤝 Contratos / Empresas</button></li>                
+                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn">📄 Empenho</button></li>
+                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn">📊 Códigos DARF</button></li>
                 
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="mostrarSecao('secao-backup')" class="menu-btn">💾 Backup / Restauro</button></li>
+                <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn">💾 Backup / Restauro</button></li>
             </ul>
         </nav>
 
@@ -35,8 +35,8 @@
             <section id="secao-empenhos" class="secao ativa">
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
-                        <h2>Minutas de Empenho</h2>
-                        <button onclick="abrirFormularioEmpenho()" class="btn-primary">+ Adicionar Minuta</button>
+                        <h2>Controle de Empenhos</h2>
+                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary">+ Adicionar Empenho</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
@@ -46,17 +46,35 @@
                         <label>Exibindo <select id="itensPorPaginaEmpenhos" onchange="mudarTamanhoPaginaEmpenhos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
                         <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar..." onkeyup="filtrarTabelaEmpenhos()"></div>
                     </div>
-                    <table id="tabelaEmpenhos" class="tabela-gov">
-                        <thead><tr><th>Nº Empenho</th><th>ND</th><th>PTRES</th><th>FR</th><th>Contrato</th><th>Valor (R$)</th><th>Ações</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaEmpenhos" class="tabela-gov">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')">Nº Empenho <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'nd')">ND <span class="sort-icon" id="sort-empenhos-nd"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'subitem')">Subitem <span class="sort-icon" id="sort-empenhos-subitem"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'ptres')">PTRES <span class="sort-icon" id="sort-empenhos-ptres"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'fr')">FR <span class="sort-icon" id="sort-empenhos-fr"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'docOrig')">AES <span class="sort-icon" id="sort-empenhos-docOrig"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'oi')">OI <span class="sort-icon" id="sort-empenhos-oi"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'contrato')">Contrato <span class="sort-icon" id="sort-empenhos-contrato"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'cap')">CAP <span class="sort-icon" id="sort-empenhos-cap"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'altcred')">Altcred <span class="sort-icon" id="sort-empenhos-altcred"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'meio')">Meio <span class="sort-icon" id="sort-empenhos-meio"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'valorEmpenho')">Valor (R$) <span class="sort-icon" id="sort-empenhos-valorEmpenho"></span></th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-empenhos"></tbody>
+                        </table>
+                    </div>
                     <div class="paginacao">
                         <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
                     </div>
                 </div>
 
                 <div id="tela-formulario-empenhos" style="display: none;" class="card">
-                    <h2>Adicionar Minuta de Empenho</h2>
+                    <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
                     <form id="formEmpenho">
                         <input type="hidden" id="editIndexEmpenho" value="-1"> 
                         <div class="form-row">
@@ -65,10 +83,10 @@
                             <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorEmpenho" step="0.01"></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>ND:</label><input type="text" id="ndEmpenho" class="somente-numeros" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>Subitem:</label><input type="text" id="subitemEmpenho" class="somente-numeros" maxlength="2"></div>
-                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" class="somente-numeros" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" class="somente-numeros" maxlength="11"></div>
+                            <div class="form-group flex-1"><label>ND:</label><input type="text" id="ndEmpenho" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>Subitem:</label><input type="text" id="subitemEmpenho" maxlength="2"></div>
+                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" maxlength="11"></div>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>Doc. Origem (AES):</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
@@ -82,9 +100,84 @@
                         </div>
                         <div class="form-group">
                             <label>Descrição / Finalidade do Empenho:</label>
-                            <textarea id="descricaoEmpenho" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d2d6de; font-size: 14px;" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
+                            <textarea id="descricaoEmpenho" rows="3" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
                         </div>
-                        <div class="form-acoes"><button type="submit" class="btn-primary">💾 Salvar</button><button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button></div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-contratos" class="secao" style="display: none;">
+                <div id="tela-lista-contratos" class="card">
+                    <div class="header-lista">
+                        <h2>Gestão de Contratos</h2>
+                        <button onclick="abrirFormularioContrato(false)" class="btn-primary">+ Novo Contrato</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"></div>
+                        <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>Exibindo <select id="itensPorPaginaContratos" onchange="mudarTamanhoPaginaContratos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
+                        <div class="search-box"><input type="text" id="buscaTabelaContratos" placeholder="Pesquisar Empresa/CNPJ/Contrato..." onkeyup="filtrarTabelaContratos()"></div>
+                    </div>
+                    <table id="tabelaContratos" class="tabela-gov">
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'empresa')">Favorecido (Empresa) <span class="sort-icon" id="sort-contratos-empresa"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'cnpj')">CNPJ <span class="sort-icon" id="sort-contratos-cnpj"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'contrato')">Nº Contrato <span class="sort-icon" id="sort-contratos-contrato"></span></th>
+                                <th>Cód. Receita</th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'vigencia')">Vigência <span class="sort-icon" id="sort-contratos-vigencia"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'valor')">Valor Global <span class="sort-icon" id="sort-contratos-valor"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-contratos"></tbody>
+                    </table>
+                    <div class="paginacao">
+                        <button onclick="mudarPaginaContratos(-1)" id="btnAnteriorContratos">Anterior</button><span id="infoPaginaContratos">Página 1</span><button onclick="mudarPaginaContratos(1)" id="btnProximoContratos">Próximo</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-contratos" style="display: none;" class="card">
+                    <h2 id="tituloFormContratos">🤝 Cadastro de Contrato</h2>
+                    <form id="formContrato">
+                        <input type="hidden" id="editIndexContrato" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>FAVORECIDO:</label><input type="text" id="nomeEmpresa" required></div>
+                            <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpresa" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Nº CONTRATO:</label><input type="text" id="numContrato"></div>
+                            <div class="form-group flex-1"><label>VIGÊNCIA:</label><input type="date" id="vigenciaContrato"></div>
+                            <div class="form-group flex-1"><label>VALOR GLOBAL:</label><input type="number" id="valorContrato" step="0.01"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>NUP:</label><input type="text" id="nupContrato"></div>
+                            <div class="form-group flex-1"><label>AF/CPV:</label><input type="text" id="afCpvContrato"></div>
+                            <div class="form-group flex-1"><label>Licitação:</label><input type="text" id="licitacaoContrato"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Optante do Simples?</label>
+                                <select id="simplesContrato"><option value=""></option><option value="NÃO">NÃO</option><option value="SIM">SIM</option></select>
+                            </div>
+                            <div class="form-group flex-1"><label>Fiscal do Contrato:</label><input type="text" id="fiscalContrato"></div>
+                            <div class="form-group flex-1"><label>Contato do Fiscal:</label><input type="text" id="contatoFiscalContrato"></div>
+                        </div>
+                        <div class="form-group" style="position: relative;">
+                            <label>Cód. Receita (DARF):</label>
+                            <input type="text" id="buscaDarfContrato" placeholder="Buscar DARF..." autocomplete="off">
+                            <ul id="listaResultadosDarf" class="autocomplete-list"></ul>
+                            <div id="containerDarfsContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                        </div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
+                            <button type="button" onclick="voltarParaListaContratos()" class="btn-default">Cancelar</button>
+                        </div>
                     </form>
                 </div>
             </section>
@@ -92,7 +185,7 @@
             <section id="secao-darf" class="secao" style="display: none;">
                 <div id="tela-lista-darf" class="card">
                     <div class="header-lista">
-                        <h2>Códigos DARF <span style="font-size: 14px; color: #777; font-weight: normal;">Tabela de Retenções</span></h2>
+                        <h2>Códigos DARF</h2>
                         <button onclick="abrirFormularioDarf()" class="btn-primary">+ Novo DARF</button>
                     </div>
                     <div class="toolbar">
@@ -104,8 +197,15 @@
                         <div class="search-box"><input type="text" id="buscaTabelaDarf" placeholder="Pesquisar Código..." onkeyup="filtrarTabelaDarf()"></div>
                     </div>
                     <table id="tabelaDarf" class="tabela-gov">
-                        <thead><tr><th>Código</th><th>Aplicação / Descrição</th><th>Total (%)</th><th>Ações</th></tr></thead>
-                        <tbody></tbody>
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'codigo')">Código <span class="sort-icon" id="sort-darf-codigo"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'aplicacao')">Aplicação / Descrição <span class="sort-icon" id="sort-darf-aplicacao"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'total')">Total (%) <span class="sort-icon" id="sort-darf-total"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-darf"></tbody>
                     </table>
                     <div class="paginacao">
                         <button onclick="mudarPaginaDarf(-1)" id="btnAnteriorDarf">Anterior</button><span id="infoPaginaDarf">Página 1</span><button onclick="mudarPaginaDarf(1)" id="btnProximoDarf">Próximo</button>
@@ -135,70 +235,6 @@
                 </div>
             </section>
 
-            <section id="secao-contratos" class="secao" style="display: none;">
-                <div id="tela-lista-contratos" class="card">
-                    <div class="header-lista">
-                        <h2>Gestão de Contratos <span style="font-size: 14px; color: #777; font-weight: normal;">Fornecedores e Ajustes</span></h2>
-                        <button onclick="abrirFormularioContrato()" class="btn-primary">+ Novo Contrato</button>
-                    </div>
-                    <div class="toolbar">
-                        <div class="import-group"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"></div>
-                        <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
-                    </div>
-                    <div class="controles-tabela">
-                        <label>Exibindo <select id="itensPorPaginaContratos" onchange="mudarTamanhoPaginaContratos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
-                        <div class="search-box"><input type="text" id="buscaTabelaContratos" placeholder="Pesquisar Empresa/CNPJ/Contrato..." onkeyup="filtrarTabelaContratos()"></div>
-                    </div>
-                    <table id="tabelaContratos" class="tabela-gov">
-                        <thead><tr><th>Favorecido (Empresa)</th><th>CNPJ</th><th>Nº Contrato</th><th>Cód. Receita</th><th>Vigência</th><th>Ações</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                    <div class="paginacao">
-                        <button onclick="mudarPaginaContratos(-1)" id="btnAnteriorContratos">Anterior</button><span id="infoPaginaContratos">Página 1</span><button onclick="mudarPaginaContratos(1)" id="btnProximoContratos">Próximo</button>
-                    </div>
-                </div>
-
-                <div id="tela-formulario-contratos" style="display: none;" class="card">
-                    <h2>Cadastro de Contrato / Empresa</h2>
-                    <form id="formContrato">
-                        <input type="hidden" id="editIndexContrato" value="-1"> 
-                        <div class="form-row">
-                            <div class="form-group flex-2"><label>FAVORECIDO (Nome da Empresa):</label><input type="text" id="nomeEmpresa" required></div>
-                            <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpresa" placeholder="00.000.000/0000-00" required></div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>CONTRATO:</label><input type="text" id="numContrato"></div>
-                            <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorContrato" step="0.01"></div>
-                            <div class="form-group flex-1"><label>NUP:</label><input type="text" id="nupContrato"></div>
-                            <div class="form-group flex-1"><label>AF/CPV:</label><input type="text" id="afCpvContrato"></div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>Licitação:</label><input type="text" id="licitacaoContrato"></div>
-                            <div class="form-group flex-1"><label>Vigência (Ex: dd/mm/aa):</label><input type="text" id="vigenciaContrato"></div>
-                            <div class="form-group flex-1"><label>Optante do Simples?</label>
-                                <select id="simplesContrato"><option value=""></option><option value="NÃO">NÃO</option><option value="SIM">SIM</option></select>
-                            </div>
-                            
-                            <div class="form-group flex-1" style="position: relative;">
-                                <label>Cód. Receita (DARF):</label>
-                                <input type="text" id="buscaDarfContrato" placeholder="Buscar DARF..." autocomplete="off">
-                                <ul id="listaResultadosDarf" class="autocomplete-list"></ul>
-                                <div id="containerDarfsContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>Fiscal do Contrato:</label><input type="text" id="fiscalContrato"></div>
-                            <div class="form-group flex-1"><label>Contato do Fiscal:</label><input type="text" id="contatoFiscalContrato"></div>
-                        </div>
-
-                        <div class="form-acoes">
-                            <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
-                            <button type="button" onclick="voltarParaListaContratos()" class="btn-default">Cancelar</button>
-                        </div>
-                    </form>
-                </div>
-            </section>
-
             <section id="secao-titulos" class="secao" style="display: none;">
                 <div id="tela-lista-titulos" class="card">
                     <div class="header-lista">
@@ -217,7 +253,15 @@
                         <div class="search-box"><input type="text" id="buscaTabelaTitulos" placeholder="Pesquisar..." onkeyup="filtrarTabelaTitulos()"></div>
                     </div>
                     <table id="tabelaTitulos" class="tabela-gov">
-                        <thead><tr><th>ID-PROC</th><th>TC</th><th>Empresa</th><th>Valor NF (R$)</th><th>Ações</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'idProc')">ID-PROC <span class="sort-icon" id="sort-titulos-idProc"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'numTC')">TC <span class="sort-icon" id="sort-titulos-numTC"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'empresa')">Empresa <span class="sort-icon" id="sort-titulos-empresa"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'valorNotaFiscal')">Valor NF (R$) <span class="sort-icon" id="sort-titulos-valorNotaFiscal"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
                         <tbody id="tbody-titulos"></tbody>
                     </table>
                     <div class="paginacao">
@@ -314,9 +358,6 @@
                 <div class="card">
                     <h2>Sistema / Backup</h2><hr>
                     <div style="margin: 20px 0;"><button onclick="exportarBancoDeDados()" class="btn-primary">📥 Fazer Backup Completo do Sistema (.JSON)</button></div>
-                    <hr>
-                    <h3>Restaurar Sistema</h3>
-                    <div class="form-group" style="max-width: 400px;"><label>Selecione o ficheiro de Backup (.JSON):</label><input type="file" id="fileImportGlobal" accept=".json"></div>
                 </div>
             </section>
         </main>
@@ -337,8 +378,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    
     <script src="script.js"></script>
 </body>
 </html>
-
