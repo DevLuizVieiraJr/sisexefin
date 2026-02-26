@@ -85,7 +85,7 @@ function mostrarSecao(idSecao) {
 }
 
 // ==========================================
-// 3. MÓDULO: EMPENHOS
+// 3. MÓDULO: EMPENHOS (COMPATÍVEL COM O SEU CSV)
 // ==========================================
 const formEmpenho = document.getElementById('formEmpenho');
 const tabelaEmpenhosBody = document.querySelector('#tabelaEmpenhos tbody');
@@ -127,9 +127,24 @@ function atualizarControlesPaginacaoEmpenhos(tamanho) {
 
 function editarEmpenho(indexOriginal) {
     const emp = baseEmpenhos[indexOriginal]; 
-    document.getElementById('editIndexEmpenho').value = emp.id; // Guarda o ID do Firebase!
-    document.getElementById('numEmpenho').value = emp.numEmpenho || ''; document.getElementById('dataEmpenho').value = emp.dataEmpenho || ''; document.getElementById('valorEmpenho').value = emp.valorEmpenho || ''; document.getElementById('ndEmpenho').value = emp.nd || ''; document.getElementById('subitemEmpenho').value = emp.subitem || ''; document.getElementById('ptresEmpenho').value = emp.ptres || ''; document.getElementById('frEmpenho').value = emp.fr || ''; document.getElementById('docOrigEmpenho').value = emp.docOrig || ''; document.getElementById('oiEmpenho').value = emp.oi || ''; document.getElementById('contratoEmpenho').value = emp.contrato || ''; document.getElementById('capEmpenho').value = emp.cap || ''; document.getElementById('altcredEmpenho').value = emp.altcred || ''; document.getElementById('meioEmpenho').value = emp.meio || '';
-    document.getElementById('tela-lista-empenhos').style.display = 'none'; document.getElementById('tela-formulario-empenhos').style.display = 'block';
+    document.getElementById('editIndexEmpenho').value = emp.id; 
+    document.getElementById('numEmpenho').value = emp.numEmpenho || ''; 
+    document.getElementById('dataEmpenho').value = emp.dataEmpenho || ''; 
+    document.getElementById('valorEmpenho').value = emp.valorEmpenho || ''; 
+    document.getElementById('ndEmpenho').value = emp.nd || ''; 
+    document.getElementById('subitemEmpenho').value = emp.subitem || ''; 
+    document.getElementById('ptresEmpenho').value = emp.ptres || ''; 
+    document.getElementById('frEmpenho').value = emp.fr || ''; 
+    document.getElementById('docOrigEmpenho').value = emp.docOrig || ''; 
+    document.getElementById('oiEmpenho').value = emp.oi || ''; 
+    document.getElementById('contratoEmpenho').value = emp.contrato || ''; 
+    document.getElementById('capEmpenho').value = emp.cap || ''; 
+    document.getElementById('altcredEmpenho').value = emp.altcred || ''; 
+    document.getElementById('meioEmpenho').value = emp.meio || '';
+    document.getElementById('descricaoEmpenho').value = emp.descricao || ''; // Novo Campo
+
+    document.getElementById('tela-lista-empenhos').style.display = 'none'; 
+    document.getElementById('tela-formulario-empenhos').style.display = 'block';
 }
 
 function apagarEmpenho(indexOriginal) {
@@ -137,7 +152,7 @@ function apagarEmpenho(indexOriginal) {
     const estaVinculado = baseTitulos.some(titulo => titulo.empenhosVinculados && titulo.empenhosVinculados.some(vinc => vinc.numEmpenho === empenho.numEmpenho));
     if (estaVinculado) { alert(`Ação Bloqueada: Empenho associado a Notas Fiscais.`); return; }
     if (confirm(`Apagar o empenho ${empenho.numEmpenho}?`)) { 
-        db.collection('empenhos').doc(empenho.id).delete(); // Firebase deleta!
+        db.collection('empenhos').doc(empenho.id).delete(); 
         if (itensExibidosAtualmenteEmpenhos.length === 1 && paginaAtualEmpenhos > 1) paginaAtualEmpenhos--; 
     }
 }
@@ -145,9 +160,24 @@ function apagarEmpenho(indexOriginal) {
 formEmpenho.addEventListener('submit', function(e) {
     e.preventDefault(); const fbID = document.getElementById('editIndexEmpenho').value; const numEmp = document.getElementById('numEmpenho').value;
     if(numEmp.length !== 12 || !numEmp.includes('NE')) { alert("Formato inválido (YYYYNENNNNNN)."); return; }
-    const dados = { numEmpenho: numEmp, dataEmpenho: document.getElementById('dataEmpenho').value, valorEmpenho: document.getElementById('valorEmpenho').value, nd: document.getElementById('ndEmpenho').value, subitem: document.getElementById('subitemEmpenho').value, ptres: document.getElementById('ptresEmpenho').value, fr: document.getElementById('frEmpenho').value, docOrig: document.getElementById('docOrigEmpenho').value, oi: document.getElementById('oiEmpenho').value, contrato: document.getElementById('contratoEmpenho').value, cap: document.getElementById('capEmpenho').value, altcred: document.getElementById('altcredEmpenho').value, meio: document.getElementById('meioEmpenho').value };
     
-    // Firebase Grava ou Atualiza!
+    const dados = { 
+        numEmpenho: numEmp, 
+        dataEmpenho: document.getElementById('dataEmpenho').value, 
+        valorEmpenho: document.getElementById('valorEmpenho').value, 
+        nd: document.getElementById('ndEmpenho').value, 
+        subitem: document.getElementById('subitemEmpenho').value, 
+        ptres: document.getElementById('ptresEmpenho').value, 
+        fr: document.getElementById('frEmpenho').value, 
+        docOrig: document.getElementById('docOrigEmpenho').value, 
+        oi: document.getElementById('oiEmpenho').value, 
+        contrato: document.getElementById('contratoEmpenho').value, 
+        cap: document.getElementById('capEmpenho').value, 
+        altcred: document.getElementById('altcredEmpenho').value, 
+        meio: document.getElementById('meioEmpenho').value,
+        descricao: document.getElementById('descricaoEmpenho').value // Novo campo guardado no DB!
+    };
+    
     if (fbID == -1 || fbID === "") {
         db.collection('empenhos').add(dados).then(() => voltarParaListaEmpenhos());
     } else { 
@@ -163,12 +193,36 @@ document.getElementById('fileImportEmpenhos').addEventListener('change', functio
             const dadosImportados = XLSX.utils.sheet_to_json(folha, {raw: false, defval: ""});
             if (dadosImportados.length === 0) return;
             let contadorSucesso = 0;
+            
             dadosImportados.forEach(linha => {
                 const chaves = Object.keys(linha); if (chaves.length === 0) return;
-                let chaveEmpenho = chaves.find(c => c.toLowerCase().includes('empenho') || c.toLowerCase().includes('ne') || c.toLowerCase().includes('numero')); if(!chaveEmpenho) chaveEmpenho = chaves[0];
-                const numBrutoExato = String(linha[chaveEmpenho]).trim(); if(!numBrutoExato) return;
-                const novoEmpenho = { numEmpenho: numBrutoExato, dataEmpenho: linha['Data'] || '', valorEmpenho: parseFloat(linha['Valor']) || 0, nd: linha['ND'] || '', subitem: String(linha['Subitem'] || '').padStart(2, '0'), ptres: linha['PTRES'] || '', fr: linha['FR'] || '', docOrig: linha['doc_orig'] || '', oi: linha['OI'] || '', contrato: linha['contrato'] || '', cap: linha['cap'] || '', altcred: linha['altcred'] || '', meio: linha['meio'] || '' };
-                db.collection('empenhos').add(novoEmpenho); // Manda para a nuvem
+                
+                // Mapeamento Inteligente: Tenta achar 'NE' ou 'Empenho' para o número.
+                let chaveEmpenho = chaves.find(c => c.toUpperCase() === 'NE' || c.toUpperCase() === 'EMPENHO'); 
+                if(!chaveEmpenho) chaveEmpenho = chaves[0];
+                
+                const numBrutoExato = String(linha[chaveEmpenho]).trim(); 
+                if(!numBrutoExato) return;
+
+                // Aqui está a mágica: Ele procura as chaves exatas do seu CSV!
+                const novoEmpenho = { 
+                    numEmpenho: numBrutoExato, 
+                    dataEmpenho: linha['Data'] || linha['DATA'] || '', 
+                    valorEmpenho: parseFloat(linha['Valor']) || parseFloat(linha['VALOR']) || 0, 
+                    nd: linha['ND'] || '', 
+                    subitem: String(linha['SUBITEM'] || linha['Subitem'] || '').padStart(2, '0'), 
+                    ptres: linha['PTRES'] || '', 
+                    fr: linha['FR'] || '', 
+                    docOrig: linha['AES'] || linha['doc_orig'] || '', // Mapeado para AES!
+                    oi: linha['OI'] || '', 
+                    contrato: linha['CONTRATO'] || linha['contrato'] || '', 
+                    cap: linha['CAP'] || linha['cap'] || '', 
+                    altcred: linha['ALTCRED'] || linha['altcred'] || '', 
+                    meio: linha['MEIO'] || linha['meio'] || '',
+                    descricao: linha['DESCRIÇÃO'] || linha['Descricao'] || linha['descricao'] || '' // Lê a descrição gigante!
+                };
+                
+                db.collection('empenhos').add(novoEmpenho);
                 contadorSucesso++;
             });
             if (contadorSucesso > 0) { alert(`A enviar ${contadorSucesso} empenhos para a nuvem...`); }
@@ -176,8 +230,31 @@ document.getElementById('fileImportEmpenhos').addEventListener('change', functio
         evento.target.value = ''; 
     }; leitor.readAsArrayBuffer(ficheiro);
 });
-function exportarEmpenhos(formato) { if (baseEmpenhos.length === 0) return alert("Vazio."); const folha = XLSX.utils.json_to_sheet(baseEmpenhos); const livro = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(livro, folha, "Empenhos"); XLSX.writeFile(livro, `Empenhos_${new Date().toISOString().slice(0,10)}.${formato}`); }
 
+function exportarEmpenhos(formato) { 
+    if (baseEmpenhos.length === 0) return alert("Vazio."); 
+    
+    // Formata a exportação para ficar igual ao seu arquivo original!
+    const dadosParaExportar = baseEmpenhos.map(emp => ({
+        "NE": emp.numEmpenho,
+        "ND": emp.nd,
+        "SUBITEM": emp.subitem,
+        "PTRES": emp.ptres,
+        "FR": emp.fr,
+        "AES": emp.docOrig, // O antigo doc_orig volta a ser chamado AES na planilha
+        "OI": emp.oi,
+        "CONTRATO": emp.contrato,
+        "CAP": emp.cap,
+        "ALTCRED": emp.altcred,
+        "MEIO": emp.meio,
+        "DESCRIÇÃO": emp.descricao
+    }));
+
+    const folha = XLSX.utils.json_to_sheet(dadosParaExportar); 
+    const livro = XLSX.utils.book_new(); 
+    XLSX.utils.book_append_sheet(livro, folha, "Empenhos"); 
+    XLSX.writeFile(livro, `Empenhos_${new Date().toISOString().slice(0,10)}.${formato}`); 
+}
 // ==========================================
 // MÓDULO DARF
 // ==========================================
@@ -642,3 +719,4 @@ function acaoModalSucesso(acao) {
         else if (acao === 'fechar') { voltarParaListaTitulos(); }
     }
 }
+
