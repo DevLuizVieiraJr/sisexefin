@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar: Verifica se o utilizador autenticado tem o perfil 'admin'
+    function isAdmin() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'admin';
+    }
+
+    match /usuarios/{userId} {
+      // O utilizador pode ler o seu próprio documento (para saber o seu perfil) ou o Admin pode ler todos
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      // Apenas Admins podem criar, editar ou apagar utilizadores
+      allow write: if isAdmin();
+    }
+
+    match /perfis/{perfilId} {
+      // Qualquer utilizador logado precisa ler os perfis para obter o seu array de permissões
+      allow read: if request.auth != null;
+      // Apenas Admins podem criar ou alterar as permissões de um perfil
+      allow write: if isAdmin();
+    }
+  }
+}
