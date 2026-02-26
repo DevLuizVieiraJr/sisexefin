@@ -71,13 +71,19 @@
                             <div class="form-group flex-1"><label>FR:</label><input type="text" id="frEmpenho" class="somente-numeros" maxlength="11"></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Doc. Origem:</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
+                            <div class="form-group flex-1"><label>Doc. Origem (AES):</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
                             <div class="form-group flex-1"><label>OI:</label><input type="text" id="oiEmpenho" maxlength="20"></div>
                             <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="20"></div>
                             <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
                         </div>
-                        <div class="form-group"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
-                        <div class="form-group"><label>Meio:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
+                            <div class="form-group flex-1"><label>Meio:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Descrição / Finalidade do Empenho:</label>
+                            <textarea id="descricaoEmpenho" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d2d6de; font-size: 14px;" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
+                        </div>
                         <div class="form-acoes"><button type="submit" class="btn-primary">💾 Salvar</button><button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button></div>
                     </form>
                 </div>
@@ -335,3 +341,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+
