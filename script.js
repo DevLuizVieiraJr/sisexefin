@@ -1,23 +1,97 @@
 // ==========================================
-// CONFIGURAÇÃO FIREBASE E AUTENTICAÇÃO
+// CONFIGURAÇÃO FIREBASE
 // ==========================================
-const firebaseConfig = {
-    apiKey: "AIzaSyDXHpJFnVUR7YCh-3rXvx4yX6zo3a-mR7A",
-    authDomain: "sisexefin.firebaseapp.com",
-    projectId: "sisexefin",
-    appId: "1:476004653478:web:45aecf0d547f57eee8d767"
-};
-firebase.initializeApp(firebaseConfig);
+// Nota: Assumimos que a inicialização (firebaseConfig) agora está no 'firebase-config.js'.
+// Se ainda não moveu, cole o firebase.initializeApp(...) aqui no topo.
 const db = firebase.firestore();
 const auth = firebase.auth();
 
 let usuarioLogadoEmail = "";
 
-auth.onAuthStateChanged((user) => {
+// ==========================================
+// 1 & 4. UTILITÁRIOS DE SEGURANÇA (SINGLE SOURCE OF TRUTH)
+// ==========================================
+function escapeHTML(str) {
+    if (str === null || str === undefined) return "";
+    const p = document.createElement('p');
+    p.textContent = str;
+    return p.innerHTML;
+}
+
+function mostrarLoading() { 
+    const loader = document.getElementById('loadingApp');
+    if(loader) loader.style.display = 'flex'; 
+}
+
+function esconderLoading() { 
+    const loader = document.getElementById('loadingApp');
+    if(loader) loader.style.display = 'none'; 
+}
+
+function debounce(func, timeout = 300) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    };
+}
+
+// ==========================================
+// MÓDULO RBAC E DELEGAÇÃO DE EVENTOS
+// ==========================================
+let permissoesEmCache = []; 
+
+async function carregarPermissoes() {
+    const user = auth.currentUser;
+    if (!user) return [];
+    try {
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (!userDoc.exists) return [];
+        const perfilID = userDoc.data().perfil;
+        const perfilDoc = await db.collection('perfis').doc(perfilID).get();
+        permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
+        return permissoesEmCache;
+    } catch (error) {
+        console.error("Erro ao carregar RBAC:", error);
+        return [];
+    }
+}
+
+function renderizarElementosRBAC() {
+    document.querySelectorAll('[data-permission]').forEach(el => {
+        const req = el.getAttribute('data-permission');
+        if (!permissoesEmCache.includes(req)) {
+            el.remove();
+        }
+    });
+}
+
+// 5. PROTEÇÃO DE ATRIBUTOS (Uso de data-id em vez de onclick)
+function gerarBotoesAcao(id, modulo) {
+    const safeId = escapeHTML(id);
+    let html = '';
+    if (permissoesEmCache.includes('editar_dados')) {
+        html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}" title="Editar">✏️</button>`;
+    }
+    if (permissoesEmCache.includes('excluir_dados')) {
+        html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}" title="Apagar">🗑️</button>`;
+    }
+    return html;
+}
+
+// ==========================================
+// INICIALIZAÇÃO DA SESSÃO
+// ==========================================
+auth.onAuthStateChanged(async (user) => {
     if (user) {
         usuarioLogadoEmail = user.email;
+        // 3. CORREÇÃO XSS: Uso de textContent em vez de innerHTML para dados do utilizador
+        document.getElementById('nomeUsuarioLogado').textContent = `👤 ${usuarioLogadoEmail}`;
+        
+        await carregarPermissoes();
+        renderizarElementosRBAC();
+        
         document.getElementById('corpo-sistema').style.display = 'block';
-        document.getElementById('nomeUsuarioLogado').innerHTML = `👤 ${usuarioLogadoEmail}`;
         escutarFirebase();
     } else {
         window.location.href = "index.html";
@@ -27,15 +101,20 @@ auth.onAuthStateChanged((user) => {
 function fazerLogout() { auth.signOut(); }
 
 // ==========================================
-// 1. VARIÁVEIS E ESTADO
+// VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================
 let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = [];
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
 let paginaAtualDarf = 1; let itensPorPaginaDarf = 10; let termoBuscaDarf = "";
+let paginaAtualTitulos = 1; let itensPorPaginaTitulos = 10; let termoBuscaTitulos = "";
 let darfsDoContratoAtual = []; 
+let empenhosDaNotaAtual = []; 
+let empenhoTemporarioSelecionado = null;
 
-// ORDENAÇÃO
+// ==========================================
+// MOTOR DE ORDENAÇÃO
+// ==========================================
 let estadoOrdenacao = {
     empenhos: { coluna: 'numEmpenho', direcao: 'asc' },
     contratos: { coluna: 'fornecedor', direcao: 'asc' },
@@ -46,13 +125,14 @@ let estadoOrdenacao = {
 function ordenarTabela(modulo, coluna) {
     if (estadoOrdenacao[modulo].coluna === coluna) { estadoOrdenacao[modulo].direcao = estadoOrdenacao[modulo].direcao === 'asc' ? 'desc' : 'asc'; } 
     else { estadoOrdenacao[modulo].coluna = coluna; estadoOrdenacao[modulo].direcao = 'asc'; }
-    document.querySelectorAll(`[id^="sort-${modulo}-"]`).forEach(el => el.innerHTML = '');
+    document.querySelectorAll(`[id^="sort-${modulo}-"]`).forEach(el => el.textContent = '');
     const iconEl = document.getElementById(`sort-${modulo}-${coluna}`);
-    if(iconEl) iconEl.innerHTML = estadoOrdenacao[modulo].direcao === 'asc' ? '▲' : '▼';
+    if(iconEl) iconEl.textContent = estadoOrdenacao[modulo].direcao === 'asc' ? '▲' : '▼';
 
     if (modulo === 'empenhos') { paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); }
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
     if (modulo === 'darf') { paginaAtualDarf = 1; atualizarTabelaDarf(); }
+    if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
 }
 
 function aplicarOrdenacao(array, modulo) {
@@ -67,30 +147,38 @@ function aplicarOrdenacao(array, modulo) {
         return 0;
     });
 }
+
 function inicializarSetasOrdenacao() {
-    ['empenhos', 'contratos', 'darf'].forEach(modulo => {
-        const col = estadoOrdenacao[modulo].coluna; const iconEl = document.getElementById(`sort-${modulo}-${col}`);
-        if(iconEl) iconEl.innerHTML = estadoOrdenacao[modulo].direcao === 'asc' ? '▲' : '▼';
+    ['empenhos', 'contratos', 'darf', 'titulos'].forEach(modulo => {
+        const col = estadoOrdenacao[modulo].coluna; 
+        const iconEl = document.getElementById(`sort-${modulo}-${col}`);
+        if(iconEl) iconEl.textContent = estadoOrdenacao[modulo].direcao === 'asc' ? '▲' : '▼';
     });
 }
 
-// SINCRONIZAÇÃO FIREBASE
-function escutarFirebase() {
-    db.collection('empenhos').onSnapshot(snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaEmpenhos(); });
-    db.collection('contratos').onSnapshot(snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaContratos(); });
-    db.collection('darf').onSnapshot(snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaDarf(); });
-}
-
+// ==========================================
+// NAVEGAÇÃO PRINCIPAL E SINCRONIZAÇÃO
+// ==========================================
 function mostrarSecao(idSecao, botao) {
     document.querySelectorAll('.secao').forEach(s => s.style.display = 'none');
-    document.getElementById(idSecao).style.display = 'block';
-    document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('ativo')); if(botao) botao.classList.add('ativo');
-    
-    document.getElementById('tela-formulario-empenhos').style.display = 'none'; document.getElementById('tela-lista-empenhos').style.display = 'block';
-    document.getElementById('tela-formulario-contratos').style.display = 'none'; document.getElementById('tela-lista-contratos').style.display = 'block';
-    document.getElementById('tela-formulario-darf').style.display = 'none'; document.getElementById('tela-lista-darf').style.display = 'block';
+    const secaoAlvo = document.getElementById(idSecao);
+    if(secaoAlvo) secaoAlvo.style.display = 'block';
 
-    atualizarTabelaEmpenhos(); atualizarTabelaContratos(); atualizarTabelaDarf(); inicializarSetasOrdenacao();
+    document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('ativo')); 
+    if(botao) botao.classList.add('ativo');
+    
+    document.querySelectorAll('[id^="tela-formulario"]').forEach(f => f.style.display = 'none');
+    document.querySelectorAll('[id^="tela-lista"]').forEach(l => l.style.display = 'block');
+
+    atualizarTabelaEmpenhos(); atualizarTabelaContratos(); atualizarTabelaDarf(); atualizarTabelaTitulos();
+    inicializarSetasOrdenacao();
+}
+
+function escutarFirebase() {
+    db.collection('empenhos').onSnapshot(snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaEmpenhos(); esconderLoading(); });
+    db.collection('contratos').onSnapshot(snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaContratos(); });
+    db.collection('darf').onSnapshot(snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaDarf(); });
+    db.collection('titulos').onSnapshot(snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaTitulos(); });
 }
 
 // ==========================================
@@ -99,32 +187,70 @@ function mostrarSecao(idSecao, botao) {
 const formEmpenho = document.getElementById('formEmpenho');
 const tabelaEmpenhosBody = document.querySelector('#tabelaEmpenhos tbody');
 
+document.getElementById('buscaTabelaEmpenhos').addEventListener('input', debounce(() => {
+    termoBuscaEmpenhos = document.getElementById('buscaTabelaEmpenhos').value.toLowerCase();
+    paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos();
+}));
+
 function abrirFormularioEmpenho(isEdit = false) { 
     if(!isEdit) { formEmpenho.reset(); document.getElementById('editIndexEmpenho').value = -1; }
     document.getElementById('tela-lista-empenhos').style.display = 'none'; document.getElementById('tela-formulario-empenhos').style.display = 'block'; 
 }
 function voltarParaListaEmpenhos() { document.getElementById('tela-formulario-empenhos').style.display = 'none'; document.getElementById('tela-lista-empenhos').style.display = 'block'; atualizarTabelaEmpenhos(); }
-function filtrarTabelaEmpenhos() { termoBuscaEmpenhos = document.getElementById('buscaTabelaEmpenhos').value.toLowerCase(); paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); }
 
+// 2. CORREÇÃO DE ESCOPO (ReferenceError corrigido)
 function atualizarTabelaEmpenhos() {
     tabelaEmpenhosBody.innerHTML = '';
     let baseFiltrada = baseEmpenhos.map((emp, index) => ({ ...emp, indexOriginal: index }));
-    if (termoBuscaEmpenhos.trim() !== "") { baseFiltrada = baseFiltrada.filter(emp => (emp.numEmpenho && emp.numEmpenho.toLowerCase().includes(termoBuscaEmpenhos)) || (emp.contrato && emp.contrato.toLowerCase().includes(termoBuscaEmpenhos))); }
-    baseFiltrada = aplicarOrdenacao(baseFiltrada, 'empenhos');
-
-    const inicio = (paginaAtualEmpenhos - 1) * itensPorPaginaEmpenhos; const fim = inicio + parseInt(itensPorPaginaEmpenhos);
-    let itensExibidosAtualmenteEmpenhos = baseFiltrada.slice(inicio, fim);
-    if (itensExibidosAtualmenteEmpenhos.length === 0) { tabelaEmpenhosBody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Nenhum registo.</td></tr>'; }
     
-    itensExibidosAtualmenteEmpenhos.forEach((emp) => {
+    if (termoBuscaEmpenhos.trim() !== "") { 
+        baseFiltrada = baseFiltrada.filter(emp => 
+            (emp.numEmpenho && emp.numEmpenho.toLowerCase().includes(termoBuscaEmpenhos)) || 
+            (emp.contrato && emp.contrato.toLowerCase().includes(termoBuscaEmpenhos))
+        ); 
+    }
+    
+    baseFiltrada = aplicarOrdenacao(baseFiltrada, 'empenhos');
+    const inicio = (paginaAtualEmpenhos - 1) * itensPorPaginaEmpenhos; 
+    const fim = inicio + parseInt(itensPorPaginaEmpenhos);
+    let itensExibidos = baseFiltrada.slice(inicio, fim);
+    
+    if (itensExibidos.length === 0) { 
+        tabelaEmpenhosBody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Nenhum registo encontrado.</td></tr>'; 
+        return;
+    }
+    
+    itensExibidos.forEach((emp) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><strong>${emp.numEmpenho}</strong></td><td>${emp.nd || '-'}</td><td>${emp.subitem || '-'}</td><td>${emp.ptres || '-'}</td><td>${emp.fr || '-'}</td><td>${emp.docOrig || '-'}</td><td>${emp.oi || '-'}</td><td>${emp.contrato || '-'}</td><td>${emp.cap || '-'}</td><td>${emp.meio || '-'}</td><td><button type="button" class="btn-icon" onclick="editarEmpenho('${emp.id}')">✏️</button><button type="button" class="btn-icon" onclick="apagarEmpenho('${emp.id}')">🗑️</button></td>`;
+        const acoesHTML = gerarBotoesAcao(emp.id, 'empenho');
+        tr.innerHTML = `
+            <td><strong>${escapeHTML(emp.numEmpenho)}</strong></td>
+            <td>${escapeHTML(emp.nd) || '-'}</td>
+            <td>${escapeHTML(emp.subitem) || '-'}</td>
+            <td>${escapeHTML(emp.ptres) || '-'}</td>
+            <td>${escapeHTML(emp.fr) || '-'}</td>
+            <td>${escapeHTML(emp.docOrig) || '-'}</td>
+            <td>${escapeHTML(emp.oi) || '-'}</td>
+            <td>${escapeHTML(emp.contrato) || '-'}</td>
+            <td>${escapeHTML(emp.cap) || '-'}</td>
+            <td>${escapeHTML(emp.meio) || '-'}</td>
+            <td>${acoesHTML}</td>`;
         tabelaEmpenhosBody.appendChild(tr);
     });
+    
     const total = Math.ceil(baseFiltrada.length / itensPorPaginaEmpenhos) || 1;
-    document.getElementById('infoPaginaEmpenhos').innerText = `Página ${paginaAtualEmpenhos} de ${total}`;
-    document.getElementById('btnAnteriorEmpenhos').disabled = paginaAtualEmpenhos === 1; document.getElementById('btnProximoEmpenhos').disabled = paginaAtualEmpenhos === total;
+    document.getElementById('infoPaginaEmpenhos').textContent = `Página ${paginaAtualEmpenhos} de ${total}`;
+    document.getElementById('btnAnteriorEmpenhos').disabled = paginaAtualEmpenhos === 1; 
+    document.getElementById('btnProximoEmpenhos').disabled = paginaAtualEmpenhos === total;
 }
+
+// 5. EVENT DELEGATION: Listener único para a tabela de Empenhos
+tabelaEmpenhosBody.addEventListener('click', function(e) {
+    const btnEditar = e.target.closest('.btn-editar-empenho');
+    const btnApagar = e.target.closest('.btn-apagar-empenho');
+    if (btnEditar) editarEmpenho(btnEditar.getAttribute('data-id'));
+    if (btnApagar) apagarEmpenho(btnApagar.getAttribute('data-id'));
+});
 
 function mudarTamanhoPaginaEmpenhos() { itensPorPaginaEmpenhos = document.getElementById('itensPorPaginaEmpenhos').value; paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); }
 function mudarPaginaEmpenhos(direcao) { paginaAtualEmpenhos += direcao; atualizarTabelaEmpenhos(); }
@@ -143,37 +269,36 @@ function editarEmpenho(id) {
     }
 }
 
-function apagarEmpenho(id) { if (confirm("Apagar empenho?")) db.collection('empenhos').doc(id).delete(); }
-
-formEmpenho.addEventListener('submit', function(e) {
-    e.preventDefault(); const fbID = document.getElementById('editIndexEmpenho').value; 
-    const dados = { numEmpenho: document.getElementById('numEmpenho').value, dataEmpenho: document.getElementById('dataEmpenho').value, valorEmpenho: document.getElementById('valorEmpenho').value, nd: document.getElementById('ndEmpenho').value, subitem: document.getElementById('subitemEmpenho').value, ptres: document.getElementById('ptresEmpenho').value, fr: document.getElementById('frEmpenho').value, docOrig: document.getElementById('docOrigEmpenho').value, oi: document.getElementById('oiEmpenho').value, contrato: document.getElementById('contratoEmpenho').value, cap: document.getElementById('capEmpenho').value, altcred: document.getElementById('altcredEmpenho').value, meio: document.getElementById('meioEmpenho').value, descricao: document.getElementById('descricaoEmpenho').value };
-    if (fbID == -1 || fbID === "") { db.collection('empenhos').add(dados).then(() => voltarParaListaEmpenhos()); } else { db.collection('empenhos').doc(fbID).update(dados).then(() => voltarParaListaEmpenhos()); }
-});
-
-document.getElementById('fileImportEmpenhos').addEventListener('change', function(evento) {
-    const ficheiro = evento.target.files[0]; if (!ficheiro) return; const leitor = new FileReader();
-    leitor.onload = function(e) {
-        try {
-            const dados = new Uint8Array(e.target.result); const folha = XLSX.read(dados, {type: 'array'}).Sheets[XLSX.read(dados, {type: 'array'}).SheetNames[0]];
-            const dadosImportados = XLSX.utils.sheet_to_json(folha, {raw: false, defval: ""});
-            let contadorSucesso = 0;
-            dadosImportados.forEach(linha => {
-                const ne = linha['ne_completa'] || linha['NE']; if(!ne) return;
-                const novo = { numEmpenho: String(ne).trim(), nd: linha['nd_naturezaDespesa'] || linha['ND'] || '', subitem: String(linha['subelemento'] || linha['SUBITEM'] || '').padStart(2, '0'), ptres: linha['ptres'] || linha['PTRES'] || '', fr: linha['fr_fonte_recurso'] || linha['FR'] || '', docOrig: linha['aes_solemp'] || linha['AES'] || '', oi: linha['org_interna'] || linha['OI'] || '', contrato: linha['contrato'] || linha['CONTRATO'] || '', cap: linha['cap'] || linha['CAP'] || '', altcred: linha['altcred'] || linha['ALTCRED'] || '', meio: linha['meio_om'] || linha['MEIO'] || '', descricao: linha['DESCRIÇÃO'] || '' };
-                db.collection('empenhos').add(novo); contadorSucesso++;
-            });
-            if (contadorSucesso > 0) alert(`A enviar ${contadorSucesso} empenhos...`);
-        } catch (erro) { alert("Erro: " + erro.message); }
-        evento.target.value = ''; 
-    }; leitor.readAsArrayBuffer(ficheiro);
-});
-
-function exportarEmpenhos(formato) { 
-    if (baseEmpenhos.length === 0) return alert("Vazio."); 
-    const exp = baseEmpenhos.map(emp => ({ "ne_completa": emp.numEmpenho, "nd_naturezaDespesa": emp.nd, "subelemento": emp.subitem, "ptres": emp.ptres, "fr_fonte_recurso": emp.fr, "aes_solemp": emp.docOrig, "org_interna": emp.oi, "contrato": emp.contrato, "cap": emp.cap, "altcred": emp.altcred, "meio_om": emp.meio, "descricao": emp.descricao }));
-    const folha = XLSX.utils.json_to_sheet(exp); const livro = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(livro, folha, "Empenhos"); XLSX.writeFile(livro, `Empenhos_${new Date().toISOString().slice(0,10)}.${formato}`); 
+async function apagarEmpenho(id) { 
+    if (confirm("Apagar empenho permanentemente?")) {
+        mostrarLoading();
+        try { await db.collection('empenhos').doc(id).delete(); } 
+        catch (error) { alert("Acesso Negado: Não tem permissão para apagar ou ocorreu um erro."); } 
+        finally { esconderLoading(); }
+    } 
 }
+
+formEmpenho.addEventListener('submit', async function(e) {
+    e.preventDefault(); mostrarLoading();
+    const fbID = document.getElementById('editIndexEmpenho').value; 
+    const dados = { 
+        numEmpenho: escapeHTML(document.getElementById('numEmpenho').value.trim()), 
+        dataEmpenho: escapeHTML(document.getElementById('dataEmpenho').value), 
+        valorEmpenho: parseFloat(document.getElementById('valorEmpenho').value) || 0, 
+        nd: escapeHTML(document.getElementById('ndEmpenho').value), subitem: escapeHTML(document.getElementById('subitemEmpenho').value), 
+        ptres: escapeHTML(document.getElementById('ptresEmpenho').value), fr: escapeHTML(document.getElementById('frEmpenho').value), 
+        docOrig: escapeHTML(document.getElementById('docOrigEmpenho').value), oi: escapeHTML(document.getElementById('oiEmpenho').value), 
+        contrato: escapeHTML(document.getElementById('contratoEmpenho').value), cap: escapeHTML(document.getElementById('capEmpenho').value), 
+        altcred: escapeHTML(document.getElementById('altcredEmpenho').value), meio: escapeHTML(document.getElementById('meioEmpenho').value), 
+        descricao: escapeHTML(document.getElementById('descricaoEmpenho').value) 
+    };
+    try {
+        if (fbID == -1 || fbID === "") { await db.collection('empenhos').add(dados); } 
+        else { await db.collection('empenhos').doc(fbID).update(dados); }
+        voltarParaListaEmpenhos();
+    } catch (error) { alert("Erro ao guardar o registo. Verifique as suas permissões."); } 
+    finally { esconderLoading(); }
+});
 
 // ==========================================
 // MÓDULO: CONTRATOS E EMPRESAS
@@ -181,32 +306,56 @@ function exportarEmpenhos(formato) {
 const formContrato = document.getElementById('formContrato');
 const tabelaContratosBody = document.querySelector('#tabelaContratos tbody');
 
+document.getElementById('buscaTabelaContratos').addEventListener('input', debounce(() => {
+    termoBuscaContratos = document.getElementById('buscaTabelaContratos').value.toLowerCase();
+    paginaAtualContratos = 1; atualizarTabelaContratos();
+}));
+
 function abrirFormularioContrato(isEdit = false) { 
     if(!isEdit) { formContrato.reset(); document.getElementById('editIndexContrato').value = -1; darfsDoContratoAtual = []; desenharDarfsContrato(); }
     document.getElementById('tela-lista-contratos').style.display = 'none'; document.getElementById('tela-formulario-contratos').style.display = 'block';
 }
 function voltarParaListaContratos() { document.getElementById('tela-formulario-contratos').style.display = 'none'; document.getElementById('tela-lista-contratos').style.display = 'block'; atualizarTabelaContratos(); }
-function filtrarTabelaContratos() { termoBuscaContratos = document.getElementById('buscaTabelaContratos').value.toLowerCase(); paginaAtualContratos = 1; atualizarTabelaContratos(); }
 
 function atualizarTabelaContratos() {
-    tabelaContratosBody.innerHTML = ''; let baseFiltrada = baseContratos.map((c, index) => ({ ...c, indexOriginal: index }));
-    if (termoBuscaContratos.trim() !== "") { baseFiltrada = baseFiltrada.filter(c => (c.fornecedor && c.fornecedor.toLowerCase().includes(termoBuscaContratos)) || (c.numContrato && c.numContrato.toLowerCase().includes(termoBuscaContratos))); }
+    tabelaContratosBody.innerHTML = ''; 
+    let baseFiltrada = baseContratos.map((c, index) => ({ ...c, indexOriginal: index }));
+    if (termoBuscaContratos.trim() !== "") { 
+        baseFiltrada = baseFiltrada.filter(c => (c.fornecedor && c.fornecedor.toLowerCase().includes(termoBuscaContratos)) || (c.numContrato && c.numContrato.toLowerCase().includes(termoBuscaContratos))); 
+    }
     baseFiltrada = aplicarOrdenacao(baseFiltrada, 'contratos');
-
     const inicio = (paginaAtualContratos - 1) * itensPorPaginaContratos; const fim = inicio + parseInt(itensPorPaginaContratos);
-    let itensExibidosAtualmenteContratos = baseFiltrada.slice(inicio, fim);
-    if (itensExibidosAtualmenteContratos.length === 0) { tabelaContratosBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum contrato encontrado.</td></tr>'; }
+    let itensExibidos = baseFiltrada.slice(inicio, fim);
+    
+    if (itensExibidos.length === 0) { tabelaContratosBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum contrato encontrado.</td></tr>'; return;}
 
-    itensExibidosAtualmenteContratos.forEach((c) => {
+    itensExibidos.forEach((c) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${c.idContrato || '-'}</td><td><strong>${c.numContrato || '-'}</strong></td><td>${c.fornecedor || '-'}</td><td>${c.dataInicio || '-'}</td><td>${c.dataFim || '-'}</td><td>${c.valorContrato || '-'}</td><td>${c.situacao || '-'}</td>
-            <td><button type="button" class="btn-icon" onclick="editarContrato('${c.id}')">✏️</button><button type="button" class="btn-icon" onclick="apagarContrato('${c.id}')">🗑️</button></td>`;
+        const acoesHTML = gerarBotoesAcao(c.id, 'contrato');
+        tr.innerHTML = `
+            <td>${escapeHTML(c.idContrato) || '-'}</td>
+            <td><strong>${escapeHTML(c.numContrato) || '-'}</strong></td>
+            <td>${escapeHTML(c.fornecedor) || '-'}</td>
+            <td>${escapeHTML(c.dataInicio) || '-'}</td>
+            <td>${escapeHTML(c.dataFim) || '-'}</td>
+            <td>${escapeHTML(c.valorContrato) || '-'}</td>
+            <td>${escapeHTML(c.situacao) || '-'}</td>
+            <td>${acoesHTML}</td>`;
         tabelaContratosBody.appendChild(tr);
     });
     const total = Math.ceil(baseFiltrada.length / itensPorPaginaContratos) || 1;
-    document.getElementById('infoPaginaContratos').innerText = `Página ${paginaAtualContratos} de ${total}`;
-    document.getElementById('btnAnteriorContratos').disabled = paginaAtualContratos === 1; document.getElementById('btnProximoContratos').disabled = paginaAtualContratos === total;
+    document.getElementById('infoPaginaContratos').textContent = `Página ${paginaAtualContratos} de ${total}`;
+    document.getElementById('btnAnteriorContratos').disabled = paginaAtualContratos === 1; 
+    document.getElementById('btnProximoContratos').disabled = paginaAtualContratos === total;
 }
+
+// EVENT DELEGATION: Contratos
+tabelaContratosBody.addEventListener('click', function(e) {
+    const btnEditar = e.target.closest('.btn-editar-contrato');
+    const btnApagar = e.target.closest('.btn-apagar-contrato');
+    if (btnEditar) editarContrato(btnEditar.getAttribute('data-id'));
+    if (btnApagar) apagarContrato(btnApagar.getAttribute('data-id'));
+});
 
 function mudarTamanhoPaginaContratos() { itensPorPaginaContratos = document.getElementById('itensPorPaginaContratos').value; paginaAtualContratos = 1; atualizarTabelaContratos(); }
 function mudarPaginaContratos(direcao) { paginaAtualContratos += direcao; atualizarTabelaContratos(); }
@@ -219,67 +368,50 @@ function editarContrato(id) {
         document.getElementById('situacaoContrato').value = c.situacao || ''; document.getElementById('fornecedorContrato').value = c.fornecedor || '';
         document.getElementById('nupContrato').value = c.nup || ''; document.getElementById('dataInicio').value = c.dataInicio || '';
         document.getElementById('dataFim').value = c.dataFim || ''; 
-        
         let valorTratado = c.valorContrato;
-        if(typeof valorTratado === 'string' && valorTratado.includes('R$')) {
-            valorTratado = valorTratado.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        }
+        if(typeof valorTratado === 'string' && valorTratado.includes('R$')) { valorTratado = valorTratado.replace('R$', '').replace(/\./g, '').replace(',', '.').trim(); }
         document.getElementById('valorContrato').value = parseFloat(valorTratado) || '';
-
         if (c.codigosReceita && Array.isArray(c.codigosReceita)) { darfsDoContratoAtual = [...c.codigosReceita]; } else { darfsDoContratoAtual = []; }
         desenharDarfsContrato();
     }
 }
+async function apagarContrato(id) { 
+    if (confirm("Apagar Contrato permanentemente?")) { 
+        mostrarLoading();
+        try { await db.collection('contratos').doc(id).delete(); } 
+        catch (err) { alert("Acesso Negado ou falha de rede."); } 
+        finally { esconderLoading(); }
+    } 
+}
 
-function apagarContrato(id) { if (confirm("Apagar Contrato?")) { db.collection('contratos').doc(id).delete(); } }
-
-formContrato.addEventListener('submit', function(e) {
-    e.preventDefault(); const fbID = document.getElementById('editIndexContrato').value;
-    
-    // Formata o valor de volta para string R$ no padrão do seu DB original
+formContrato.addEventListener('submit', async function(e) {
+    e.preventDefault(); mostrarLoading();
+    const fbID = document.getElementById('editIndexContrato').value;
     let numVal = parseFloat(document.getElementById('valorContrato').value) || 0;
     let stringValor = numVal.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-
-    const dados = { idContrato: document.getElementById('idContrato').value, numContrato: document.getElementById('numContrato').value, situacao: document.getElementById('situacaoContrato').value, fornecedor: document.getElementById('fornecedorContrato').value, nup: document.getElementById('nupContrato').value, dataInicio: document.getElementById('dataInicio').value, dataFim: document.getElementById('dataFim').value, valorContrato: stringValor, codigosReceita: darfsDoContratoAtual };
-    
-    if (fbID == -1 || fbID === "") { db.collection('contratos').add(dados).then(() => voltarParaListaContratos()); } else { db.collection('contratos').doc(fbID).update(dados).then(() => voltarParaListaContratos()); }
+    const dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: stringValor, codigosReceita: darfsDoContratoAtual };
+    try {
+        if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); } 
+        else { await db.collection('contratos').doc(fbID).update(dados); }
+        voltarParaListaContratos();
+    } catch(err) { alert("Erro ao guardar contrato."); }
+    finally { esconderLoading(); }
 });
 
+// Autocomplete DARF
 const inputBuscaDarfContrato = document.getElementById('buscaDarfContrato'); const listaResultadosDarf = document.getElementById('listaResultadosDarf');
-inputBuscaDarfContrato.addEventListener('input', function() {
+inputBuscaDarfContrato.addEventListener('input', debounce(function() {
     const texto = this.value.toLowerCase(); listaResultadosDarf.innerHTML = '';
     if (texto.length >= 2) {
         const resultados = baseDarf.filter(d => d.codigo.includes(texto) || d.aplicacao.toLowerCase().includes(texto));
         if (resultados.length === 0) { listaResultadosDarf.innerHTML = '<li style="color:red; padding:10px;">Nenhum DARF encontrado.</li>'; }
-        else { resultados.forEach(d => { const li = document.createElement('li'); li.innerHTML = `<strong>${d.codigo}</strong> - ${d.aplicacao.substring(0, 40)}...`; li.onclick = () => selecionarDarfContrato(d); listaResultadosDarf.appendChild(li); }); }
+        else { resultados.forEach(d => { const li = document.createElement('li'); li.innerHTML = `<strong>${escapeHTML(d.codigo)}</strong> - ${escapeHTML(d.aplicacao.substring(0, 40))}...`; li.onclick = () => selecionarDarfContrato(d); listaResultadosDarf.appendChild(li); }); }
     }
-});
+}));
 function selecionarDarfContrato(d) { if (!darfsDoContratoAtual.includes(d.codigo)) { darfsDoContratoAtual.push(d.codigo); desenharDarfsContrato(); } inputBuscaDarfContrato.value = ''; listaResultadosDarf.innerHTML = ''; }
-function desenharDarfsContrato() { const container = document.getElementById('containerDarfsContrato'); container.innerHTML = ''; darfsDoContratoAtual.forEach((codigo, index) => { const span = document.createElement('span'); span.className = 'badge-tag'; span.innerHTML = `${codigo} <button type="button" onclick="removerDarfContrato(${index})">&times;</button>`; container.appendChild(span); }); }
+function desenharDarfsContrato() { const container = document.getElementById('containerDarfsContrato'); container.innerHTML = ''; darfsDoContratoAtual.forEach((codigo, index) => { const span = document.createElement('span'); span.className = 'badge-tag'; span.innerHTML = `${escapeHTML(codigo)} <button type="button" data-index="${index}" class="btn-rm-darf">&times;</button>`; container.appendChild(span); }); }
+document.getElementById('containerDarfsContrato').addEventListener('click', (e) => { if(e.target.classList.contains('btn-rm-darf')) removerDarfContrato(e.target.getAttribute('data-index')); });
 function removerDarfContrato(index) { darfsDoContratoAtual.splice(index, 1); desenharDarfsContrato(); }
-
-document.getElementById('fileImportContratos').addEventListener('change', function(evento) {
-    const ficheiro = evento.target.files[0]; if (!ficheiro) return; const leitor = new FileReader();
-    leitor.onload = function(e) {
-        try {
-            const dados = new Uint8Array(e.target.result); const folha = XLSX.read(dados, {type: 'array'}).Sheets[XLSX.read(dados, {type: 'array'}).SheetNames[0]];
-            const dadosImportados = XLSX.utils.sheet_to_json(folha, {raw: false, defval: ""});
-            let contadorSucesso = 0;
-            dadosImportados.forEach(linha => {
-                const fornecedor = linha['fornecedor'] || linha['FORNECEDOR']; if(!fornecedor) return; 
-                const novoContrato = { idContrato: linha['id_contrato'] || '', numContrato: linha['num_instrum'] || '', fornecedor: String(fornecedor).trim(), nup: linha['nup_processo'] || '', dataInicio: linha['data_inicio'] || '', dataFim: linha['data_fim'] || '', valorContrato: linha['valor_global'] || '', situacao: linha['situacao'] || '', codigosReceita: [] };
-                db.collection('contratos').add(novoContrato); contadorSucesso++;
-            });
-            if (contadorSucesso > 0) alert(`A enviar ${contadorSucesso} contratos...`); 
-        } catch (erro) { alert("Erro ao importar: " + erro.message); }
-        evento.target.value = ''; 
-    }; leitor.readAsArrayBuffer(ficheiro);
-});
-function exportarContratos(formato) { 
-    if (baseContratos.length === 0) return alert("Não há contratos."); 
-    const exp = baseContratos.map(c => ({ "id_contrato": c.idContrato, "num_instrum": c.numContrato, "fornecedor": c.fornecedor, "nup_processo": c.nup, "data_inicio": c.dataInicio, "data_fim": c.dataFim, "valor_global": c.valorContrato, "situacao": c.situacao }));
-    const folha = XLSX.utils.json_to_sheet(exp); const livro = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(livro, folha, "Contratos"); XLSX.writeFile(livro, `Contratos_${new Date().toISOString().slice(0,10)}.${formato}`); 
-}
 
 // ==========================================
 // MÓDULO: DARF
@@ -287,33 +419,52 @@ function exportarContratos(formato) {
 const formDarf = document.getElementById('formDarf');
 const tabelaDarfBody = document.querySelector('#tabelaDarf tbody');
 
+document.getElementById('buscaTabelaDarf').addEventListener('input', debounce(() => {
+    termoBuscaDarf = document.getElementById('buscaTabelaDarf').value.toLowerCase();
+    paginaAtualDarf = 1; atualizarTabelaDarf();
+}));
+
 function abrirFormularioDarf(isEdit = false) { 
     if(!isEdit) { document.getElementById('formDarf').reset(); document.getElementById('editIndexDarf').value = -1; }
     document.getElementById('tela-lista-darf').style.display = 'none'; document.getElementById('tela-formulario-darf').style.display = 'block'; 
 }
 function voltarParaListaDarf() { document.getElementById('tela-formulario-darf').style.display = 'none'; document.getElementById('tela-lista-darf').style.display = 'block'; atualizarTabelaDarf(); }
-function filtrarTabelaDarf() { termoBuscaDarf = document.getElementById('buscaTabelaDarf').value.toLowerCase(); paginaAtualDarf = 1; atualizarTabelaDarf(); }
 
 function atualizarTabelaDarf() {
-    tabelaDarfBody.innerHTML = ''; let baseFiltrada = baseDarf.map((d, index) => ({ ...d, indexOriginal: index }));
+    tabelaDarfBody.innerHTML = ''; 
+    let baseFiltrada = baseDarf.map((d, index) => ({ ...d, indexOriginal: index }));
     if (termoBuscaDarf.trim() !== "") { baseFiltrada = baseFiltrada.filter(d => (d.codigo && String(d.codigo).includes(termoBuscaDarf)) || (d.natRendimento && String(d.natRendimento).includes(termoBuscaDarf))); }
     baseFiltrada = aplicarOrdenacao(baseFiltrada, 'darf');
 
     const inicio = (paginaAtualDarf - 1) * itensPorPaginaDarf; const fim = inicio + parseInt(itensPorPaginaDarf);
-    let itensExibidosAtualmenteDarf = baseFiltrada.slice(inicio, fim);
-    if (itensExibidosAtualmenteDarf.length === 0) { tabelaDarfBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum DARF encontrado.</td></tr>'; }
+    let itensExibidos = baseFiltrada.slice(inicio, fim);
+    if (itensExibidos.length === 0) { tabelaDarfBody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center;\">Nenhum DARF encontrado.</td></tr>'; return; }
 
-    itensExibidosAtualmenteDarf.forEach((d) => {
+    itensExibidos.forEach((d) => {
         const tr = document.createElement('tr');
         const aplicacaoCurta = d.aplicacao && d.aplicacao.length > 40 ? d.aplicacao.substring(0, 40) + "..." : d.aplicacao;
-        tr.innerHTML = `<td><strong>${d.codigo}</strong></td><td>${d.natRendimento || '-'}</td><td title="${d.aplicacao}">${aplicacaoCurta || '-'}</td><td>${d.sitSiafi || '-'}</td><td>${d.total || '-'}</td>
-            <td><button type="button" class="btn-icon" onclick="editarDarf('${d.id}')">✏️</button><button type="button" class="btn-icon" onclick="apagarDarf('${d.id}')">🗑️</button></td>`;
+        const acoesHTML = gerarBotoesAcao(d.id, 'darf');
+        tr.innerHTML = `
+            <td><strong>${escapeHTML(d.codigo)}</strong></td>
+            <td>${escapeHTML(d.natRendimento) || '-'}</td>
+            <td title="${escapeHTML(d.aplicacao)}">${escapeHTML(aplicacaoCurta) || '-'}</td>
+            <td>${escapeHTML(d.sitSiafi) || '-'}</td>
+            <td>${escapeHTML(d.total) || '-'}</td>
+            <td>${acoesHTML}</td>`;
         tabelaDarfBody.appendChild(tr);
     });
     const total = Math.ceil(baseFiltrada.length / itensPorPaginaDarf) || 1;
-    document.getElementById('infoPaginaDarf').innerText = `Página ${paginaAtualDarf} de ${total}`;
+    document.getElementById('infoPaginaDarf').textContent = `Página ${paginaAtualDarf} de ${total}`;
     document.getElementById('btnAnteriorDarf').disabled = paginaAtualDarf === 1; document.getElementById('btnProximoDarf').disabled = paginaAtualDarf === total;
 }
+
+// EVENT DELEGATION: DARF
+tabelaDarfBody.addEventListener('click', function(e) {
+    const btnEditar = e.target.closest('.btn-editar-darf');
+    const btnApagar = e.target.closest('.btn-apagar-darf');
+    if (btnEditar) editarDarf(btnEditar.getAttribute('data-id'));
+    if (btnApagar) apagarDarf(btnApagar.getAttribute('data-id'));
+});
 
 function mudarTamanhoPaginaDarf() { itensPorPaginaDarf = document.getElementById('itensPorPaginaDarf').value; paginaAtualDarf = 1; atualizarTabelaDarf(); }
 function mudarPaginaDarf(direcao) { paginaAtualDarf += direcao; atualizarTabelaDarf(); }
@@ -329,34 +480,282 @@ function editarDarf(id) {
         document.getElementById('totalDarf').value = d.total || '';
     }
 }
+async function apagarDarf(id) { 
+    if (confirm(`Apagar o DARF permanentemente?`)) { 
+        mostrarLoading();
+        try { await db.collection('darf').doc(id).delete(); } 
+        catch(err) { alert("Acesso Negado."); } 
+        finally { esconderLoading(); } 
+    } 
+}
 
-function apagarDarf(id) { if (confirm(`Apagar o DARF?`)) { db.collection('darf').doc(id).delete(); } }
-
-formDarf.addEventListener('submit', function(e) {
-    e.preventDefault(); const fbID = document.getElementById('editIndexDarf').value;
-    const dados = { codigo: document.getElementById('codigoDarf').value, natRendimento: document.getElementById('natRendimentoDarf').value, sitSiafi: document.getElementById('sitSiafiDarf').value, aplicacao: document.getElementById('aplicacaoDarf').value, ir: document.getElementById('irDarf').value, csll: document.getElementById('csllDarf').value, cofins: document.getElementById('cofinsDarf').value, pis: document.getElementById('pisDarf').value, total: document.getElementById('totalDarf').value };
-    if (fbID == -1 || fbID === "") { db.collection('darf').add(dados).then(() => voltarParaListaDarf()); } else { db.collection('darf').doc(fbID).update(dados).then(() => voltarParaListaDarf()); }
+formDarf.addEventListener('submit', async function(e) {
+    e.preventDefault(); mostrarLoading();
+    const fbID = document.getElementById('editIndexDarf').value;
+    const dados = { codigo: escapeHTML(document.getElementById('codigoDarf').value), natRendimento: escapeHTML(document.getElementById('natRendimentoDarf').value), sitSiafi: escapeHTML(document.getElementById('sitSiafiDarf').value), aplicacao: escapeHTML(document.getElementById('aplicacaoDarf').value), ir: escapeHTML(document.getElementById('irDarf').value), csll: escapeHTML(document.getElementById('csllDarf').value), cofins: escapeHTML(document.getElementById('cofinsDarf').value), pis: escapeHTML(document.getElementById('pisDarf').value), total: escapeHTML(document.getElementById('totalDarf').value) };
+    try {
+        if (fbID == -1 || fbID === "") { await db.collection('darf').add(dados); } 
+        else { await db.collection('darf').doc(fbID).update(dados); }
+        voltarParaListaDarf();
+    } catch(err) { alert("Erro ao guardar DARF."); }
+    finally { esconderLoading(); }
 });
 
-document.getElementById('fileImportDarf').addEventListener('change', function(evento) {
-    const ficheiro = evento.target.files[0]; if (!ficheiro) return; const leitor = new FileReader();
-    leitor.onload = function(e) {
-        try {
-            const dados = new Uint8Array(e.target.result); const folha = XLSX.read(dados, {type: 'array'}).Sheets[XLSX.read(dados, {type: 'array'}).SheetNames[0]];
-            const dadosImportados = XLSX.utils.sheet_to_json(folha, {raw: false, defval: ""});
-            let contadorSucesso = 0;
-            dadosImportados.forEach(linha => {
-                let codigo = linha['cod_receita']; if(!codigo) return;
-                const novoDarf = { codigo: String(codigo), natRendimento: linha['nat_rendimento'] || '', aplicacao: linha['aplicacao'] || '', ir: linha['perc_ir'] || '', csll: linha['perc_csll'] || '', cofins: linha['perc_cofins'] || '', pis: linha['perc_pis'] || '', total: linha['aliq_total'] || '', sitSiafi: linha['sit_siafi'] || '' };
-                db.collection('darf').add(novoDarf); contadorSucesso++;
-            });
-            if (contadorSucesso > 0) alert(`A enviar ${contadorSucesso} códigos DARF...`); 
-        } catch (erro) { alert("Erro: " + erro.message); }
-        evento.target.value = ''; 
-    }; leitor.readAsArrayBuffer(ficheiro);
+// ==========================================
+// MÓDULO: ENTRADA DE TÍTULOS (FORM-3)
+// ==========================================
+document.getElementById('buscaTabelaTitulos').addEventListener('input', debounce(() => {
+    termoBuscaTitulos = document.getElementById('buscaTabelaTitulos').value.toLowerCase();
+    paginaAtualTitulos = 1; atualizarTabelaTitulos();
+}));
+
+function abrirFormularioTitulo() {
+    document.getElementById('formTitulo').reset();
+    document.getElementById('editIndexTitulo').value = -1;
+    document.getElementById('idProc').value = "";
+    document.getElementById('dadosContratoSelecionado').style.display = 'none';
+    empenhosDaNotaAtual = [];
+    desenharMiniTabelaEmpenhos();
+    document.getElementById('tela-lista-titulos').style.display = 'none';
+    document.getElementById('tela-formulario-titulos').style.display = 'block';
+}
+
+function voltarParaListaTitulos() {
+    document.getElementById('tela-formulario-titulos').style.display = 'none';
+    document.getElementById('tela-lista-titulos').style.display = 'block';
+}
+
+function atualizarTabelaTitulos() {
+    const tbody = document.getElementById('tbody-titulos');
+    tbody.innerHTML = '';
+    let baseFiltrada = baseTitulos.map((t, index) => ({ ...t, indexOriginal: index }));
+    
+    if (termoBuscaTitulos.trim() !== "") { 
+        baseFiltrada = baseFiltrada.filter(t => 
+            (t.idProc && t.idProc.toLowerCase().includes(termoBuscaTitulos)) || 
+            (t.fornecedor && t.fornecedor.toLowerCase().includes(termoBuscaTitulos)) ||
+            (t.numTC && t.numTC.toLowerCase().includes(termoBuscaTitulos))
+        ); 
+    }
+    baseFiltrada = aplicarOrdenacao(baseFiltrada, 'titulos');
+
+    const inicio = (paginaAtualTitulos - 1) * itensPorPaginaTitulos; const fim = inicio + parseInt(itensPorPaginaTitulos);
+    let itensExibidos = baseFiltrada.slice(inicio, fim);
+    
+    if (itensExibidos.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum título encontrado.</td></tr>'; return;}
+
+    itensExibidos.forEach(t => {
+        const tr = document.createElement('tr');
+        const acoesHTML = gerarBotoesAcao(t.id, 'titulo');
+        tr.innerHTML = `
+            <td><strong>${escapeHTML(t.idProc)}</strong></td>
+            <td>${escapeHTML(t.numTC) || '-'}</td>
+            <td>${escapeHTML(t.fornecedor) || '-'}</td>
+            <td>R$ ${escapeHTML(t.valorNotaFiscal) || '0.00'}</td>
+            <td>${acoesHTML}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// EVENT DELEGATION: Titulos
+document.getElementById('tbody-titulos').addEventListener('click', function(e) {
+    const btnEditar = e.target.closest('.btn-editar-titulo');
+    const btnApagar = e.target.closest('.btn-apagar-titulo');
+    if (btnEditar) editarTitulo(btnEditar.getAttribute('data-id'));
+    if (btnApagar) apagarTitulo(btnApagar.getAttribute('data-id'));
 });
-function exportarDarf(formato) { 
-    if (baseDarf.length === 0) return alert("Vazio."); 
-    const exp = baseDarf.map(d => ({ "cod_receita": d.codigo, "nat_rendimento": d.natRendimento, "aplicacao": d.aplicacao, "perc_ir": d.ir, "perc_csll": d.csll, "perc_cofins": d.cofins, "perc_pis": d.pis, "aliq_total": d.total, "sit_siafi": d.sitSiafi }));
-    const folha = XLSX.utils.json_to_sheet(exp); const livro = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(livro, folha, "DARF"); XLSX.writeFile(livro, `DARF_${new Date().toISOString().slice(0,10)}.${formato}`); 
+
+function mudarTamanhoPagina() { itensPorPaginaTitulos = document.getElementById('itensPorPagina').value; paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
+
+// Autocomplete CONTRATO no FORM-3
+const inputBuscaContratoT = document.getElementById('buscaContratoT');
+const listaContratosT = document.getElementById('listaResultadosContratoT');
+
+inputBuscaContratoT.addEventListener('input', debounce(function() {
+    const texto = this.value.toLowerCase();
+    listaContratosT.innerHTML = '';
+    if (texto.length >= 3) {
+        const resultados = baseContratos.filter(c => (c.fornecedor && c.fornecedor.toLowerCase().includes(texto)) || (c.numContrato && c.numContrato.toLowerCase().includes(texto)));
+        resultados.forEach(c => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>${escapeHTML(c.numContrato)}</strong> - ${escapeHTML(c.fornecedor)}`;
+            li.onclick = () => {
+                document.getElementById('dadosContratoSelecionado').style.display = 'block';
+                document.getElementById('readFornecedor').value = c.fornecedor;
+                document.getElementById('readInstrumento').value = c.numContrato;
+                listaContratosT.innerHTML = ''; inputBuscaContratoT.value = '';
+            };
+            listaContratosT.appendChild(li);
+        });
+    }
+}));
+
+// Autocomplete EMPENHO no FORM-3
+const inputBuscaEmpenhoT = document.getElementById('buscaEmpenhoT');
+const listaEmpenhosT = document.getElementById('listaResultadosEmpenhoT');
+
+inputBuscaEmpenhoT.addEventListener('input', debounce(function() {
+    const texto = this.value.toUpperCase();
+    listaEmpenhosT.innerHTML = '';
+    if (texto.length >= 4) {
+        const resultados = baseEmpenhos.filter(e => e.numEmpenho.includes(texto));
+        resultados.forEach(e => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>${escapeHTML(e.numEmpenho)}</strong> (FR: ${escapeHTML(e.fr)})`;
+            li.onclick = () => {
+                empenhoTemporarioSelecionado = e;
+                document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
+                document.getElementById('empenhoSelecionadoTexto').textContent = `NE Selecionada: ${e.numEmpenho}`;
+                listaEmpenhosT.innerHTML = ''; inputBuscaEmpenhoT.value = '';
+            };
+            listaEmpenhosT.appendChild(li);
+        });
+    }
+}));
+
+// Delegação de eventos para apagar itens da Mini Tabela
+document.querySelector('#tabelaEmpenhosDaNota tbody').addEventListener('click', function(e) {
+    const btnRm = e.target.closest('.btn-rm-empenhonota');
+    if(btnRm) {
+        const index = btnRm.getAttribute('data-index');
+        empenhosDaNotaAtual.splice(index, 1);
+        desenharMiniTabelaEmpenhos();
+    }
+});
+
+function adicionarEmpenhoNaNota() {
+    const valor = document.getElementById('vinculoValor').value;
+    if(!valor || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
+    
+    empenhosDaNotaAtual.push({
+        numEmpenho: escapeHTML(empenhoTemporarioSelecionado.numEmpenho),
+        valorVinculado: escapeHTML(valor),
+        lf: escapeHTML(document.getElementById('vinculoLF').value),
+        pf: escapeHTML(document.getElementById('vinculoPF').value)
+    });
+    desenharMiniTabelaEmpenhos();
+    document.getElementById('detalhesVinculoEmpenho').style.display = 'none';
+}
+
+function desenharMiniTabelaEmpenhos() {
+    const tbody = document.querySelector('#tabelaEmpenhosDaNota tbody');
+    tbody.innerHTML = '';
+    empenhosDaNotaAtual.forEach((v, i) => {
+        tbody.innerHTML += `<tr>
+            <td>${escapeHTML(v.numEmpenho)}</td>
+            <td>R$ ${escapeHTML(v.valorVinculado)}</td>
+            <td>${escapeHTML(v.lf)}</td>
+            <td>${escapeHTML(v.pf)}</td>
+            <td><button type="button" class="btn-icon btn-rm-empenhonota" data-index="${i}">🗑️</button></td>
+        </tr>`;
+    });
+}
+
+function gerarNovoIDProc() {
+    if (baseTitulos.length === 0) return "PROC-001";
+    const numeros = baseTitulos.map(t => parseInt(t.idProc.split('-')[1]) || 0);
+    const max = Math.max(...numeros);
+    return "PROC-" + String(max + 1).padStart(3, '0');
+}
+
+document.getElementById('formTitulo').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (empenhosDaNotaAtual.length === 0) return alert("Vincule ao menos um empenho!");
+
+    mostrarLoading();
+    const fbID = document.getElementById('editIndexTitulo').value;
+    const idProcOriginal = document.getElementById('idProc').value;
+    
+    const dados = {
+        idProc: escapeHTML(idProcOriginal || gerarNovoIDProc()),
+        dataExefin: escapeHTML(document.getElementById('dataExefin').value),
+        numTC: escapeHTML(document.getElementById('numTC').value),
+        notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
+        fornecedor: escapeHTML(document.getElementById('readFornecedor').value),
+        instrumento: escapeHTML(document.getElementById('readInstrumento').value),
+        valorNotaFiscal: parseFloat(document.getElementById('valorNotaFiscal').value) || 0,
+        dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
+        dataAteste: escapeHTML(document.getElementById('dataAteste').value),
+        empenhosVinculados: empenhosDaNotaAtual,
+        criado_por: escapeHTML(usuarioLogadoEmail)
+    };
+
+    try {
+        if (fbID == -1 || fbID === "") {
+            dados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('titulos').add(dados);
+        } else {
+            dados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('titulos').doc(fbID).update(dados);
+        }
+        alert(`Processamento salvo com sucesso!`);
+        voltarParaListaTitulos();
+    } catch(err) {
+        alert("Erro ao gravar Processamento. Acesso Negado.");
+    } finally {
+        esconderLoading();
+    }
+});
+
+function editarTitulo(id) {
+    const t = baseTitulos.find(item => item.id === id);
+    if(t) {
+        abrirFormularioTitulo(); document.getElementById('editIndexTitulo').value = t.id;
+        document.getElementById('idProc').value = t.idProc || '';
+        document.getElementById('badgeStatusProc').textContent = t.idProc;
+        document.getElementById('badgeStatusProc').className = "badge-status salvo";
+        
+        document.getElementById('dataExefin').value = t.dataExefin || '';
+        document.getElementById('numTC').value = t.numTC || '';
+        document.getElementById('notaFiscal').value = t.notaFiscal || '';
+        document.getElementById('valorNotaFiscal').value = t.valorNotaFiscal || '';
+        document.getElementById('dataEmissao').value = t.dataEmissao || '';
+        document.getElementById('dataAteste').value = t.dataAteste || '';
+
+        if(t.fornecedor) {
+            document.getElementById('dadosContratoSelecionado').style.display = 'block';
+            document.getElementById('readFornecedor').value = t.fornecedor;
+            document.getElementById('readInstrumento').value = t.instrumento || '';
+        }
+        
+        empenhosDaNotaAtual = t.empenhosVinculados ? JSON.parse(JSON.stringify(t.empenhosVinculados)) : [];
+        desenharMiniTabelaEmpenhos();
+    }
+}
+
+async function apagarTitulo(id) { 
+    if (confirm("Apagar Título permanentemente?")) { 
+        mostrarLoading();
+        try { await db.collection('titulos').doc(id).delete(); } 
+        catch(err) { alert("Acesso Negado."); } 
+        finally { esconderLoading(); } 
+    } 
+}
+
+// 6. FUNÇÃO DE BACKUP GLOBAL (Implementada)
+function exportarBancoDeDados() {
+    try {
+        const backupData = {
+            data_exportacao: new Date().toISOString(),
+            usuario: usuarioLogadoEmail,
+            empenhos: baseEmpenhos,
+            contratos: baseContratos,
+            darf: baseDarf,
+            titulos: baseTitulos
+        };
+
+        const dataStr = JSON.stringify(backupData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        const exportFileName = `SisExeFin_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileName);
+        linkElement.click();
+        
+        console.log("Backup gerado com sucesso.");
+    } catch (error) {
+        console.error("Erro ao gerar backup:", error);
+        alert("Erro ao gerar o ficheiro de backup.");
+    }
 }

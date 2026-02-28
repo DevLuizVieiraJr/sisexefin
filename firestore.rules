@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =================================================================
+    // 1. FUNÇÕES DE VALIDAÇÃO GERAIS
+    // =================================================================
+    function logado() { 
+      return request.auth != null; 
+    }
+    
+    function temPermissao(permissao) {
+      // Busca o documento do usuário atual para saber qual é o seu perfil
+      let userDoc = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      // Busca as permissões dentro do perfil desse usuário
+      let perfil = get(/databases/$(database)/documents/perfis/$(userDoc.data.perfil));
+      // Verifica se a permissão exigida está dentro da lista (array)
+      return permissao in perfil.data.permissoes;
+    }
+
+    // =================================================================
+    // 2. REGRAS DO PAINEL DE ADMINISTRAÇÃO (Segurança Máxima)
+    // =================================================================
+    
+    // Coleção de Usuários
+    match /usuarios/{userId} {
+      // O usuário pode ler o seu próprio cargo, mas só o Admin pode ver todos
+      allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
+      // Apenas Admins podem definir ou trocar cargos
+      allow write: if logado() && temPermissao('acesso_admin');
+    }
+
+    // Coleção de Perfis (Roles)
+    match /perfis/{perfilId} {
+      // Qualquer utilizador logado precisa de ler isto para o sistema montar os menus
+      allow read: if logado();
+      // Apenas Admins podem criar novos perfis ou alterar permissões
+      allow write: if logado() && temPermissao('acesso_admin');
+    }
+
+    // =================================================================
+    // 3. REGRAS OPERACIONAIS (Empenhos, Contratos, DARF, Títulos)
+    // =================================================================
+    
+    match /empenhos/{docId} {
+      allow read: if logado();
+      allow create: if logado() && temPermissao('inserir_dados');
+      allow update: if logado() && temPermissao('editar_dados');
+      allow delete: if logado() && temPermissao('excluir_dados');
+    }
+
+    match /contratos/{docId} {
+      allow read: if logado();
+      allow create: if logado() && temPermissao('inserir_dados');
+      allow update: if logado() && temPermissao('editar_dados');
+      allow delete: if logado() && temPermissao('excluir_dados');
+    }
+
+    match /darf/{docId} {
+      allow read: if logado();
+      allow create: if logado() && temPermissao('inserir_dados');
+      allow update: if logado() && temPermissao('editar_dados');
+      allow delete: if logado() && temPermissao('excluir_dados');
+    }
+
+    match /titulos/{docId} {
+      allow read: if logado();
+      allow create: if logado() && temPermissao('inserir_dados');
+      allow update: if logado() && temPermissao('editar_dados');
+      allow delete: if logado() && temPermissao('excluir_dados');
+    }
+  }
+}
