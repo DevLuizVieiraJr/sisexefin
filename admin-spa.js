@@ -18,7 +18,7 @@
     let listaPerfis = [];
     let listaOI = [];
 
-    const TAB_INDEX = { usuarios: 1, perfis: 2, oi: 3, cadastrar: 4 };
+    const TAB_INDEX = { usuarios: 1, pendentes: 2, perfis: 3, oi: 4, cadastrar: 5 };
 
     function adminLoading(mostrar) {
         const el = document.getElementById('adminLoading');
@@ -41,6 +41,23 @@
         if (tab) tab.classList.add('ativo');
         const el = document.getElementById('painel-' + painel);
         if (el) el.classList.add('visivel');
+        if (painel === 'cadastrar') {
+            const uidInput = document.getElementById('adminUsuarioUid');
+            const senhaInicialGroup = document.getElementById('formGroupSenhaInicial');
+            const senhaAdminGroup = document.getElementById('formGroupSenhaAdmin');
+            const ehNovo = !(uidInput && uidInput.value && uidInput.value.trim());
+            if (senhaInicialGroup) senhaInicialGroup.style.display = ehNovo ? 'block' : 'none';
+            if (senhaAdminGroup) senhaAdminGroup.style.display = ehNovo ? 'block' : 'none';
+            if (ehNovo) {
+                const senhaInicial = document.getElementById('adminUsuarioSenhaInicial');
+                const senhaAdmin = document.getElementById('adminUsuarioSenhaAdmin');
+                if (senhaInicial) senhaInicial.required = true;
+                if (senhaAdmin) senhaAdmin.required = false;
+            } else {
+                const senhaInicial = document.getElementById('adminUsuarioSenhaInicial');
+                if (senhaInicial) { senhaInicial.required = false; senhaInicial.value = ''; }
+            }
+        }
     }
 
     window.mostrarPainelAdmin = mostrarPainelAdmin;
@@ -53,9 +70,51 @@
             const snap = await db.collection('usuarios').get();
             listaUsuarios = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             desenharTabelaUsuarios();
+            carregarPendentes();
         } catch (err) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar usuários.</td></tr>';
         }
+    }
+
+    async function carregarPendentes() {
+        const tbody = document.getElementById('tbodyPendentes');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">A carregar...</td></tr>';
+        try {
+            const snap = await db.collection('usuarios').get();
+            const pendentes = snap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(u => u.status === 'pendente');
+            desenharTabelaPendentes(pendentes);
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Erro ao carregar.</td></tr>';
+        }
+    }
+
+    function desenharTabelaPendentes(pendentes) {
+        const tbody = document.getElementById('tbodyPendentes');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!pendentes || pendentes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum usuário aguardando aprovação.</td></tr>';
+            return;
+        }
+        pendentes.forEach(u => {
+            const tr = document.createElement('tr');
+            const criado = u.criadoEm && u.criadoEm.toDate ? u.criadoEm.toDate().toLocaleString('pt-BR') : '-';
+            tr.innerHTML = `
+                <td>${escapeHTML(u.email || '-')}</td>
+                <td>${escapeHTML(u.nomeCompleto || u.displayName || '-')}</td>
+                <td><span class="status-ativo">${escapeHTML(u.origem || '-')}</span></td>
+                <td>${criado}</td>
+                <td>
+                    <button type="button" class="btn-icon btn-aprovar-usuario" data-uid="${escapeHTML(u.id)}" title="Aprovar">✓</button>
+                    <button type="button" class="btn-icon btn-rejeitar-usuario" data-uid="${escapeHTML(u.id)}" title="Rejeitar">✗</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('.btn-aprovar-usuario').forEach(btn => btn.addEventListener('click', function() { adminAprovarUsuario(this.getAttribute('data-uid')); }));
+        tbody.querySelectorAll('.btn-rejeitar-usuario').forEach(btn => btn.addEventListener('click', function() { adminRejeitarUsuario(this.getAttribute('data-uid')); }));
     }
 
     async function carregarPerfis() {
@@ -127,10 +186,14 @@
     }
 
     window.abrirFormularioOI = function() {
-        document.getElementById('formOI').reset();
+        const form = document.getElementById('formOI');
+        const listEl = document.getElementById('tela-lista-oi');
+        const formEl = document.getElementById('tela-formulario-oi');
+        if (!form || !listEl || !formEl) return;
+        form.reset();
         document.getElementById('editIndexOI').value = '-1';
-        document.getElementById('tela-lista-oi').style.display = 'none';
-        document.getElementById('tela-formulario-oi').style.display = 'block';
+        listEl.style.display = 'none';
+        formEl.style.display = 'block';
     };
 
     window.voltarListaOI = function() {
@@ -172,13 +235,13 @@
     if (formOI) {
         formOI.addEventListener('submit', async function(e) {
             e.preventDefault();
-            const numeroOI = escapeHTML(document.getElementById('numeroOI').value).trim();
+            const numeroOI = (document.getElementById('numeroOI').value || '').trim();
             const telefoneRaw = typeof telefoneSomenteDigitos === 'function' ? telefoneSomenteDigitos(document.getElementById('telefoneOI').value) : (document.getElementById('telefoneOI').value || '').replace(/\D/g, '');
             if (telefoneRaw.length > 0 && telefoneRaw.length < 10) {
                 alert('Telefone inválido. Informe pelo menos 10 dígitos.');
                 return;
             }
-            const fbID = document.getElementById('editIndexOI').value;
+            const fbID = (document.getElementById('editIndexOI') || {}).value || '-1';
             const duplicado = listaOI.find(o => (o.numeroOI || '').toLowerCase() === numeroOI.toLowerCase() && o.id !== fbID);
             if (duplicado) {
                 alert('Já existe uma OI com este número. Escolha outro.');
@@ -186,10 +249,10 @@
             }
             const dados = {
                 numeroOI,
-                nomeOI: escapeHTML(document.getElementById('nomeOI').value),
-                contatoOI: escapeHTML(document.getElementById('contatoOI').value),
-                telefoneOI: document.getElementById('telefoneOI').value || '',
-                situacao: document.getElementById('situacaoOI').value
+                nomeOI: (document.getElementById('nomeOI') || {}).value || '',
+                contatoOI: (document.getElementById('contatoOI') || {}).value || '',
+                telefoneOI: (document.getElementById('telefoneOI') || {}).value || '',
+                situacao: (document.getElementById('situacaoOI') || {}).value || 'Ativo'
             };
             const btn = formOI.querySelector('button[type="submit"]');
             btnLoading(btn, true, 'A guardar...');
@@ -199,7 +262,9 @@
                 else await db.collection('oi').doc(fbID).update(dados);
                 alert('OI salva com sucesso.');
                 voltarListaOI();
-            } catch (err) { alert('Erro ao salvar OI.'); }
+            } catch (err) {
+                alert('Erro ao salvar OI: ' + (err.message || err));
+            }
             finally { btnLoading(btn, false); adminLoading(false); }
         });
     }
@@ -271,7 +336,9 @@
             const tr = document.createElement('tr');
             const perfis = Array.isArray(u.perfis) ? u.perfis : (u.perfil ? [u.perfil] : []);
             const perfilAtual = u.perfil_ativo || u.perfilAtual || u.perfil || (perfis[0] || '-');
-            const status = u.bloqueado ? '<span class="status-bloqueado">Bloqueado</span>' : '<span class="status-ativo">Ativo</span>';
+            const status = u.bloqueado || u.status === 'bloqueado' ? '<span class="status-bloqueado">Bloqueado</span>' :
+                u.status === 'pendente' || (!(u.perfis && u.perfis.length) && !u.perfil) ? '<span class="status-pendente">Pendente</span>' :
+                '<span class="status-ativo">Ativo</span>';
             tr.innerHTML = `
                 <td><code style="font-size:11px;">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
                 <td>${escapeHTML(u.email || '-')}</td>
@@ -328,6 +395,15 @@
         mostrarPainelAdmin('cadastrar');
     };
 
+    window.adminNovoUsuario = function() {
+        document.getElementById('formUsuarioAdmin').reset();
+        document.getElementById('adminUsuarioUid').value = '';
+        mostrarPainelAdmin('cadastrar');
+    };
+
+    const btnNovoUsuario = document.getElementById('btnNovoUsuario');
+    if (btnNovoUsuario) btnNovoUsuario.addEventListener('click', adminNovoUsuario);
+
     window.adminBloquearUsuario = async function(uid, btn) {
         if (!confirm('Bloquear este usuário? Ele perderá o acesso ao sistema.')) return;
         adminLoading(true);
@@ -344,11 +420,35 @@
         }
     };
 
+    window.adminAprovarUsuario = function(uid) {
+        adminEditarUsuario(uid);
+    };
+
+    window.adminRejeitarUsuario = async function(uid) {
+        if (!confirm('Rejeitar este cadastro? O utilizador ficará bloqueado e não poderá aceder ao sistema.')) return;
+        adminLoading(true);
+        try {
+            await db.collection('usuarios').doc(uid).update({ status: 'bloqueado', bloqueado: true });
+            const u = listaUsuarios.find(x => x.id === uid);
+            const email = (u && u.email) || uid;
+            if (typeof window.registrarAuditoria === 'function') window.registrarAuditoria('rejeitar_usuario', email, { uid });
+            alert('Cadastro rejeitado.');
+            carregarUsuarios();
+            carregarPendentes();
+        } catch (err) {
+            alert('Erro ao rejeitar: ' + (err.message || 'Acesso negado.'));
+        } finally {
+            adminLoading(false);
+        }
+    };
+
     window.adminDesbloquearUsuario = async function(uid, btn) {
         adminLoading(true);
         if (btn) btnLoading(btn, true);
         try {
-            await db.collection('usuarios').doc(uid).update({ bloqueado: false });
+            await db.collection('usuarios').doc(uid).update({ bloqueado: false, status: 'ativo' });
+            const u = listaUsuarios.find(x => x.id === uid);
+            if (typeof window.registrarAuditoria === 'function') window.registrarAuditoria('desbloquear_usuario', u ? u.email : uid, { uid });
             alert('Usuário desbloqueado.');
             carregarUsuarios();
         } catch (err) {

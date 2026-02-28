@@ -14,6 +14,7 @@ service cloud.firestore {
       if (!exists(userRef)) return false;
       let userDoc = get(userRef).data;
       if (userDoc.bloqueado == true) return false;
+      if (userDoc.keys().hasAny(['status']) && userDoc.status == 'pendente') return false;
       let perfis = userDoc.keys().hasAny(['perfis']) ? userDoc.perfis : (userDoc.keys().hasAny(['perfil']) ? [userDoc.perfil] : []);
       let perfilAtivo = userDoc.keys().hasAny(['perfil_ativo']) ? userDoc.perfil_ativo : userDoc.perfil;
       if (perfilAtivo == null) return false;
@@ -34,7 +35,16 @@ service cloud.firestore {
     
     match /usuarios/{userId} {
       allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
-      allow write: if logado() && temPermissao('acesso_admin');
+      allow create: if logado() && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(['perfis', 'perfil_ativo', 'bloqueado', 'perfil'])
+        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'pendente');
+      allow update, delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    match /auditoria/{docId} {
+      allow read: if logado() && temPermissao('acesso_admin');
+      allow create: if logado() && temPermissao('acesso_admin');
+      allow update, delete: if false;
     }
 
     match /perfis/{perfilId} {

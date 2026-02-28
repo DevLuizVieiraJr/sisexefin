@@ -1,6 +1,8 @@
 // ==========================================
 // CONFIGURAÇÃO CENTRALIZADA DO FIREBASE
 // ==========================================
+// SEGURANÇA: Restrinja a API key no Google Cloud Console (APIs & Services > Credentials)
+// para permitir apenas os domínios/aplicações autorizados do SisExeFin.
 const firebaseConfig = {
     apiKey: "AIzaSyDXHpJFnVUR7YCh-3rXvx4yX6zo3a-mR7A",
     authDomain: "sisexefin.firebaseapp.com",

@@ -15,6 +15,33 @@ function mostrarLoading() { const l = document.getElementById('loadingApp'); if(
 function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
+/** Registra ação administrativa na coleção auditoria. Apenas admins podem criar. */
+async function registrarAuditoria(acao, alvo, detalhes) {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+        await db.collection('auditoria').add({
+            acao,
+            alvo: String(alvo || ''),
+            detalhes: typeof detalhes === 'object' ? JSON.stringify(detalhes) : String(detalhes || ''),
+            adminUid: user.uid,
+            adminEmail: user.email || '',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (err) {
+        console.warn('Erro ao registrar auditoria:', err);
+    }
+}
+window.registrarAuditoria = registrarAuditoria;
+
+/** Valida senha forte: mínimo 8 caracteres, pelo menos 1 letra e 1 número. */
+function validarSenhaForte(senha) {
+    if (!senha || senha.length < 8) return false;
+    const temLetra = /[a-zA-Z]/.test(senha);
+    const temNumero = /\d/.test(senha);
+    return temLetra && temNumero;
+}
+
 /** Exibe apenas os últimos 12 caracteres da NE (ex: 2024NE000001). O valor completo permanece no banco. */
 function formatarNumEmpenhoVisivel(numEmpenho) {
     if (!numEmpenho) return '-';
@@ -106,8 +133,23 @@ function gerarBotoesAcao(id, modulo) {
 // ==========================================
 // INICIALIZAÇÃO DA SESSÃO (Resolve null & Race Conditions)
 // ==========================================
+function usuarioPodeAcessarSistema(data) {
+    if (!data) return false;
+    if (data.bloqueado === true || data.status === 'bloqueado') return false;
+    if (data.status === 'pendente') return false;
+    const perfis = Array.isArray(data.perfis) ? data.perfis : (data.perfil ? [data.perfil] : []);
+    const perfilAtivo = data.perfil_ativo || data.perfilAtual || data.perfil || (perfis[0] || null);
+    return perfis.length > 0 && perfilAtivo && perfis.includes(perfilAtivo);
+}
+
 auth.onAuthStateChanged(async (user) => {
     if (user) {
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        const data = userDoc.exists ? userDoc.data() : null;
+        if (!usuarioPodeAcessarSistema(data)) {
+            window.location.replace('index.html');
+            return;
+        }
         usuarioLogadoEmail = user.email;
         const elUser = document.getElementById('nomeUsuarioLogado');
         if (elUser) elUser.textContent = `👤 ${usuarioLogadoEmail}`;
@@ -147,11 +189,72 @@ auth.onAuthStateChanged(async (user) => {
             corpoSistema.style.display = 'block';
             escutarFirebase();
         }
+        if (typeof iniciarWatcherInatividade === 'function') iniciarWatcherInatividade();
     } else {
         window.location.href = "index.html";
     }
 });
 function fazerLogout() { auth.signOut(); }
+
+// ==========================================
+// TIMEOUT POR INATIVIDADE (15 min + aviso 2 min)
+// ==========================================
+const INATIVIDADE_MS = 15 * 60 * 1000;
+const AVISO_MS = 2 * 60 * 1000;
+
+function iniciarWatcherInatividade() {
+    if (!auth.currentUser) return;
+    let timerPrincipal = null;
+    let timerAviso = null;
+    let modalEl = null;
+
+    function fazerLogoutPorInatividade() {
+        if (timerPrincipal) clearTimeout(timerPrincipal);
+        if (timerAviso) clearTimeout(timerAviso);
+        if (modalEl && modalEl.parentNode) modalEl.remove();
+        auth.signOut();
+        window.location.replace('index.html');
+    }
+
+    function fecharModalEResetar() {
+        if (modalEl && modalEl.parentNode) modalEl.remove();
+        modalEl = null;
+        if (timerAviso) { clearTimeout(timerAviso); timerAviso = null; }
+        reiniciarTimer();
+    }
+
+    function mostrarModalAviso() {
+        if (modalEl) return;
+        modalEl = document.createElement('div');
+        modalEl.id = 'modal-inatividade';
+        modalEl.innerHTML = `
+            <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">
+                <div style="background:white;padding:30px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);max-width:400px;text-align:center;">
+                    <p style="font-size:16px;margin-bottom:20px;color:#333;">Sessão expirando por inatividade em 2 minutos.<br>Clique em Continuar para permanecer conectado.</p>
+                    <div style="display:flex;gap:10px;justify-content:center;">
+                        <button type="button" id="btn-continuar-sessao" class="btn-primary" style="padding:10px 20px;">Continuar</button>
+                        <button type="button" id="btn-sair-sessao" class="btn-default" style="padding:10px 20px;">Sair</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modalEl);
+        document.getElementById('btn-continuar-sessao').addEventListener('click', fecharModalEResetar);
+        document.getElementById('btn-sair-sessao').addEventListener('click', fazerLogoutPorInatividade);
+        timerAviso = setTimeout(fazerLogoutPorInatividade, AVISO_MS);
+    }
+
+    function reiniciarTimer() {
+        if (timerPrincipal) clearTimeout(timerPrincipal);
+        timerPrincipal = setTimeout(mostrarModalAviso, INATIVIDADE_MS);
+    }
+
+    const eventos = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const debouncedReset = debounce(reiniciarTimer, 1000);
+    eventos.forEach(ev => document.addEventListener(ev, debouncedReset));
+
+    reiniciarTimer();
+}
+window.iniciarWatcherInatividade = iniciarWatcherInatividade;
 
 // ==========================================
 // LÓGICA DO PAINEL ADMIN (Agora integrada de forma segura)
@@ -184,7 +287,7 @@ const formUsuarioAdmin = document.getElementById('formUsuarioAdmin');
 if (formUsuarioAdmin) {
     formUsuarioAdmin.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const uid = document.getElementById('adminUsuarioUid').value.trim();
+        const uid = (document.getElementById('adminUsuarioUid') || {}).value ? document.getElementById('adminUsuarioUid').value.trim() : '';
         const email = document.getElementById('adminUsuarioEmail').value.trim();
         const cpfEl = document.getElementById('adminUsuarioCPF');
         const cpfRaw = (cpfEl && cpfEl.value) ? cpfEl.value.replace(/\D/g, '') : '';
@@ -201,7 +304,7 @@ if (formUsuarioAdmin) {
         if (perfis.length === 0) { alert("Selecione pelo menos um perfil."); return; }
         if (!perfilAtual || !perfis.includes(perfilAtual)) perfilAtual = perfis[0];
 
-        const dados = { email, perfis, perfil_ativo: perfilAtual };
+        const dados = { email, perfis, perfil_ativo: perfilAtual, status: 'ativo' };
         if (cpfRaw.length === 11) dados.cpf = cpfRaw;
         if (nomeCompleto) dados.nomeCompleto = nomeCompleto;
         if (nomeGuerra) dados.nomeGuerra = nomeGuerra;
@@ -210,13 +313,49 @@ if (formUsuarioAdmin) {
         const btn = formUsuarioAdmin.querySelector('button[type="submit"]');
         if (typeof window.adminLoading === 'function') window.adminLoading(true);
         if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
+
         try {
-            await db.collection('usuarios').doc(uid).set(dados, { merge: true });
+            let uidFinal = uid;
+            if (!uid) {
+                const senhaInicial = (document.getElementById('adminUsuarioSenhaInicial') || {}).value || '';
+                if (!validarSenhaForte(senhaInicial)) {
+                    alert("Para novo usuário, informe senha forte: mínimo 8 caracteres, incluindo letras e números.");
+                    return;
+                }
+                const adminEmail = auth.currentUser ? auth.currentUser.email : '';
+                const adminSenha = (document.getElementById('adminUsuarioSenhaAdmin') || {}).value || '';
+                const userCred = await auth.createUserWithEmailAndPassword(email, senhaInicial);
+                uidFinal = userCred.user.uid;
+                await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });
+                await auth.signOut();
+                if (adminSenha && adminEmail) {
+                    await auth.signInWithEmailAndPassword(adminEmail, adminSenha);
+                }
+                if (typeof registrarAuditoria === 'function') registrarAuditoria('criar_usuario', email, { perfis, perfil_ativo: perfilAtual });
+                alert(`Usuário criado com sucesso. UID gerado automaticamente pelo Firebase Auth. Perfis: ${perfis.join(', ')}.`);
+                formUsuarioAdmin.reset();
+                const uidInput = document.getElementById('adminUsuarioUid');
+                if (uidInput) uidInput.value = '';
+                if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+                if (!adminSenha && adminEmail) {
+                    window.location.href = (window.location.pathname.replace(/admin\.html?$/, '') || '/') + 'index.html';
+                }
+                return;
+            }
+            await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });
+            if (typeof registrarAuditoria === 'function') registrarAuditoria('atualizar_usuario', email, { perfis, perfil_ativo: perfilAtual });
             alert(`Usuário atualizado com perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`);
             formUsuarioAdmin.reset();
+            const uidInputEdit = document.getElementById('adminUsuarioUid');
+            if (uidInputEdit) uidInputEdit.value = '';
             if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
-        } catch (err) { alert("Acesso Negado: Apenas o Admin pode atribuir cargos."); }
-        finally {
+        } catch (err) {
+            const msg = err.code === 'auth/email-already-in-use' ? 'Este email já está em uso.' :
+                err.code === 'auth/invalid-email' ? 'Email inválido.' :
+                err.code === 'auth/weak-password' ? 'Senha muito fraca. Use mínimo 8 caracteres, incluindo letras e números.' :
+                err.message || 'Erro ao salvar.';
+            alert(msg);
+        } finally {
             if (typeof window.adminLoading === 'function') window.adminLoading(false);
             if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, false);
         }
@@ -302,10 +441,23 @@ function mostrarSecao(idSecao, botao) {
 }
 
 function escutarFirebase() {
-    db.collection('empenhos').onSnapshot(snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); esconderLoading(); });
-    db.collection('contratos').onSnapshot(snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); });
-    db.collection('darf').onSnapshot(snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); });
-    db.collection('titulos').onSnapshot(snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); });
+    const onError = () => esconderLoading();
+    db.collection('empenhos').onSnapshot(
+        snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); esconderLoading(); },
+        onError
+    );
+    db.collection('contratos').onSnapshot(
+        snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); esconderLoading(); },
+        onError
+    );
+    db.collection('darf').onSnapshot(
+        snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); esconderLoading(); },
+        onError
+    );
+    db.collection('titulos').onSnapshot(
+        snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); esconderLoading(); },
+        onError
+    );
 }
 
 // ==========================================
