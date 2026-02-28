@@ -64,7 +64,16 @@ auth.onAuthStateChanged(async (user) => {
         usuarioLogadoEmail = user.email;
         const elUser = document.getElementById('nomeUsuarioLogado');
         if (elUser) elUser.textContent = `👤 ${usuarioLogadoEmail}`;
-        
+
+        // Sincronizar utilizador Auth -> Firestore (permite listar no menu de acesso)
+        try {
+            const userRef = db.collection('usuarios').doc(user.uid);
+            const snap = await userRef.get();
+            if (!snap.exists) {
+                await userRef.set({ email: user.email || '' }, { merge: true });
+            }
+        } catch (e) { /* ignora erro de rede ou permissão */ }
+
         // Espera SINCRONAMENTE pelas permissões antes de exibir qualquer tela
         await carregarPermissoes();
         

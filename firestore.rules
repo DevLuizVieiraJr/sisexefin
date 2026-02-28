@@ -50,7 +50,8 @@ service cloud.firestore {
     
     match /usuarios/{userId} {
       allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
-      allow write: if logado() && temPermissao('acesso_admin');
+      allow create: if logado() && request.auth.uid == userId;
+      allow update, delete: if logado() && temPermissao('acesso_admin');
     }
 
     match /perfis/{perfilId} {
