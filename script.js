@@ -26,9 +26,17 @@ async function carregarPermissoes() {
     try {
         const userDoc = await db.collection('usuarios').doc(user.uid).get();
         if (!userDoc.exists) return [];
-        const perfilID = userDoc.data().perfil;
-        const perfilDoc = await db.collection('perfis').doc(perfilID).get();
-        permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
+        const data = userDoc.data();
+        // Suporta perfis (array) ou perfil (singular) para retrocompatibilidade
+        const idsPerfis = Array.isArray(data.perfis) ? data.perfis : (data.perfil ? [data.perfil] : []);
+        const todasPermissoes = [];
+        for (const perfilId of idsPerfis) {
+            const perfilDoc = await db.collection('perfis').doc(perfilId).get();
+            if (perfilDoc.exists && perfilDoc.data().permissoes) {
+                todasPermissoes.push(...perfilDoc.data().permissoes);
+            }
+        }
+        permissoesEmCache = [...new Set(todasPermissoes)];
         return permissoesEmCache;
     } catch (error) { return []; }
 }
@@ -85,7 +93,170 @@ auth.onAuthStateChanged(async (user) => {
 function fazerLogout() { auth.signOut(); }
 
 // ==========================================
-// LÓGICA DO PAINEL ADMIN (Agora integrada de forma segura)
+// LÓGICA DO PAINEL ADMIN (SPA - Usuários e Perfis)
+// ==========================================
+let baseUsuarios = [];
+let basePerfis = [];
+let paginaAtualUsuarios = 1;
+let itensPorPaginaUsuarios = 10;
+let termoBuscaUsuarios = "";
+let paginaAtualPerfis = 1;
+let itensPorPaginaPerfis = 10;
+let termoBuscaPerfis = "";
+
+// Alternar entre abas Usuários e Perfis
+function mostrarSecaoAdmin(idSecao, botao) {
+    const secUsuarios = document.getElementById('secao-usuarios');
+    const secPerfis = document.getElementById('secao-perfis');
+    if (secUsuarios) secUsuarios.style.display = idSecao === 'secao-usuarios' ? 'block' : 'none';
+    if (secPerfis) secPerfis.style.display = idSecao === 'secao-perfis' ? 'block' : 'none';
+    document.querySelectorAll('.admin-sidebar .menu-btn').forEach(b => b.classList.remove('ativo'));
+    if (botao) botao.classList.add('ativo');
+    if (idSecao === 'secao-usuarios') carregarUsuariosTabela();
+    else if (idSecao === 'secao-perfis') { carregarPerfisTabela(); carregarPerfisNoSelect(); }
+}
+
+// Busca coleção perfis e preenche a tabela de Perfis
+async function carregarPerfisTabela() {
+    try {
+        const snap = await db.collection('perfis').get();
+        basePerfis = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        atualizarTabelaPerfis();
+    } catch (err) {
+        console.error('Erro ao carregar perfis:', err);
+        const tbody = document.getElementById('tbody-perfis');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Erro ao carregar. Verifique as permissões.</td></tr>';
+    }
+}
+
+function atualizarTabelaPerfis() {
+    const tbody = document.getElementById('tbody-perfis');
+    if (!tbody) return;
+    const sel = document.getElementById('itensPorPaginaPerfis');
+    if (sel) itensPorPaginaPerfis = parseInt(sel.value) || 10;
+    termoBuscaPerfis = (document.getElementById('buscaPerfis')?.value || '').toLowerCase();
+    let baseFiltrada = basePerfis.filter(p =>
+        (p.id && p.id.toLowerCase().includes(termoBuscaPerfis))
+    );
+    const totalPaginas = Math.max(1, Math.ceil(baseFiltrada.length / itensPorPaginaPerfis));
+    const inicio = (paginaAtualPerfis - 1) * itensPorPaginaPerfis;
+    const itensExibidos = baseFiltrada.slice(inicio, inicio + itensPorPaginaPerfis);
+    tbody.innerHTML = '';
+    if (itensExibidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Nenhum perfil encontrado.</td></tr>';
+    } else {
+        itensExibidos.forEach(p => {
+            const tr = document.createElement('tr');
+            const perms = Array.isArray(p.permissoes) ? p.permissoes.join(', ') : '-';
+            tr.innerHTML = `<td><strong>${escapeHTML(p.id)}</strong></td><td>${escapeHTML(perms)}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+    const info = document.getElementById('infoPaginaPerfis');
+    const btnAnt = document.getElementById('btnAnteriorPerfis');
+    const btnProx = document.getElementById('btnProximoPerfis');
+    if (info) info.textContent = `Página ${paginaAtualPerfis} de ${totalPaginas}`;
+    if (btnAnt) btnAnt.disabled = paginaAtualPerfis <= 1;
+    if (btnProx) btnProx.disabled = paginaAtualPerfis >= totalPaginas;
+}
+
+function mudarPaginaPerfis(direcao) {
+    paginaAtualPerfis = Math.max(1, paginaAtualPerfis + direcao);
+    atualizarTabelaPerfis();
+}
+
+// Busca coleção usuarios e preenche a tabela de Usuários
+async function carregarUsuariosTabela() {
+    try {
+        const snap = await db.collection('usuarios').get();
+        baseUsuarios = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        atualizarTabelaUsuarios();
+    } catch (err) {
+        console.error('Erro ao carregar usuários:', err);
+        const tbody = document.getElementById('tbody-usuarios');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Erro ao carregar. Verifique as permissões.</td></tr>';
+    }
+}
+
+function atualizarTabelaUsuarios() {
+    const tbody = document.getElementById('tbody-usuarios');
+    if (!tbody) return;
+    const sel = document.getElementById('itensPorPaginaUsuarios');
+    if (sel) itensPorPaginaUsuarios = parseInt(sel.value) || 10;
+    termoBuscaUsuarios = (document.getElementById('buscaUsuarios')?.value || '').toLowerCase();
+    let baseFiltrada = baseUsuarios.filter(u =>
+        (u.email && u.email.toLowerCase().includes(termoBuscaUsuarios)) ||
+        (u.id && u.id.toLowerCase().includes(termoBuscaUsuarios))
+    );
+    const totalPaginas = Math.max(1, Math.ceil(baseFiltrada.length / itensPorPaginaUsuarios));
+    const inicio = (paginaAtualUsuarios - 1) * itensPorPaginaUsuarios;
+    const itensExibidos = baseFiltrada.slice(inicio, inicio + itensPorPaginaUsuarios);
+    tbody.innerHTML = '';
+    if (itensExibidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum utilizador encontrado.</td></tr>';
+    } else {
+        itensExibidos.forEach(u => {
+            const tr = document.createElement('tr');
+            const perfisStr = Array.isArray(u.perfis) ? u.perfis.join(', ') : (u.perfil || '-');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-icon';
+            btn.title = 'Editar perfil';
+            btn.textContent = '✏️';
+            btn.dataset.uid = u.id;
+            btn.dataset.email = u.email || '';
+            btn.dataset.perfil = Array.isArray(u.perfis) ? u.perfis[0] || '' : (u.perfil || '');
+            btn.onclick = () => { if (typeof abrirModalEditarUsuario === 'function') abrirModalEditarUsuario(btn.dataset.uid, btn.dataset.email, btn.dataset.perfil); };
+            tr.innerHTML = `
+                <td style="font-size:11px; max-width:150px; overflow:hidden; text-overflow:ellipsis;" title="${escapeHTML(u.id)}">${escapeHTML(u.id)}</td>
+                <td>${escapeHTML(u.email || '-')}</td>
+                <td><span class="badge-tag">${escapeHTML(perfisStr)}</span></td>
+                <td></td>`;
+            tr.querySelector('td:last-child').appendChild(btn);
+            tbody.appendChild(tr);
+        });
+    }
+    const info = document.getElementById('infoPaginaUsuarios');
+    const btnAnt = document.getElementById('btnAnteriorUsuarios');
+    const btnProx = document.getElementById('btnProximoUsuarios');
+    if (info) info.textContent = `Página ${paginaAtualUsuarios} de ${totalPaginas}`;
+    if (btnAnt) btnAnt.disabled = paginaAtualUsuarios <= 1;
+    if (btnProx) btnProx.disabled = paginaAtualUsuarios >= totalPaginas;
+}
+
+function mudarPaginaUsuarios(direcao) {
+    paginaAtualUsuarios = Math.max(1, paginaAtualUsuarios + direcao);
+    atualizarTabelaUsuarios();
+}
+
+// Alias para o botão Atualizar na secção Usuários
+function recarregarUsuarios() { carregarUsuariosTabela(); }
+
+// Carregar perfis para o select do modal (Admin)
+function carregarPerfisNoSelect() {
+    if (basePerfis.length === 0) {
+        db.collection('perfis').get().then(snap => {
+            basePerfis = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            preencherSelectPerfis();
+        });
+    } else preencherSelectPerfis();
+}
+function preencherSelectPerfis() {
+    const select = document.getElementById('modalSelectPerfil');
+    if (!select) return;
+    const atual = select.value;
+    select.innerHTML = '<option value="">— Selecionar perfil —</option>';
+    basePerfis.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.id;
+        select.appendChild(opt);
+    });
+    if (atual) select.value = atual;
+}
+
+// ==========================================
+// FORMULÁRIOS DO PAINEL ADMIN
 // ==========================================
 const formPerfilAdmin = document.getElementById('formPerfilAdmin');
 if (formPerfilAdmin) {
@@ -99,6 +270,8 @@ if (formPerfilAdmin) {
             await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
             alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
             formPerfilAdmin.reset();
+            if (typeof carregarPerfisTabela === 'function') carregarPerfisTabela();
+            if (typeof carregarPerfisNoSelect === 'function') carregarPerfisNoSelect();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }
     });
 }
@@ -778,5 +951,4 @@ function exportarBancoDeDados() {
         console.error("Erro ao gerar backup:", error);
         alert("Erro ao gerar o ficheiro de backup.");
     }
-
 }

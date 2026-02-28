@@ -9,14 +9,39 @@ service cloud.firestore {
       return request.auth != null; 
     }
     
+    // Verifica se um perfil específico contém a permissão exigida
+    function perfilTemPermissao(perfilId, permissao) {
+      let perfilRef = /databases/$(database)/documents/perfis/$(perfilId);
+      return exists(perfilRef) && 
+             'permissoes' in get(perfilRef).data &&
+             get(perfilRef).data.permissoes.hasAny([permissao]);
+    }
+
+    // Varre o array de perfis e verifica se algum contém a permissão (até 10 perfis).
+    // Firestore rules não têm loops, por isso verificamos cada índice manualmente.
+    function algumPerfilTemPermissao(perfis, permissao) {
+      let n = perfis.size();
+      return (n > 0 && perfilTemPermissao(perfis[0], permissao)) ||
+             (n > 1 && perfilTemPermissao(perfis[1], permissao)) ||
+             (n > 2 && perfilTemPermissao(perfis[2], permissao)) ||
+             (n > 3 && perfilTemPermissao(perfis[3], permissao)) ||
+             (n > 4 && perfilTemPermissao(perfis[4], permissao)) ||
+             (n > 5 && perfilTemPermissao(perfis[5], permissao)) ||
+             (n > 6 && perfilTemPermissao(perfis[6], permissao)) ||
+             (n > 7 && perfilTemPermissao(perfis[7], permissao)) ||
+             (n > 8 && perfilTemPermissao(perfis[8], permissao)) ||
+             (n > 9 && perfilTemPermissao(perfis[9], permissao));
+    }
+
+    // Varre o array de perfis do utilizador (get(userRef).data.perfis) e verifica se algum
+    // contém a permissão exigida. Suporta perfis (array) ou perfil (singular) para retrocompatibilidade.
     function temPermissao(permissao) {
-      // 1. Verifica se o documento do utilizador existe
       let userRef = /databases/$(database)/documents/usuarios/$(request.auth.uid);
-      
-      // 2. Se o user existir, verifica se o perfil também existe e usa o hasAny
-      return exists(userRef) && 
-             exists(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)) &&
-             get(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)).data.permissoes.hasAny([permissao]);
+      return exists(userRef) && temPermissaoComUserData(get(userRef).data, permissao);
+    }
+    function temPermissaoComUserData(userData, permissao) {
+      return ('perfis' in userData && userData.perfis is list && algumPerfilTemPermissao(userData.perfis, permissao)) ||
+             ('perfil' in userData && perfilTemPermissao(userData.perfil, permissao));
     }
 
     // =================================================================
