@@ -1,15 +1,9 @@
-// ==========================================
-// CONFIGURAÇÃO FIREBASE
-// ==========================================
-// Nota: Assumimos que a inicialização (firebaseConfig) agora está no 'firebase-config.js'.
-// Se ainda não moveu, cole o firebase.initializeApp(...) aqui no topo.
 const db = firebase.firestore();
 const auth = firebase.auth();
-
 let usuarioLogadoEmail = "";
 
 // ==========================================
-// 1 & 4. UTILITÁRIOS DE SEGURANÇA (SINGLE SOURCE OF TRUTH)
+// UTILITÁRIOS GERAIS
 // ==========================================
 function escapeHTML(str) {
     if (str === null || str === undefined) return "";
@@ -17,27 +11,12 @@ function escapeHTML(str) {
     p.textContent = str;
     return p.innerHTML;
 }
-
-function mostrarLoading() { 
-    const loader = document.getElementById('loadingApp');
-    if(loader) loader.style.display = 'flex'; 
-}
-
-function esconderLoading() { 
-    const loader = document.getElementById('loadingApp');
-    if(loader) loader.style.display = 'none'; 
-}
-
-function debounce(func, timeout = 300) {
-    let timer;
-    return (...args) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => { func.apply(this, args); }, timeout);
-    };
-}
+function mostrarLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'flex'; }
+function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
+function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
 // ==========================================
-// MÓDULO RBAC E DELEGAÇÃO DE EVENTOS
+// MÓDULO RBAC
 // ==========================================
 let permissoesEmCache = []; 
 
@@ -51,55 +30,96 @@ async function carregarPermissoes() {
         const perfilDoc = await db.collection('perfis').doc(perfilID).get();
         permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
         return permissoesEmCache;
-    } catch (error) {
-        console.error("Erro ao carregar RBAC:", error);
-        return [];
-    }
+    } catch (error) { return []; }
 }
 
 function renderizarElementosRBAC() {
     document.querySelectorAll('[data-permission]').forEach(el => {
         const req = el.getAttribute('data-permission');
-        if (!permissoesEmCache.includes(req)) {
-            el.remove();
-        }
+        if (!permissoesEmCache.includes(req)) el.remove();
     });
 }
 
-// 5. PROTEÇÃO DE ATRIBUTOS (Uso de data-id em vez de onclick)
 function gerarBotoesAcao(id, modulo) {
     const safeId = escapeHTML(id);
     let html = '';
-    if (permissoesEmCache.includes('editar_dados')) {
-        html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}" title="Editar">✏️</button>`;
-    }
-    if (permissoesEmCache.includes('excluir_dados')) {
-        html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}" title="Apagar">🗑️</button>`;
-    }
+    if (permissoesEmCache.includes('editar_dados')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
+    if (permissoesEmCache.includes('excluir_dados')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
     return html;
 }
 
 // ==========================================
-// INICIALIZAÇÃO DA SESSÃO
+// INICIALIZAÇÃO DA SESSÃO (Resolve null & Race Conditions)
 // ==========================================
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         usuarioLogadoEmail = user.email;
-        // 3. CORREÇÃO XSS: Uso de textContent em vez de innerHTML para dados do utilizador
-        document.getElementById('nomeUsuarioLogado').textContent = `👤 ${usuarioLogadoEmail}`;
+        const elUser = document.getElementById('nomeUsuarioLogado');
+        if (elUser) elUser.textContent = `👤 ${usuarioLogadoEmail}`;
         
+        // Espera SINCRONAMENTE pelas permissões antes de exibir qualquer tela
         await carregarPermissoes();
-        renderizarElementosRBAC();
         
-        document.getElementById('corpo-sistema').style.display = 'block';
-        escutarFirebase();
+        const corpoSistema = document.getElementById('corpo-sistema');
+        const corpoAdmin = document.getElementById('corpo-admin');
+
+        // Lógica de Rota: Estamos no Admin?
+        if (corpoAdmin) {
+            if (!permissoesEmCache.includes('acesso_admin')) {
+                alert("Acesso Negado! Redirecionando...");
+                window.location.replace('sistema.html');
+                return; // Bloqueia execução imediata
+            }
+            corpoAdmin.style.display = 'block';
+        } 
+        // Lógica de Rota: Estamos no Sistema?
+        else if (corpoSistema) {
+            renderizarElementosRBAC();
+            corpoSistema.style.display = 'block';
+            escutarFirebase();
+        }
     } else {
         window.location.href = "index.html";
     }
 });
-
 function fazerLogout() { auth.signOut(); }
 
+// ==========================================
+// LÓGICA DO PAINEL ADMIN (Agora integrada de forma segura)
+// ==========================================
+const formPerfilAdmin = document.getElementById('formPerfilAdmin');
+if (formPerfilAdmin) {
+    formPerfilAdmin.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const nomePerfil = document.getElementById('adminNomePerfil').value.trim().toLowerCase();
+        const checkboxes = document.querySelectorAll('.cb-perm:checked');
+        const permissoesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
+
+        try {
+            await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
+            alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
+            formPerfilAdmin.reset();
+        } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }
+    });
+}
+
+const formUsuarioAdmin = document.getElementById('formUsuarioAdmin');
+if (formUsuarioAdmin) {
+    formUsuarioAdmin.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const uid = document.getElementById('adminUsuarioUid').value.trim();
+        const email = document.getElementById('adminUsuarioEmail').value.trim();
+        const perfil = document.getElementById('adminUsuarioPerfil').value.trim().toLowerCase();
+
+        try {
+            await db.collection('usuarios').doc(uid).set({ email: email, perfil: perfil }, { merge: true });
+            alert(`Usuário atualizado com o cargo de '${perfil}'!`);
+            formUsuarioAdmin.reset();
+        } catch (err) { alert("Acesso Negado: Apenas o Admin pode atribuir cargos."); }
+    });
+}
+
+// ... DAQUI PARA BAIXO O CÓDIGO CONTINUA IGUAL (VÁRIAVEIS DE ESTADO, ETC.) ...
 // ==========================================
 // VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================

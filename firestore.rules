@@ -10,36 +10,31 @@ service cloud.firestore {
     }
     
     function temPermissao(permissao) {
-      // Busca o documento do usuário atual para saber qual é o seu perfil
-      let userDoc = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
-      // Busca as permissões dentro do perfil desse usuário
-      let perfil = get(/databases/$(database)/documents/perfis/$(userDoc.data.perfil));
-      // Verifica se a permissão exigida está dentro da lista (array)
-      return permissao in perfil.data.permissoes;
+      // 1. Verifica se o documento do utilizador existe
+      let userRef = /databases/$(database)/documents/usuarios/$(request.auth.uid);
+      
+      // 2. Se o user existir, verifica se o perfil também existe e usa o hasAny
+      return exists(userRef) && 
+             exists(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)) &&
+             get(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)).data.permissoes.hasAny([permissao]);
     }
 
     // =================================================================
     // 2. REGRAS DO PAINEL DE ADMINISTRAÇÃO (Segurança Máxima)
     // =================================================================
     
-    // Coleção de Usuários
     match /usuarios/{userId} {
-      // O usuário pode ler o seu próprio cargo, mas só o Admin pode ver todos
       allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
-      // Apenas Admins podem definir ou trocar cargos
       allow write: if logado() && temPermissao('acesso_admin');
     }
 
-    // Coleção de Perfis (Roles)
     match /perfis/{perfilId} {
-      // Qualquer utilizador logado precisa de ler isto para o sistema montar os menus
       allow read: if logado();
-      // Apenas Admins podem criar novos perfis ou alterar permissões
       allow write: if logado() && temPermissao('acesso_admin');
     }
 
     // =================================================================
-    // 3. REGRAS OPERACIONAIS (Empenhos, Contratos, DARF, Títulos)
+    // 3. REGRAS OPERACIONAIS (Sem sobreposições/wildcards)
     // =================================================================
     
     match /empenhos/{docId} {
