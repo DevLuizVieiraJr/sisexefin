@@ -15,6 +15,14 @@ function mostrarLoading() { const l = document.getElementById('loadingApp'); if(
 function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
+/** Exibe apenas os últimos 12 caracteres da NE (ex: 2024NE000001). O valor completo permanece no banco. */
+function formatarNumEmpenhoVisivel(numEmpenho) {
+    if (!numEmpenho) return '-';
+    const s = String(numEmpenho).trim();
+    if (s.length <= 12) return s;
+    return s.slice(-12);
+}
+
 // ==========================================
 // MÓDULO RBAC - Multi-perfis + Role Switching (Princípio do Menor Privilégio)
 // ==========================================
@@ -109,16 +117,29 @@ auth.onAuthStateChanged(async (user) => {
         
         const corpoSistema = document.getElementById('corpo-sistema');
         const corpoAdmin = document.getElementById('corpo-admin');
+        const corpoTitulos = document.getElementById('corpo-titulos');
 
         // Lógica de Rota: Estamos no Admin?
         if (corpoAdmin) {
             if (!permissoesEmCache.includes('acesso_admin')) {
                 alert("Acesso Negado! Redirecionando...");
                 window.location.replace('sistema.html');
-                return; // Bloqueia execução imediata
+                return;
             }
             corpoAdmin.style.display = 'block';
-        } 
+        }
+        // Lógica de Rota: Estamos na SPA Títulos?
+        else if (corpoTitulos) {
+            if (!permissoesEmCache.includes('titulos_ler')) {
+                alert("Acesso Negado ao módulo TC. Redirecionando...");
+                window.location.replace('sistema.html');
+                return;
+            }
+            renderizarElementosRBAC();
+            atualizarSeletorPerfil();
+            corpoTitulos.style.display = 'block';
+            if (typeof inicializarTitulosSPA === 'function') inicializarTitulosSPA();
+        }
         // Lógica de Rota: Estamos no Sistema?
         else if (corpoSistema) {
             renderizarElementosRBAC();
@@ -142,13 +163,20 @@ if (formPerfilAdmin) {
         const nomePerfil = document.getElementById('adminNomePerfil').value.trim().toLowerCase();
         const checkboxes = document.querySelectorAll('.cb-perm:checked');
         const permissoesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
-
+        const btn = formPerfilAdmin.querySelector('button[type="submit"]');
+        if (typeof window.adminLoading === 'function') window.adminLoading(true);
+        if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
         try {
             await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
             alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
             formPerfilAdmin.reset();
             if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+            if (typeof window.voltarListaPerfis === 'function') window.voltarListaPerfis();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }
+        finally {
+            if (typeof window.adminLoading === 'function') window.adminLoading(false);
+            if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, false);
+        }
     });
 }
 
@@ -158,6 +186,14 @@ if (formUsuarioAdmin) {
         e.preventDefault();
         const uid = document.getElementById('adminUsuarioUid').value.trim();
         const email = document.getElementById('adminUsuarioEmail').value.trim();
+        const cpfEl = document.getElementById('adminUsuarioCPF');
+        const cpfRaw = (cpfEl && cpfEl.value) ? cpfEl.value.replace(/\D/g, '') : '';
+        if (cpfRaw.length > 0 && cpfRaw.length !== 11) { alert("CPF inválido. Digite 11 números."); return; }
+        if (cpfRaw.length === 11 && typeof validarCPF === 'function' && !validarCPF(cpfEl.value)) { alert("CPF inválido. Verifique os dígitos."); return; }
+        const nomeCompleto = (document.getElementById('adminUsuarioNome') || {}).value ? document.getElementById('adminUsuarioNome').value.trim() : '';
+        const nomeGuerra = (document.getElementById('adminUsuarioNomeGuerra') || {}).value ? document.getElementById('adminUsuarioNomeGuerra').value.trim() : '';
+        const oiEl = document.getElementById('adminUsuarioOI');
+        const oi = (oiEl && oiEl.value) ? oiEl.value : null;
         const checkboxes = document.querySelectorAll('.cb-perfil-usuario:checked');
         const perfis = Array.from(checkboxes).map(cb => cb.value.trim().toLowerCase());
         const perfilAtualEl = document.getElementById('adminUsuarioPerfilAtual');
@@ -165,12 +201,25 @@ if (formUsuarioAdmin) {
         if (perfis.length === 0) { alert("Selecione pelo menos um perfil."); return; }
         if (!perfilAtual || !perfis.includes(perfilAtual)) perfilAtual = perfis[0];
 
+        const dados = { email, perfis, perfil_ativo: perfilAtual };
+        if (cpfRaw.length === 11) dados.cpf = cpfRaw;
+        if (nomeCompleto) dados.nomeCompleto = nomeCompleto;
+        if (nomeGuerra) dados.nomeGuerra = nomeGuerra;
+        if (oi) dados.oi = oi;
+
+        const btn = formUsuarioAdmin.querySelector('button[type="submit"]');
+        if (typeof window.adminLoading === 'function') window.adminLoading(true);
+        if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
         try {
-            await db.collection('usuarios').doc(uid).set({ email: email, perfis: perfis, perfil_ativo: perfilAtual }, { merge: true });
+            await db.collection('usuarios').doc(uid).set(dados, { merge: true });
             alert(`Usuário atualizado com perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`);
             formUsuarioAdmin.reset();
             if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode atribuir cargos."); }
+        finally {
+            if (typeof window.adminLoading === 'function') window.adminLoading(false);
+            if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, false);
+        }
     });
 }
 
@@ -245,15 +294,18 @@ function mostrarSecao(idSecao, botao) {
     document.querySelectorAll('[id^="tela-formulario"]').forEach(f => f.style.display = 'none');
     document.querySelectorAll('[id^="tela-lista"]').forEach(l => l.style.display = 'block');
 
-    atualizarTabelaEmpenhos(); atualizarTabelaContratos(); atualizarTabelaDarf(); atualizarTabelaTitulos();
+    if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos();
+    if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos();
+    if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf();
+    if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
     inicializarSetasOrdenacao();
 }
 
 function escutarFirebase() {
-    db.collection('empenhos').onSnapshot(snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaEmpenhos(); esconderLoading(); });
-    db.collection('contratos').onSnapshot(snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaContratos(); });
-    db.collection('darf').onSnapshot(snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaDarf(); });
-    db.collection('titulos').onSnapshot(snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); atualizarTabelaTitulos(); });
+    db.collection('empenhos').onSnapshot(snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); esconderLoading(); });
+    db.collection('contratos').onSnapshot(snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); });
+    db.collection('darf').onSnapshot(snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); });
+    db.collection('titulos').onSnapshot(snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); });
 }
 
 // ==========================================

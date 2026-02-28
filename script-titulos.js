@@ -98,11 +98,11 @@
                 const resultados = baseEmpenhos.filter(e => e.numEmpenho.includes(texto));
                 resultados.forEach(e => {
                     const li = document.createElement('li');
-                    li.innerHTML = '<strong>' + escapeHTML(e.numEmpenho) + '</strong> (FR: ' + escapeHTML(e.fr) + ')';
+                    li.innerHTML = '<strong>' + escapeHTML(formatarNumEmpenhoVisivel(e.numEmpenho)) + '</strong> (FR: ' + escapeHTML(e.fr) + ')';
                     li.onclick = () => {
                         empenhoTemporarioSelecionado = e;
                         document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
-                        document.getElementById('empenhoSelecionadoTexto').textContent = 'NE Selecionada: ' + e.numEmpenho;
+                        document.getElementById('empenhoSelecionadoTexto').textContent = 'NE Selecionada: ' + formatarNumEmpenhoVisivel(e.numEmpenho);
                         listaEmpenhosT.innerHTML = '';
                         inputBuscaEmpenhoT.value = '';
                     };
@@ -143,7 +143,7 @@
         if (!tbody) return;
         tbody.innerHTML = '';
         empenhosDaNotaAtual.forEach((v, i) => {
-            tbody.innerHTML += '<tr><td>' + escapeHTML(v.numEmpenho) + '</td><td>R$ ' + escapeHTML(v.valorVinculado) + '</td><td>' + escapeHTML(v.lf) + '</td><td>' + escapeHTML(v.pf) + '</td><td><button type="button" class="btn-icon btn-rm-empenhonota" data-index="' + i + '">🗑️</button></td></tr>';
+            tbody.innerHTML += '<tr><td title="' + escapeHTML(v.numEmpenho || '') + '">' + escapeHTML(formatarNumEmpenhoVisivel(v.numEmpenho)) + '</td><td>R$ ' + escapeHTML(v.valorVinculado) + '</td><td>' + escapeHTML(v.lf) + '</td><td>' + escapeHTML(v.pf) + '</td><td><button type="button" class="btn-icon btn-rm-empenhonota" data-index="' + i + '">🗑️</button></td></tr>';
         });
     }
 

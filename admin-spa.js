@@ -1,5 +1,5 @@
 // ==========================================
-// ADMIN SPA - Listar, Editar e Bloquear Usuários e Perfis
+// ADMIN SPA - Usuários, Perfis, OI (usa admin-utils.js para máscaras/validações)
 // ==========================================
 (function() {
     if (!document.getElementById('corpo-admin')) return;
@@ -8,16 +8,36 @@
         { modulo: 'empenhos', label: 'Empenhos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'titulos', label: 'Títulos', acoes: ['ler', 'inserir', 'editar', 'excluir'] }
+        { modulo: 'titulos', label: 'Títulos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'usuarios', label: 'Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'perfis', label: 'Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'oi', label: 'OI', acoes: ['ler', 'inserir', 'editar', 'excluir'] }
     ];
 
     let listaUsuarios = [];
     let listaPerfis = [];
+    let listaOI = [];
+
+    const TAB_INDEX = { usuarios: 1, perfis: 2, oi: 3, cadastrar: 4 };
+
+    function adminLoading(mostrar) {
+        const el = document.getElementById('adminLoading');
+        if (el) el.classList.toggle('visivel', !!mostrar);
+    }
+    function btnLoading(btn, mostrar, textoLoading) {
+        if (!btn) return;
+        const txt = textoLoading || 'A processar...';
+        if (mostrar) { btn.disabled = true; btn.classList.add('btn-loading'); btn.dataset.origText = btn.textContent; btn.textContent = txt; }
+        else { btn.disabled = false; btn.classList.remove('btn-loading'); if (btn.dataset.origText) btn.textContent = btn.dataset.origText; }
+    }
+    window.adminLoading = adminLoading;
+    window.btnLoading = btnLoading;
 
     function mostrarPainelAdmin(painel) {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('ativo'));
         document.querySelectorAll('.admin-painel').forEach(p => p.classList.remove('visivel'));
-        const tab = document.querySelector('.admin-tab:nth-child(' + (painel === 'usuarios' ? 1 : painel === 'perfis' ? 2 : 3) + ')');
+        const idx = TAB_INDEX[painel] || 1;
+        const tab = document.querySelector('.admin-tab:nth-child(' + idx + ')');
         if (tab) tab.classList.add('ativo');
         const el = document.getElementById('painel-' + painel);
         if (el) el.classList.add('visivel');
@@ -52,6 +72,152 @@
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:red;">Erro ao carregar perfis.</td></tr>';
         }
     }
+
+    async function carregarOI() {
+        const tbody = document.getElementById('tbodyOI');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">A carregar...</td></tr>';
+        try {
+            const snap = await db.collection('oi').get();
+            listaOI = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            desenharTabelaOI();
+            popularSelectOI();
+        } catch (err) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar OI.</td></tr>';
+        }
+    }
+
+    function desenharTabelaOI() {
+        const tbody = document.getElementById('tbodyOI');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (listaOI.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma OI encontrada.</td></tr>';
+            return;
+        }
+        listaOI.forEach(o => {
+            const tr = document.createElement('tr');
+            const status = o.situacao === 'Ativo' ? '<span class="status-ativo">Ativo</span>' : '<span class="status-bloqueado">Inativo</span>';
+            tr.innerHTML = `<td><strong>${escapeHTML(o.numeroOI || '-')}</strong></td>
+                <td>${escapeHTML(o.nomeOI || '-')}</td>
+                <td>${escapeHTML(o.contatoOI || '-')}</td>
+                <td>${escapeHTML(o.telefoneOI || '-')}</td>
+                <td>${status}</td>
+                <td>
+                    <button type="button" class="btn-icon btn-editar-oi" data-id="${escapeHTML(o.id)}" title="Editar">✏️</button>
+                    <button type="button" class="btn-icon btn-apagar-oi" data-id="${escapeHTML(o.id)}" title="Excluir">🗑️</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('.btn-editar-oi').forEach(btn => btn.addEventListener('click', function() { editarOI(this.getAttribute('data-id')); }));
+        tbody.querySelectorAll('.btn-apagar-oi').forEach(btn => btn.addEventListener('click', function() { excluirOI(this.getAttribute('data-id')); }));
+    }
+
+    function popularSelectOI() {
+        const sel = document.getElementById('adminUsuarioOI');
+        if (!sel) return;
+        const oisAtivas = listaOI.filter(o => o.situacao === 'Ativo');
+        sel.innerHTML = '<option value="">-- Nenhum --</option>';
+        oisAtivas.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
+            sel.appendChild(opt);
+        });
+    }
+
+    window.abrirFormularioOI = function() {
+        document.getElementById('formOI').reset();
+        document.getElementById('editIndexOI').value = '-1';
+        document.getElementById('tela-lista-oi').style.display = 'none';
+        document.getElementById('tela-formulario-oi').style.display = 'block';
+    };
+
+    window.voltarListaOI = function() {
+        document.getElementById('tela-formulario-oi').style.display = 'none';
+        document.getElementById('tela-lista-oi').style.display = 'block';
+        carregarOI();
+    };
+
+    function editarOI(id) {
+        const o = listaOI.find(x => x.id === id);
+        if (!o) return;
+        document.getElementById('editIndexOI').value = o.id;
+        document.getElementById('numeroOI').value = o.numeroOI || '';
+        document.getElementById('nomeOI').value = o.nomeOI || '';
+        document.getElementById('contatoOI').value = o.contatoOI || '';
+        document.getElementById('telefoneOI').value = o.telefoneOI || '';
+        document.getElementById('situacaoOI').value = o.situacao || 'Ativo';
+        document.getElementById('tela-lista-oi').style.display = 'none';
+        document.getElementById('tela-formulario-oi').style.display = 'block';
+    }
+
+    async function excluirOI(id) {
+        const usuariosVinculados = listaUsuarios.filter(u => u.oi === id);
+        if (usuariosVinculados.length > 0) {
+            alert('Não é possível excluir esta OI: existem ' + usuariosVinculados.length + ' utilizador(es) vinculado(s). Remova a OI dos utilizadores primeiro.');
+            return;
+        }
+        if (!confirm('Excluir esta OI permanentemente?')) return;
+        adminLoading(true);
+        try {
+            await db.collection('oi').doc(id).delete();
+            alert('OI excluída.');
+            voltarListaOI();
+        } catch (err) { alert('Erro ao excluir: ' + (err.message || 'Acesso negado.')); }
+        finally { adminLoading(false); }
+    }
+
+    const formOI = document.getElementById('formOI');
+    if (formOI) {
+        formOI.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const numeroOI = escapeHTML(document.getElementById('numeroOI').value).trim();
+            const telefoneRaw = typeof telefoneSomenteDigitos === 'function' ? telefoneSomenteDigitos(document.getElementById('telefoneOI').value) : (document.getElementById('telefoneOI').value || '').replace(/\D/g, '');
+            if (telefoneRaw.length > 0 && telefoneRaw.length < 10) {
+                alert('Telefone inválido. Informe pelo menos 10 dígitos.');
+                return;
+            }
+            const fbID = document.getElementById('editIndexOI').value;
+            const duplicado = listaOI.find(o => (o.numeroOI || '').toLowerCase() === numeroOI.toLowerCase() && o.id !== fbID);
+            if (duplicado) {
+                alert('Já existe uma OI com este número. Escolha outro.');
+                return;
+            }
+            const dados = {
+                numeroOI,
+                nomeOI: escapeHTML(document.getElementById('nomeOI').value),
+                contatoOI: escapeHTML(document.getElementById('contatoOI').value),
+                telefoneOI: document.getElementById('telefoneOI').value || '',
+                situacao: document.getElementById('situacaoOI').value
+            };
+            const btn = formOI.querySelector('button[type="submit"]');
+            btnLoading(btn, true, 'A guardar...');
+            adminLoading(true);
+            try {
+                if (fbID === '-1' || fbID === '') await db.collection('oi').add(dados);
+                else await db.collection('oi').doc(fbID).update(dados);
+                alert('OI salva com sucesso.');
+                voltarListaOI();
+            } catch (err) { alert('Erro ao salvar OI.'); }
+            finally { btnLoading(btn, false); adminLoading(false); }
+        });
+    }
+
+    window.abrirFormularioPerfil = function() {
+        document.getElementById('formPerfilAdmin').reset();
+        document.getElementById('adminNomePerfil').value = '';
+        desenharMatrizPermissoes();
+        document.querySelectorAll('.cb-perm').forEach(cb => cb.checked = false);
+        document.getElementById('tela-lista-perfis').style.display = 'none';
+        document.getElementById('tela-formulario-perfis').style.display = 'block';
+    };
+
+    window.voltarListaPerfis = function() {
+        document.getElementById('tela-formulario-perfis').style.display = 'none';
+        document.getElementById('tela-lista-perfis').style.display = 'block';
+        carregarPerfis();
+    };
 
     function desenharMatrizPermissoes() {
         const tbody = document.getElementById('matrizPermissoes');
@@ -121,8 +287,8 @@
         tbody.querySelectorAll('.btn-editar-usuario').forEach(btn => btn.addEventListener('click', function() { adminEditarUsuario(this.getAttribute('data-uid')); }));
         tbody.querySelectorAll('.btn-bloquear-usuario').forEach(btn => btn.addEventListener('click', function() {
             const uid = this.getAttribute('data-uid');
-            if (this.getAttribute('data-acao') === 'bloquear') adminBloquearUsuario(uid);
-            else adminDesbloquearUsuario(uid);
+            if (this.getAttribute('data-acao') === 'bloquear') adminBloquearUsuario(uid, this);
+            else adminDesbloquearUsuario(uid, this);
         }));
     }
 
@@ -147,6 +313,13 @@
         if (!u) return;
         document.getElementById('adminUsuarioUid').value = u.id;
         document.getElementById('adminUsuarioEmail').value = u.email || '';
+        const cpfRaw = (u.cpf || '').replace(/\D/g, '');
+        if (cpfRaw.length === 11) {
+            document.getElementById('adminUsuarioCPF').value = cpfRaw.slice(0,3) + '.' + cpfRaw.slice(3,6) + '.' + cpfRaw.slice(6,9) + '-' + cpfRaw.slice(9);
+        } else document.getElementById('adminUsuarioCPF').value = u.cpf || '';
+        document.getElementById('adminUsuarioNome').value = u.nomeCompleto || '';
+        document.getElementById('adminUsuarioNomeGuerra').value = u.nomeGuerra || '';
+        document.getElementById('adminUsuarioOI').value = u.oi || '';
         const perfis = Array.isArray(u.perfis) ? u.perfis : (u.perfil ? [u.perfil] : []);
         document.querySelectorAll('.cb-perfil-usuario').forEach(cb => {
             cb.checked = perfis.includes(cb.value);
@@ -155,24 +328,34 @@
         mostrarPainelAdmin('cadastrar');
     };
 
-    window.adminBloquearUsuario = async function(uid) {
+    window.adminBloquearUsuario = async function(uid, btn) {
         if (!confirm('Bloquear este usuário? Ele perderá o acesso ao sistema.')) return;
+        adminLoading(true);
+        if (btn) btnLoading(btn, true);
         try {
             await db.collection('usuarios').doc(uid).update({ bloqueado: true });
             alert('Usuário bloqueado.');
             carregarUsuarios();
         } catch (err) {
             alert('Erro ao bloquear: ' + (err.message || 'Acesso negado.'));
+        } finally {
+            adminLoading(false);
+            if (btn) btnLoading(btn, false);
         }
     };
 
-    window.adminDesbloquearUsuario = async function(uid) {
+    window.adminDesbloquearUsuario = async function(uid, btn) {
+        adminLoading(true);
+        if (btn) btnLoading(btn, true);
         try {
             await db.collection('usuarios').doc(uid).update({ bloqueado: false });
             alert('Usuário desbloqueado.');
             carregarUsuarios();
         } catch (err) {
             alert('Erro ao desbloquear: ' + (err.message || 'Acesso negado.'));
+        } finally {
+            adminLoading(false);
+            if (btn) btnLoading(btn, false);
         }
     };
 
@@ -200,22 +383,26 @@
         const p = listaPerfis.find(x => x.id === perfilId);
         if (!p) return;
         document.getElementById('adminNomePerfil').value = p.id;
+        desenharMatrizPermissoes();
         const perms = Array.isArray(p.permissoes) ? p.permissoes : [];
         document.querySelectorAll('.cb-perm').forEach(cb => {
             cb.checked = perms.includes(cb.value);
         });
-        mostrarPainelAdmin('cadastrar');
+        document.getElementById('tela-lista-perfis').style.display = 'none';
+        document.getElementById('tela-formulario-perfis').style.display = 'block';
     };
 
     auth.onAuthStateChanged((user) => {
         if (user && document.getElementById('corpo-admin')) {
             carregarUsuarios();
             carregarPerfis();
+            carregarOI();
         }
     });
 
     window.adminRecarregarDados = function() {
         carregarUsuarios();
         carregarPerfis();
+        carregarOI();
     };
 })();

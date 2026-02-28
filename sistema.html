@@ -44,8 +44,8 @@
         <nav class="sidebar">
             <ul>
                 <li class="menu-section">Módulos</li>
-                <li><button onclick="mostrarSecao('secao-titulos', this)" class="menu-btn ativo">📝 Entrada de Títulos</button></li>
-                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn">🤝 Contratos / Empresas</button></li>                
+                <li><a href="titulos.html" class="menu-btn" style="text-decoration:none;display:block;color:inherit;">📝 Títulos de Crédito</a></li>
+                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn ativo">🤝 Contratos / Empresas</button></li>                
                 <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn">📄 Empenho</button></li>
                 <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn">📊 Códigos DARF</button></li>
                 
@@ -234,7 +234,7 @@
                         <table id="tabelaEmpenhos" class="tabela-gov">
                             <thead>
                                 <tr>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')">NE Completa <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')" title="Exibe ano+tipo+sequencial (ex: 2024NE000001). Passe o rato para ver o número completo.">NE <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'nd')">ND <span class="sort-icon" id="sort-empenhos-nd"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'subitem')">Sub.El <span class="sort-icon" id="sort-empenhos-subitem"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'ptres')">PTRES <span class="sort-icon" id="sort-empenhos-ptres"></span></th>
@@ -385,6 +385,6 @@
     <script src="script-empenhos.js"></script>
     <script src="script-contratos.js"></script>
     <script src="script-darf.js"></script>
-    <script src="script-titulos.js"></script>
+    <script src="script-import.js"></script>
 </body>
 </html>

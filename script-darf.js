@@ -82,6 +82,14 @@
     }
 
     async function apagarDarf(id) {
+        const d = baseDarf.find(item => item.id === id);
+        if (d && (typeof baseContratos !== 'undefined')) {
+            const contratosVinculados = baseContratos.filter(c => (c.codigosReceita || []).includes(d.codigo));
+            if (contratosVinculados.length > 0) {
+                alert('Não é possível excluir este DARF: existem ' + contratosVinculados.length + ' contrato(s) vinculado(s). Remova o código DARF dos contratos primeiro.');
+                return;
+            }
+        }
         if (confirm("Apagar o DARF permanentemente?")) {
             mostrarLoading();
             try { await db.collection('darf').doc(id).delete(); }

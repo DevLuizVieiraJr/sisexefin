@@ -71,6 +71,14 @@
         }
     }
     async function apagarContrato(id) {
+        var c = baseContratos.find(function(item) { return item.id === id; });
+        if (c && typeof baseTitulos !== 'undefined') {
+            var titulosVinculados = baseTitulos.filter(function(t) { return (t.instrumento || '') === (c.numContrato || ''); });
+            if (titulosVinculados.length > 0) {
+                alert('Não é possível excluir este Contrato: existem ' + titulosVinculados.length + ' título(s) vinculado(s). Remova o vínculo nos títulos primeiro.');
+                return;
+            }
+        }
         if (confirm("Apagar Contrato permanentemente?")) {
             mostrarLoading();
             try { await db.collection('contratos').doc(id).delete(); }

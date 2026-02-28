@@ -47,7 +47,7 @@
             const tr = document.createElement('tr');
             const acoesHTML = gerarBotoesAcao(e.id, 'empenho');
             tr.innerHTML = `
-                <td><strong>${escapeHTML(e.numEmpenho) || '-'}</strong></td>
+                <td title="${escapeHTML(e.numEmpenho) || ''}"><strong>${escapeHTML(formatarNumEmpenhoVisivel(e.numEmpenho)) || '-'}</strong></td>
                 <td>${escapeHTML(e.nd) || '-'}</td>
                 <td>${escapeHTML(e.subitem) || '-'}</td>
                 <td>${escapeHTML(e.ptres) || '-'}</td>
@@ -99,6 +99,14 @@
     }
 
     async function apagarEmpenho(id) {
+        const e = baseEmpenhos.find(item => item.id === id);
+        if (e && (typeof baseTitulos !== 'undefined')) {
+            const titulosVinculados = baseTitulos.filter(t => (t.empenhosVinculados || []).some(v => v.numEmpenho === e.numEmpenho));
+            if (titulosVinculados.length > 0) {
+                alert('Não é possível excluir este Empenho: existem ' + titulosVinculados.length + ' título(s) vinculado(s). Remova o empenho dos títulos primeiro.');
+                return;
+            }
+        }
         if (confirm("Apagar o Empenho permanentemente?")) {
             mostrarLoading();
             try { await db.collection('empenhos').doc(id).delete(); }
