@@ -10,13 +10,19 @@ service cloud.firestore {
     }
     
     function temPermissao(permissao) {
-      // 1. Verifica se o documento do utilizador existe
       let userRef = /databases/$(database)/documents/usuarios/$(request.auth.uid);
-      
-      // 2. Se o user existir, verifica se o perfil também existe e usa o hasAny
-      return exists(userRef) && 
-             exists(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)) &&
-             get(/databases/$(database)/documents/perfis/$(get(userRef).data.perfil)).data.permissoes.hasAny([permissao]);
+      if (!exists(userRef)) return false;
+      let userDoc = get(userRef).data;
+      if (userDoc.bloqueado == true) return false;
+      // Legado: perfil (singular) ou novo: perfis + perfil_ativo
+      let perfis = userDoc.keys().hasAny(['perfis']) ? userDoc.perfis : (userDoc.keys().hasAny(['perfil']) ? [userDoc.perfil] : []);
+      let perfilAtivo = userDoc.keys().hasAny(['perfil_ativo']) ? userDoc.perfil_ativo : userDoc.perfil;
+      if (perfilAtivo == null) return false;
+      // Validação estrita: perfil_ativo deve estar contido em perfis
+      let perfilValido = perfis.hasAny([perfilAtivo]);
+      if (!perfilValido) return false;
+      let permRef = get(/databases/$(database)/documents/perfis/$(perfilAtivo)).data.permissoes;
+      return permRef.hasAny([permissao]);
     }
 
     // =================================================================
@@ -34,35 +40,35 @@ service cloud.firestore {
     }
 
     // =================================================================
-    // 3. REGRAS OPERACIONAIS (Sem sobreposições/wildcards)
+    // 3. REGRAS OPERACIONAIS (Permissões granulares: modulo_acao)
     // =================================================================
     
     match /empenhos/{docId} {
-      allow read: if logado();
-      allow create: if logado() && temPermissao('inserir_dados');
-      allow update: if logado() && temPermissao('editar_dados');
-      allow delete: if logado() && temPermissao('excluir_dados');
+      allow read: if logado() && temPermissao('empenhos_ler');
+      allow create: if logado() && temPermissao('empenhos_inserir');
+      allow update: if logado() && temPermissao('empenhos_editar');
+      allow delete: if logado() && temPermissao('empenhos_excluir');
     }
 
     match /contratos/{docId} {
-      allow read: if logado();
-      allow create: if logado() && temPermissao('inserir_dados');
-      allow update: if logado() && temPermissao('editar_dados');
-      allow delete: if logado() && temPermissao('excluir_dados');
+      allow read: if logado() && temPermissao('contratos_ler');
+      allow create: if logado() && temPermissao('contratos_inserir');
+      allow update: if logado() && temPermissao('contratos_editar');
+      allow delete: if logado() && temPermissao('contratos_excluir');
     }
 
     match /darf/{docId} {
-      allow read: if logado();
-      allow create: if logado() && temPermissao('inserir_dados');
-      allow update: if logado() && temPermissao('editar_dados');
-      allow delete: if logado() && temPermissao('excluir_dados');
+      allow read: if logado() && temPermissao('darf_ler');
+      allow create: if logado() && temPermissao('darf_inserir');
+      allow update: if logado() && temPermissao('darf_editar');
+      allow delete: if logado() && temPermissao('darf_excluir');
     }
 
     match /titulos/{docId} {
-      allow read: if logado();
-      allow create: if logado() && temPermissao('inserir_dados');
-      allow update: if logado() && temPermissao('editar_dados');
-      allow delete: if logado() && temPermissao('excluir_dados');
+      allow read: if logado() && temPermissao('titulos_ler');
+      allow create: if logado() && temPermissao('titulos_inserir');
+      allow update: if logado() && temPermissao('titulos_editar');
+      allow delete: if logado() && temPermissao('titulos_excluir');
     }
   }
 }

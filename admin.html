@@ -40,7 +40,8 @@
                         <tr>
                             <th>UID</th>
                             <th>Email</th>
-                            <th>Perfil</th>
+                            <th>Perfis</th>
+                            <th>Perfil Atual</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
@@ -75,24 +76,29 @@
                     <form id="formPerfilAdmin">
                         <div class="form-group"><label>Nome do Perfil:</label><input type="text" id="adminNomePerfil" placeholder="ex: operador_leitura" required></div>
                         <fieldset class="gov-fieldset">
-                            <legend>Permissões</legend>
-                            <label><input type="checkbox" class="cb-perm" value="acesso_admin"> Acesso Admin</label><br>
-                            <label><input type="checkbox" class="cb-perm" value="inserir_dados"> Inserir Dados</label><br>
-                            <label><input type="checkbox" class="cb-perm" value="editar_dados"> Editar Dados</label><br>
-                            <label><input type="checkbox" class="cb-perm" value="excluir_dados"> Excluir Dados</label>
+                            <legend>Matriz de Permissões (Módulo × Ação)</legend>
+                            <table class="tabela-gov" style="min-width: 400px;">
+                                <thead><tr><th>Módulo</th><th>Ler</th><th>Inserir</th><th>Editar</th><th>Excluir</th></tr></thead>
+                                <tbody id="matrizPermissoes"></tbody>
+                            </table>
+                            <div style="margin-top: 10px;"><label><input type="checkbox" class="cb-perm" value="acesso_admin"> Acesso Admin</label></div>
                         </fieldset>
                         <button type="submit" class="btn-primary" style="margin-top:10px;">💾 Salvar Perfil</button>
                     </form>
                 </div>
                 <div style="flex: 1; min-width: 280px;">
-                    <h3>2. Atribuir Perfil a Usuário</h3>
+                    <h3>2. Atribuir Perfis ao Usuário</h3>
                     <form id="formUsuarioAdmin">
                         <div class="form-group"><label>UID do Usuário:</label><input type="text" id="adminUsuarioUid" placeholder="Ou selecione na lista Usuários" required></div>
                         <div class="form-group"><label>Email:</label><input type="email" id="adminUsuarioEmail" required></div>
-                        <div class="form-group"><label>Perfil (Role):</label>
-                            <select id="adminUsuarioPerfil"></select>
+                        <fieldset class="gov-fieldset">
+                            <legend>Perfis atribuídos (multi-select)</legend>
+                            <div id="containerCheckboxesPerfis"></div>
+                        </fieldset>
+                        <div class="form-group"><label>Perfil ativo por defeito:</label>
+                            <select id="adminUsuarioPerfilAtual"></select>
                         </div>
-                        <button type="submit" class="btn-outline">Atribuir Cargo</button>
+                        <button type="submit" class="btn-outline">Salvar Usuário</button>
                     </form>
                 </div>
             </div>

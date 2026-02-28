@@ -4,6 +4,13 @@
 (function() {
     if (!document.getElementById('corpo-admin')) return;
 
+    const MATRIZ_MODULOS = [
+        { modulo: 'empenhos', label: 'Empenhos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'titulos', label: 'Títulos', acoes: ['ler', 'inserir', 'editar', 'excluir'] }
+    ];
+
     let listaUsuarios = [];
     let listaPerfis = [];
 
@@ -21,13 +28,13 @@
     async function carregarUsuarios() {
         const tbody = document.getElementById('tbodyUsuarios');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">A carregar...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">A carregar...</td></tr>';
         try {
             const snap = await db.collection('usuarios').get();
             listaUsuarios = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             desenharTabelaUsuarios();
         } catch (err) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Erro ao carregar usuários.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Erro ao carregar usuários.</td></tr>';
         }
     }
 
@@ -39,25 +46,49 @@
             const snap = await db.collection('perfis').get();
             listaPerfis = snap.docs.map(doc => ({ id: doc.id, permissoes: doc.data().permissoes || [] }));
             desenharTabelaPerfis();
-            popularSelectPerfis();
+            popularCheckboxesPerfis();
+            desenharMatrizPermissoes();
         } catch (err) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:red;">Erro ao carregar perfis.</td></tr>';
         }
     }
 
-    function popularSelectPerfis() {
-        const sel = document.getElementById('adminUsuarioPerfil');
-        if (!sel) return;
-        sel.innerHTML = '';
-        const opt0 = document.createElement('option');
-        opt0.value = '';
-        opt0.textContent = '-- Selecionar perfil --';
-        sel.appendChild(opt0);
+    function desenharMatrizPermissoes() {
+        const tbody = document.getElementById('matrizPermissoes');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        MATRIZ_MODULOS.forEach(m => {
+            const tr = document.createElement('tr');
+            let cells = '<td><strong>' + escapeHTML(m.label) + '</strong></td>';
+            m.acoes.forEach(acao => {
+                const val = m.modulo + '_' + acao;
+                cells += '<td><label><input type="checkbox" class="cb-perm" value="' + escapeHTML(val) + '"></label></td>';
+            });
+            tr.innerHTML = cells;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function popularCheckboxesPerfis() {
+        const container = document.getElementById('containerCheckboxesPerfis');
+        const selAtual = document.getElementById('adminUsuarioPerfilAtual');
+        if (!container || !selAtual) return;
+        container.innerHTML = '';
+        selAtual.innerHTML = '<option value="">-- Nenhum --</option>';
         listaPerfis.forEach(p => {
+            const lbl = document.createElement('label');
+            lbl.style.display = 'block';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'cb-perfil-usuario';
+            cb.value = p.id;
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + p.id));
+            container.appendChild(lbl);
             const opt = document.createElement('option');
             opt.value = p.id;
             opt.textContent = p.id;
-            sel.appendChild(opt);
+            selAtual.appendChild(opt);
         });
     }
 
@@ -67,16 +98,19 @@
         const dados = filtrados !== undefined ? filtrados : listaUsuarios;
         tbody.innerHTML = '';
         if (dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum usuário encontrado.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum usuário encontrado.</td></tr>';
             return;
         }
         dados.forEach(u => {
             const tr = document.createElement('tr');
+            const perfis = Array.isArray(u.perfis) ? u.perfis : (u.perfil ? [u.perfil] : []);
+            const perfilAtual = u.perfil_ativo || u.perfilAtual || u.perfil || (perfis[0] || '-');
             const status = u.bloqueado ? '<span class="status-bloqueado">Bloqueado</span>' : '<span class="status-ativo">Ativo</span>';
             tr.innerHTML = `
                 <td><code style="font-size:11px;">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
                 <td>${escapeHTML(u.email || '-')}</td>
-                <td>${escapeHTML(u.perfil || '-')}</td>
+                <td style="font-size:12px;">${escapeHTML(perfis.join(', ') || '-')}</td>
+                <td><strong>${escapeHTML(perfilAtual)}</strong></td>
                 <td>${status}</td>
                 <td>
                     <button type="button" class="btn-icon btn-editar-usuario" data-uid="${escapeHTML(u.id)}" title="Editar">✏️</button>
@@ -98,11 +132,13 @@
             desenharTabelaUsuarios();
             return;
         }
-        const f = listaUsuarios.filter(u =>
-            (u.email && u.email.toLowerCase().includes(q)) ||
-            (u.perfil && u.perfil.toLowerCase().includes(q)) ||
-            (u.id && u.id.toLowerCase().includes(q))
-        );
+        const f = listaUsuarios.filter(u => {
+            const perfis = Array.isArray(u.perfis) ? u.perfis : (u.perfil ? [u.perfil] : []);
+            return (u.email && u.email.toLowerCase().includes(q)) ||
+                (u.perfil && u.perfil.toLowerCase().includes(q)) ||
+                perfis.some(p => p && p.toLowerCase().includes(q)) ||
+                (u.id && u.id.toLowerCase().includes(q));
+        });
         desenharTabelaUsuarios(f);
     };
 
@@ -111,7 +147,11 @@
         if (!u) return;
         document.getElementById('adminUsuarioUid').value = u.id;
         document.getElementById('adminUsuarioEmail').value = u.email || '';
-        document.getElementById('adminUsuarioPerfil').value = u.perfil || '';
+        const perfis = Array.isArray(u.perfis) ? u.perfis : (u.perfil ? [u.perfil] : []);
+        document.querySelectorAll('.cb-perfil-usuario').forEach(cb => {
+            cb.checked = perfis.includes(cb.value);
+        });
+        document.getElementById('adminUsuarioPerfilAtual').value = u.perfil_ativo || u.perfilAtual || u.perfil || (perfis[0] || '');
         mostrarPainelAdmin('cadastrar');
     };
 
@@ -160,8 +200,9 @@
         const p = listaPerfis.find(x => x.id === perfilId);
         if (!p) return;
         document.getElementById('adminNomePerfil').value = p.id;
+        const perms = Array.isArray(p.permissoes) ? p.permissoes : [];
         document.querySelectorAll('.cb-perm').forEach(cb => {
-            cb.checked = Array.isArray(p.permissoes) && p.permissoes.includes(cb.value);
+            cb.checked = perms.includes(cb.value);
         });
         mostrarPainelAdmin('cadastrar');
     };

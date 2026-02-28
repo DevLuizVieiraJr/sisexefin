@@ -16,9 +16,11 @@ function esconderLoading() { const l = document.getElementById('loadingApp'); if
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
 // ==========================================
-// MÓDULO RBAC
+// MÓDULO RBAC - Multi-perfis + Role Switching (Princípio do Menor Privilégio)
 // ==========================================
-let permissoesEmCache = []; 
+let permissoesEmCache = [];
+let perfilAtualEmCache = null;   // Perfil ativo na sessão
+let perfisDoUsuario = [];        // Perfis atribuídos ao utilizador (permite troca)
 
 async function carregarPermissoes() {
     const user = auth.currentUser;
@@ -28,12 +30,33 @@ async function carregarPermissoes() {
         if (!userDoc.exists) return [];
         const data = userDoc.data();
         if (data.bloqueado === true) return []; // Usuário bloqueado perde todas as permissões
-        const perfilID = data.perfil;
-        const perfilDoc = await db.collection('perfis').doc(perfilID).get();
+
+        // Migração: perfil (legado) -> perfis[] + perfil_ativo
+        let perfis = Array.isArray(data.perfis) ? data.perfis : (data.perfil ? [data.perfil] : []);
+        let perfilAtivo = data.perfil_ativo || data.perfilAtual || data.perfil || (perfis[0] || null);
+        if (perfis.length === 0 && data.perfil) perfis = [data.perfil];
+        if (!perfis.includes(perfilAtivo) && perfis.length > 0) perfilAtivo = perfis[0];
+
+        perfilAtualEmCache = perfilAtivo;
+        perfisDoUsuario = perfis;
+
+        const perfilDoc = await db.collection('perfis').doc(perfilAtivo).get();
         permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
         return permissoesEmCache;
     } catch (error) { return []; }
 }
+
+async function trocarPerfil(perfilId) {
+    const user = auth.currentUser;
+    if (!user || !perfisDoUsuario.includes(perfilId)) return;
+    if (!confirm("Deseja alternar a sua sessão para o perfil " + perfilId + "?")) return;
+    try {
+        await db.collection('usuarios').doc(user.uid).update({ perfil_ativo: perfilId });
+        window.location.reload();
+    } catch (err) { alert("Erro ao trocar perfil."); }
+}
+window.trocarPerfil = trocarPerfil;
+
 
 function renderizarElementosRBAC() {
     document.querySelectorAll('[data-permission]').forEach(el => {
@@ -42,11 +65,33 @@ function renderizarElementosRBAC() {
     });
 }
 
+function atualizarSeletorPerfil() {
+    const container = document.getElementById('containerSeletorPerfil');
+    const select = document.getElementById('seletorPerfilAtivo');
+    if (!container || !select) return;
+    if (typeof perfisDoUsuario === 'undefined' || perfisDoUsuario.length <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+    select.innerHTML = '';
+    perfisDoUsuario.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        if (p === perfilAtualEmCache) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+window.atualizarSeletorPerfil = atualizarSeletorPerfil;
+
 function gerarBotoesAcao(id, modulo) {
     const safeId = escapeHTML(id);
+    const modMap = { empenho: 'empenhos', contrato: 'contratos', titulo: 'titulos', darf: 'darf' };
+    const mod = modMap[modulo] || modulo;
     let html = '';
-    if (permissoesEmCache.includes('editar_dados')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
-    if (permissoesEmCache.includes('excluir_dados')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
+    if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
+    if (permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
     return html;
 }
 
@@ -77,6 +122,7 @@ auth.onAuthStateChanged(async (user) => {
         // Lógica de Rota: Estamos no Sistema?
         else if (corpoSistema) {
             renderizarElementosRBAC();
+            atualizarSeletorPerfil();
             corpoSistema.style.display = 'block';
             escutarFirebase();
         }
@@ -112,13 +158,16 @@ if (formUsuarioAdmin) {
         e.preventDefault();
         const uid = document.getElementById('adminUsuarioUid').value.trim();
         const email = document.getElementById('adminUsuarioEmail').value.trim();
-        const perfilEl = document.getElementById('adminUsuarioPerfil');
-        const perfil = (perfilEl && perfilEl.tagName === 'SELECT' ? perfilEl.value : perfilEl?.value || '').trim().toLowerCase();
-        if (!perfil) { alert("Selecione um perfil."); return; }
+        const checkboxes = document.querySelectorAll('.cb-perfil-usuario:checked');
+        const perfis = Array.from(checkboxes).map(cb => cb.value.trim().toLowerCase());
+        const perfilAtualEl = document.getElementById('adminUsuarioPerfilAtual');
+        let perfilAtual = (perfilAtualEl && perfilAtualEl.value) ? perfilAtualEl.value.trim().toLowerCase() : null;
+        if (perfis.length === 0) { alert("Selecione pelo menos um perfil."); return; }
+        if (!perfilAtual || !perfis.includes(perfilAtual)) perfilAtual = perfis[0];
 
         try {
-            await db.collection('usuarios').doc(uid).set({ email: email, perfil: perfil }, { merge: true });
-            alert(`Usuário atualizado com o cargo de '${perfil}'!`);
+            await db.collection('usuarios').doc(uid).set({ email: email, perfis: perfis, perfil_ativo: perfilAtual }, { merge: true });
+            alert(`Usuário atualizado com perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`);
             formUsuarioAdmin.reset();
             if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode atribuir cargos."); }

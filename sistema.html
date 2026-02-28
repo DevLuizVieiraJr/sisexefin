@@ -30,9 +30,13 @@
 
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
-        <div class="topbar-user">
+        <div class="topbar-user" style="display: flex; align-items: center; gap: 15px;">
             <span id="nomeUsuarioLogado">👤 A carregar...</span>
-            <span style="cursor: pointer; margin-left: 20px; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
+            <div id="containerSeletorPerfil" style="display: none;">
+                <label style="font-size: 12px; margin-right: 6px;">Perfil ativo:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px;"></select>
+            </div>
+            <span style="cursor: pointer; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
@@ -60,7 +64,7 @@
                 <div id="tela-lista-titulos" class="card">
                     <div class="header-lista">
                         <h2>Entrada de Títulos <span style="font-size: 14px; color: #777;">(HUB / FORM-3)</span></h2>
-                        <button onclick="abrirFormularioTitulo()" class="btn-primary" data-permission="inserir_dados">+ Novo Título</button>
+                        <button onclick="abrirFormularioTitulo()" class="btn-primary" data-permission="titulos_inserir">+ Novo Título</button>
                     </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="25">25</option></select></label>
@@ -139,7 +143,7 @@
                         </fieldset>
 
                         <div class="form-acoes">
-                            <button type="submit" class="btn-primary" data-permission="inserir_dados">💾 Salvar Processo</button>
+                            <button type="submit" class="btn-primary" data-permission="titulos_inserir">💾 Salvar Processo</button>
                             <button type="button" onclick="voltarParaListaTitulos()" class="btn-default">Cancelar</button>
                         </div>
                     </form>
@@ -150,7 +154,7 @@
                 <div id="tela-lista-contratos" class="card">
                     <div class="header-lista">
                         <h2>Gestão de Contratos</h2>
-                        <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="inserir_dados">+ Novo Contrato</button>
+                        <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Contrato</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"></div>
@@ -216,7 +220,7 @@
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
                         <h2>Controle de Empenhos</h2>
-                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="inserir_dados">+ Adicionar Empenho</button>
+                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="empenhos_inserir">+ Adicionar Empenho</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
@@ -294,7 +298,7 @@
                 <div id="tela-lista-darf" class="card">
                     <div class="header-lista">
                         <h2>Códigos DARF</h2>
-                        <button onclick="abrirFormularioDarf()" class="btn-primary" data-permission="inserir_dados">+ Novo DARF</button>
+                        <button onclick="abrirFormularioDarf()" class="btn-primary" data-permission="darf_inserir">+ Novo DARF</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportDarf" accept=".xlsx, .xls, .csv"></div>
