@@ -1,5 +1,5 @@
-const db = firebase.firestore();
-const auth = firebase.auth();
+//const db = firebase.firestore();
+//const auth = firebase.auth();
 let usuarioLogadoEmail = "";
 
 // ==========================================
@@ -778,4 +778,5 @@ function exportarBancoDeDados() {
         console.error("Erro ao gerar backup:", error);
         alert("Erro ao gerar o ficheiro de backup.");
     }
+
 }
