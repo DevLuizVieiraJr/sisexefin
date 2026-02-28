@@ -26,7 +26,9 @@ async function carregarPermissoes() {
     try {
         const userDoc = await db.collection('usuarios').doc(user.uid).get();
         if (!userDoc.exists) return [];
-        const perfilID = userDoc.data().perfil;
+        const data = userDoc.data();
+        if (data.bloqueado === true) return []; // Usuário bloqueado perde todas as permissões
+        const perfilID = data.perfil;
         const perfilDoc = await db.collection('perfis').doc(perfilID).get();
         permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
         return permissoesEmCache;
@@ -99,6 +101,7 @@ if (formPerfilAdmin) {
             await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
             alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
             formPerfilAdmin.reset();
+            if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }
     });
 }
@@ -109,12 +112,15 @@ if (formUsuarioAdmin) {
         e.preventDefault();
         const uid = document.getElementById('adminUsuarioUid').value.trim();
         const email = document.getElementById('adminUsuarioEmail').value.trim();
-        const perfil = document.getElementById('adminUsuarioPerfil').value.trim().toLowerCase();
+        const perfilEl = document.getElementById('adminUsuarioPerfil');
+        const perfil = (perfilEl && perfilEl.tagName === 'SELECT' ? perfilEl.value : perfilEl?.value || '').trim().toLowerCase();
+        if (!perfil) { alert("Selecione um perfil."); return; }
 
         try {
             await db.collection('usuarios').doc(uid).set({ email: email, perfil: perfil }, { merge: true });
             alert(`Usuário atualizado com o cargo de '${perfil}'!`);
             formUsuarioAdmin.reset();
+            if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode atribuir cargos."); }
     });
 }
