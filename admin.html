@@ -2,185 +2,42 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SisExeFin - Administração de Acessos</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Admin SPA - Estilos específicos */
-        .admin-sidebar .menu-btn.ativo { background-color: #34495e; border-left-color: #f39c12; color: #f39c12; }
-        .admin-sidebar .menu-btn:hover { border-left-color: #f39c12; }
-        .perm-group { margin-bottom: 20px; padding: 15px; background: #f9fafc; border-radius: 4px; border: 1px solid #e1e5eb; }
-        .perm-group h4 { margin-bottom: 12px; font-size: 14px; color: #337ab7; }
-        .perm-group label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: normal; cursor: pointer; }
-        .perm-group input[type="checkbox"] { width: auto; margin: 0; }
-        .modal-overlay.admin-modal { align-items: center; justify-content: center; }
-        .modal-content.admin-modal { max-width: 500px; text-align: left; border-top-color: #337ab7; }
-        .modal-content.admin-modal h2 { text-align: center; margin-bottom: 20px; color: #2c3e50; }
-        .search-box input { padding: 8px 12px; border: 1px solid #d2d6de; border-radius: 3px; }
-    </style>
 </head>
 <body style="display: none;" id="corpo-admin">
-
     <header class="topbar" style="background-color: #2c3e50;">
         <div class="topbar-logo">🛡️ Painel de Segurança - RBAC</div>
-        <div class="topbar-user">
-            <button onclick="location.href='sistema.html'" class="btn-outline" style="color:white; border-color:white;">⬅ Voltar ao Sistema</button>
-        </div>
+        <div class="topbar-user"><button onclick="location.href='sistema.html'" class="btn-outline" style="color:white; border-color:white;">⬅ Voltar ao Sistema</button></div>
     </header>
 
-    <div class="app-container">
-        <nav class="sidebar admin-sidebar">
-            <ul>
-                <li class="menu-section">Administração</li>
-                <li><button onclick="mostrarSecaoAdmin('secao-usuarios', this)" class="menu-btn ativo">👥 Usuários</button></li>
-                <li><button onclick="mostrarSecaoAdmin('secao-perfis', this)" class="menu-btn">📋 Perfis</button></li>
-            </ul>
-        </nav>
-
-        <main class="content">
-            <!-- Secção Usuários -->
-            <section id="secao-usuarios" class="secao ativa">
-                <div class="card">
-                    <div class="header-lista">
-                        <h2>Gestão de Usuários</h2>
-                        <button onclick="recarregarUsuarios()" class="btn-outline">🔄 Atualizar</button>
-                    </div>
-                    <div class="controles-tabela">
-                        <label>A exibir <select id="itensPorPaginaUsuarios" onchange="atualizarTabelaUsuarios()">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select></label>
-                        <div class="search-box">
-                            <input type="text" id="buscaUsuarios" placeholder="Pesquisar por e-mail ou UID..." oninput="atualizarTabelaUsuarios()">
-                        </div>
-                    </div>
-                    <table id="tabelaUsuarios" class="tabela-gov">
-                        <thead>
-                            <tr>
-                                <th>UID</th>
-                                <th>E-mail</th>
-                                <th>Perfil Atual</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-usuarios"></tbody>
-                    </table>
-                    <div class="paginacao">
-                        <button onclick="mudarPaginaUsuarios(-1)" id="btnAnteriorUsuarios">Anterior</button>
-                        <span id="infoPaginaUsuarios">Página 1</span>
-                        <button onclick="mudarPaginaUsuarios(1)" id="btnProximoUsuarios">Próximo</button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Secção Perfis -->
-            <section id="secao-perfis" class="secao" style="display: none;">
-                <div class="card">
-                    <div class="header-lista">
-                        <h2>Lista de Perfis</h2>
-                        <button onclick="carregarPerfisTabela()" class="btn-outline">🔄 Atualizar</button>
-                    </div>
-                    <div class="controles-tabela">
-                        <label>A exibir <select id="itensPorPaginaPerfis" onchange="atualizarTabelaPerfis()">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select></label>
-                        <div class="search-box">
-                            <input type="text" id="buscaPerfis" placeholder="Pesquisar por nome do perfil..." oninput="atualizarTabelaPerfis()">
-                        </div>
-                    </div>
-                    <table id="tabelaPerfis" class="tabela-gov">
-                        <thead>
-                            <tr>
-                                <th>Nome do Perfil</th>
-                                <th>Permissões</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-perfis"></tbody>
-                    </table>
-                    <div class="paginacao">
-                        <button onclick="mudarPaginaPerfis(-1)" id="btnAnteriorPerfis">Anterior</button>
-                        <span id="infoPaginaPerfis">Página 1</span>
-                        <button onclick="mudarPaginaPerfis(1)" id="btnProximoPerfis">Próximo</button>
-                    </div>
-                </div>
-                <div class="card" style="margin-top: 20px;">
-                    <div class="header-lista">
-                        <h2>Criar / Editar Perfil</h2>
-                    </div>
+    <div class="content">
+        <div class="card">
+            <h2>Gestão de Cargos e Permissões</h2>
+            <div style="display: flex; gap: 30px; margin-top: 20px;">
+                <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">
+                    <h3>1. Definir Perfil</h3>
                     <form id="formPerfilAdmin">
-                        <div class="form-group">
-                            <label>Nome do Perfil:</label>
-                            <input type="text" id="adminNomePerfil" placeholder="ex: operador, financeiro, admin" required style="text-transform: lowercase; max-width: 300px;">
-                        </div>
-
+                        <div class="form-group"><label>Nome do Perfil:</label><input type="text" id="adminNomePerfil" placeholder="ex: operador_leitura" required></div>
                         <fieldset class="gov-fieldset">
-                            <legend>Acesso a Menus</legend>
-                            <div class="perm-group">
-                                <h4>Visibilidade de secções do sistema</h4>
-                                <label><input type="checkbox" class="cb-perm cb-menu" value="acesso_admin"> Painel Admin (Gestão de Acessos)</label>
-                                <label><input type="checkbox" class="cb-perm cb-menu" value="acesso_backup"> Backup / Exportação</label>
-                                <label><input type="checkbox" class="cb-perm cb-menu" value="acesso_financeiro"> Módulos Financeiros (Títulos, Contratos, Empenhos, DARF)</label>
-                            </div>
+                            <legend>Permissões</legend>
+                            <label><input type="checkbox" class="cb-perm" value="acesso_admin"> Acesso Admin</label><br>
+                            <label><input type="checkbox" class="cb-perm" value="inserir_dados"> Inserir Dados</label><br>
+                            <label><input type="checkbox" class="cb-perm" value="editar_dados"> Editar Dados</label><br>
+                            <label><input type="checkbox" class="cb-perm" value="excluir_dados"> Excluir Dados</label>
                         </fieldset>
-
-                        <fieldset class="gov-fieldset">
-                            <legend>Acesso a Ações</legend>
-                            <div class="perm-group">
-                                <h4>Operações permitidas nos dados</h4>
-                                <label><input type="checkbox" class="cb-perm cb-acao" value="inserir_dados"> Inserir / Criar registos (+ Novo)</label>
-                                <label><input type="checkbox" class="cb-perm cb-acao" value="editar_dados"> Editar registos (✏️)</label>
-                                <label><input type="checkbox" class="cb-perm cb-acao" value="excluir_dados"> Excluir registos (🗑️)</label>
-                                <label><input type="checkbox" class="cb-perm cb-acao" value="importar_dados"> Importar Excel/CSV</label>
-                            </div>
-                        </fieldset>
-
-                        <div class="form-acoes">
-                            <button type="submit" class="btn-primary">💾 Salvar Perfil</button>
-                            <button type="button" onclick="document.getElementById('formPerfilAdmin').reset()" class="btn-default">Limpar</button>
-                        </div>
+                        <button type="submit" class="btn-primary" style="margin-top:10px;">💾 Salvar Perfil</button>
                     </form>
                 </div>
-            </section>
-        </main>
-    </div>
-
-    <!-- Modal: Editar Perfil do Usuário -->
-    <div id="modalEditarUsuario" class="modal-overlay admin-modal" style="display: none;">
-        <div class="modal-content admin-modal">
-            <h2>✏️ Editar Perfis do Usuário</h2>
-            <p id="modalUsuarioEmail" style="margin-bottom: 20px; color: #555; font-weight: bold;"></p>
-            <input type="hidden" id="modalUsuarioUid" value="">
-
-            <fieldset class="gov-fieldset">
-                <legend>Atribuir Perfil (escolha um ou defina permissões customizadas)</legend>
-                <div class="form-group">
-                    <label>Perfil pré-definido:</label>
-                    <select id="modalSelectPerfil">
-                        <option value="">— Selecionar perfil —</option>
-                    </select>
+                <div style="flex: 1;">
+                    <h3>2. Atribuir Perfil a Usuário</h3>
+                    <form id="formUsuarioAdmin">
+                        <div class="form-group"><label>UID do Usuário:</label><input type="text" id="adminUsuarioUid" required></div>
+                        <div class="form-group"><label>Email:</label><input type="email" id="adminUsuarioEmail" required></div>
+                        <div class="form-group"><label>Perfil (Role):</label><input type="text" id="adminUsuarioPerfil" required></div>
+                        <button type="submit" class="btn-outline">Atribuir Cargo</button>
+                    </form>
                 </div>
-                <p style="font-size: 12px; color: #777; margin: 10px 0;">ou defina permissões manualmente:</p>
-                <div class="perm-group">
-                    <h4>Acesso a Menus</h4>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-menu" value="acesso_admin"> Painel Admin</label>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-menu" value="acesso_backup"> Backup</label>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-menu" value="acesso_financeiro"> Módulos Financeiros</label>
-                </div>
-                <div class="perm-group">
-                    <h4>Acesso a Ações</h4>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-acao" value="inserir_dados"> Inserir</label>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-acao" value="editar_dados"> Editar</label>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-acao" value="excluir_dados"> Excluir</label>
-                    <label><input type="checkbox" class="cb-modal-perm cb-modal-acao" value="importar_dados"> Importar</label>
-                </div>
-            </fieldset>
-
-            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
-                <button onclick="fecharModalUsuario()" class="btn-default">Cancelar</button>
-                <button onclick="salvarPerfilUsuario()" class="btn-primary">💾 Guardar</button>
             </div>
         </div>
     </div>
@@ -190,6 +47,5 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
-    <script src="admin-spa.js"></script>
 </body>
 </html>
