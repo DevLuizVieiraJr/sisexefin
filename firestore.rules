@@ -86,7 +86,9 @@ service cloud.firestore {
 
     match /oi/{docId} {
       allow read: if logado();
-      allow write: if logado() && temPermissao('acesso_admin');
+      allow create: if logado() && (temPermissao('oi_inserir') || temPermissao('acesso_admin'));
+      allow update: if logado() && (temPermissao('oi_editar') || temPermissao('acesso_admin'));
+      allow delete: if logado() && (temPermissao('oi_excluir') || temPermissao('acesso_admin'));
     }
   }
 }
