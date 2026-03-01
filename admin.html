@@ -23,19 +23,41 @@
 </head>
 <body style="display: none;" id="corpo-admin">
     <div id="adminLoading" class="admin-loading"><div class="spinner"></div><p style="margin-top:10px; color:#337ab7;">A processar...</p></div>
-    <header class="topbar" style="background-color: #2c3e50;">
-        <div class="topbar-logo">🛡️ Painel de Segurança - RBAC</div>
-        <div class="topbar-user"><button onclick="location.href='sistema.html'" class="btn-outline" style="color:white; border-color:white;">⬅ Voltar ao Sistema</button></div>
+    <header class="topbar topbar-admin">
+        <div class="topbar-logo">🛡️ Painel de Controle - SisExeFin</div>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 Utilizador</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
+            </div>
+            <span class="topbar-voltar" onclick="location.href='sistema.html'">⬅ Voltar</span>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
     </header>
 
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <ul>
+                <li class="menu-section">Painel de Segurança</li>
+                <li><button type="button" data-painel="usuarios" class="menu-btn ativo" onclick="mostrarPainelAdmin('usuarios')" title="Usuários"><span class="menu-btn-icon">👥</span><span class="menu-btn-text">Usuários</span></button></li>
+                <li><button type="button" data-painel="pendentes" class="menu-btn" onclick="mostrarPainelAdmin('pendentes')" title="Aguardando Aprovação"><span class="menu-btn-icon">⏳</span><span class="menu-btn-text">Aguardando Aprovação</span></button></li>
+                <li><button type="button" data-painel="perfis" class="menu-btn" onclick="mostrarPainelAdmin('perfis')" title="Perfis"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Perfis</span></button></li>
+                <li><button type="button" data-painel="oi" class="menu-btn" onclick="mostrarPainelAdmin('oi')" title="Organizações Internas (OI)"><span class="menu-btn-icon">🏢</span><span class="menu-btn-text">Organizações Internas (OI)</span></button></li>
+                <li><button type="button" data-painel="cadastrar" class="menu-btn" onclick="mostrarPainelAdmin('cadastrar')" title="Cadastrar Usuário"><span class="menu-btn-icon">➕</span><span class="menu-btn-text">Cadastrar Usuário</span></button></li>
+                <li class="menu-section" style="margin-top: 20px;">Módulos</li>
+                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Sistema Principal"><span class="menu-btn-icon">🌐</span><span class="menu-btn-text">Sistema Principal</span></a></li>
+                <li><a href="titulos.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Títulos de Crédito"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Títulos de Crédito</span></a></li>
+                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Contratos / Empresas"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos / Empresas</span></a></li>
+                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Empenhos"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Empenhos</span></a></li>
+                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Códigos DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">Códigos DARF</span></a></li>
+                <li class="menu-section" style="margin-top: 20px;">Sistema</li>
+                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></a></li>
+            </ul>
+        </nav>
+
     <div class="content">
-        <div class="admin-tabs">
-            <button class="admin-tab ativo" onclick="mostrarPainelAdmin('usuarios')">👥 Usuários</button>
-            <button class="admin-tab" onclick="mostrarPainelAdmin('pendentes')">⏳ Aguardando Aprovação</button>
-            <button class="admin-tab" onclick="mostrarPainelAdmin('perfis')">📋 Perfis</button>
-            <button class="admin-tab" onclick="mostrarPainelAdmin('oi')">🏢 Controle de OI</button>
-            <button class="admin-tab" onclick="mostrarPainelAdmin('cadastrar')">➕ Cadastrar</button>
-        </div>
 
         <div id="painel-pendentes" class="admin-painel card">
             <h2>Aguardando Aprovação</h2>
@@ -125,7 +147,7 @@
                     <h2 style="margin:0;">Organizações Internas (OI)</h2>
                     <button type="button" onclick="window.abrirFormularioOI && window.abrirFormularioOI()" class="btn-primary">+ Nova OI</button>
                 </div>
-                <p style="color:#666; margin-bottom:15px;">Liste ou cadastre organizações internas.</p>
+                <p style="color:#666; margin-bottom:15px;">Liste ou cadastre organizações internas. A coleção OI é criada automaticamente ao salvar o primeiro registo. O seu perfil precisa da permissão <strong>Acesso Admin</strong> (em Perfis).</p>
                 <div style="overflow-x: auto;">
                     <table id="tabelaOI" class="tabela-gov">
                         <thead>
@@ -196,6 +218,7 @@
             </form>
             </div>
         </div>
+    </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

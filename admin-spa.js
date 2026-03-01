@@ -34,11 +34,10 @@
     window.btnLoading = btnLoading;
 
     function mostrarPainelAdmin(painel) {
-        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('ativo'));
+        document.querySelectorAll('.sidebar .menu-btn[data-painel]').forEach(t => t.classList.remove('ativo'));
+        const btnAtivo = document.querySelector('.sidebar .menu-btn[data-painel="' + painel + '"]');
+        if (btnAtivo) btnAtivo.classList.add('ativo');
         document.querySelectorAll('.admin-painel').forEach(p => p.classList.remove('visivel'));
-        const idx = TAB_INDEX[painel] || 1;
-        const tab = document.querySelector('.admin-tab:nth-child(' + idx + ')');
-        if (tab) tab.classList.add('ativo');
         const el = document.getElementById('painel-' + painel);
         if (el) el.classList.add('visivel');
         if (painel === 'cadastrar') {
@@ -263,7 +262,10 @@
                 alert('OI salva com sucesso.');
                 voltarListaOI();
             } catch (err) {
-                alert('Erro ao salvar OI: ' + (err.message || err));
+                console.error('Erro ao salvar OI:', err);
+                const msg = err.code === 'permission-denied' ? 'Sem permissão (acesso_admin necessário).' :
+                    err.code ? (err.code + ': ' + (err.message || '')) : (err.message || String(err));
+                alert('Erro ao salvar OI: ' + msg);
             }
             finally { btnLoading(btn, false); adminLoading(false); }
         });

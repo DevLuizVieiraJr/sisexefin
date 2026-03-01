@@ -30,31 +30,28 @@
 
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
-        <div class="topbar-user" style="display: flex; align-items: center; gap: 15px;">
-            <span id="nomeUsuarioLogado">👤 A carregar...</span>
-            <div id="containerSeletorPerfil" style="display: none;">
-                <label style="font-size: 12px; margin-right: 6px;">Perfil ativo:</label>
-                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px;"></select>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span style="cursor: pointer; color: #ff6b6b;" onclick="fazerLogout()">🚪 Sair</span>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
 
     <div class="app-container">
-        <nav class="sidebar">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <ul>
                 <li class="menu-section">Módulos</li>
-                <li><a href="titulos.html" class="menu-btn" style="text-decoration:none;display:block;color:inherit;">📝 Títulos de Crédito</a></li>
-                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn ativo">🤝 Contratos / Empresas</button></li>                
-                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn">📄 Empenho</button></li>
-                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn">📊 Códigos DARF</button></li>
-                
+                <li><a href="titulos.html" class="menu-btn" title="Títulos de Crédito"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Títulos de Crédito</span></a></li>
+                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn ativo" title="Contratos / Empresas"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos / Empresas</span></button></li>
+                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn" title="Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Empenho</span></button></li>
+                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn" title="Códigos DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">Códigos DARF</span></button></li>
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn">💾 Backup / Exportação</button></li>
-                
-                <li data-permission="acesso_admin">
-                    <button onclick="window.location.href='admin.html'" class="menu-btn" style="color: #f39c12;">🛡️ Gestão de Acessos</button>
-                </li>
+                <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></button></li>
+                <li data-permission="acesso_admin"><button onclick="window.location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
             </ul>
         </nav>
 

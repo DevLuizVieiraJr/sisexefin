@@ -15,6 +15,38 @@ function mostrarLoading() { const l = document.getElementById('loadingApp'); if(
 function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const colapsado = sidebar.classList.toggle('colapsado');
+    try { localStorage.setItem('sidebarColapsado', colapsado ? '1' : '0'); } catch (e) {}
+    const toggle = sidebar.querySelector('.sidebar-toggle');
+    if (toggle) {
+        const icon = toggle.querySelector('.menu-btn-icon');
+        const text = toggle.querySelector('.sidebar-toggle-text');
+        if (icon) icon.textContent = colapsado ? '▶' : '◀';
+        if (text) text.textContent = colapsado ? ' Mostrar menu' : ' Ocultar menu';
+    }
+}
+window.toggleSidebar = toggleSidebar;
+
+function initSidebarState() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    try {
+        if (localStorage.getItem('sidebarColapsado') === '1') {
+            sidebar.classList.add('colapsado');
+            const toggle = sidebar.querySelector('.sidebar-toggle');
+            if (toggle) {
+                const icon = toggle.querySelector('.menu-btn-icon');
+                const text = toggle.querySelector('.sidebar-toggle-text');
+                if (icon) icon.textContent = '▶';
+                if (text) text.textContent = ' Mostrar menu';
+            }
+        }
+    } catch (e) {}
+}
+
 /** Registra ação administrativa na coleção auditoria. Apenas admins podem criar. */
 async function registrarAuditoria(acao, alvo, detalhes) {
     const user = auth.currentUser;
@@ -493,4 +525,10 @@ function exportarBancoDeDados() {
         console.error("Erro ao gerar backup:", error);
         alert("Erro ao gerar o ficheiro de backup.");
     }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSidebarState);
+} else {
+    initSidebarState();
 }
