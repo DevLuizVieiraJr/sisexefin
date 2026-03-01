@@ -31,7 +31,7 @@
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span class="topbar-voltar" onclick="location.href='sistema.html'">⬅ Voltar</span>
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'">⬅ Voltar</span>
             <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
@@ -47,13 +47,13 @@
                 <li><button type="button" data-painel="oi" class="menu-btn" onclick="mostrarPainelAdmin('oi')" title="Organizações Internas (OI)"><span class="menu-btn-icon">🏢</span><span class="menu-btn-text">Organizações Internas (OI)</span></button></li>
                 <li><button type="button" data-painel="cadastrar" class="menu-btn" onclick="mostrarPainelAdmin('cadastrar')" title="Cadastrar Usuário"><span class="menu-btn-icon">➕</span><span class="menu-btn-text">Cadastrar Usuário</span></button></li>
                 <li class="menu-section" style="margin-top: 20px;">Módulos</li>
-                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Sistema Principal"><span class="menu-btn-icon">🌐</span><span class="menu-btn-text">Sistema Principal</span></a></li>
+                <li><a href="dashboard.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Dashboard"><span class="menu-btn-icon">🌐</span><span class="menu-btn-text">Sistema Principal</span></a></li>
                 <li><a href="titulos.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Títulos de Crédito"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Títulos de Crédito</span></a></li>
-                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Contratos / Empresas"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos / Empresas</span></a></li>
-                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Empenhos"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Empenhos</span></a></li>
-                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Códigos DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">Códigos DARF</span></a></li>
+                <li><a href="sistema.html?secao=contratos" class="menu-btn" style="text-decoration:none;color:inherit;" title="Contratos / Empresas"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos / Empresas</span></a></li>
+                <li><a href="sistema.html?secao=empenhos" class="menu-btn" style="text-decoration:none;color:inherit;" title="Empenhos"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Empenhos</span></a></li>
+                <li><a href="sistema.html?secao=darf" class="menu-btn" style="text-decoration:none;color:inherit;" title="Códigos DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">Códigos DARF</span></a></li>
                 <li class="menu-section" style="margin-top: 20px;">Sistema</li>
-                <li><a href="sistema.html" class="menu-btn" style="text-decoration:none;color:inherit;" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></a></li>
+                <li><a href="sistema.html?secao=backup" class="menu-btn" style="text-decoration:none;color:inherit;" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></a></li>
             </ul>
         </nav>
 

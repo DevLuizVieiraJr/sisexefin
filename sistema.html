@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SisExeFin - Dashboard</title>
+    <title>SisExeFin - Tabelas de Apoio</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
@@ -31,6 +31,7 @@
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
         <div class="topbar-user">
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'" style="margin-right:15px;">⬅ Dashboard</span>
             <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
             <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
                 <label style="font-size: 12px;">Perfil:</label>
@@ -44,11 +45,13 @@
         <nav class="sidebar" id="sidebar">
             <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <ul>
-                <li class="menu-section">Módulos</li>
-                <li><a href="titulos.html" class="menu-btn" title="Títulos de Crédito"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Títulos de Crédito</span></a></li>
-                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn ativo" title="Contratos / Empresas"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos / Empresas</span></button></li>
-                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn" title="Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Empenho</span></button></li>
-                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn" title="Códigos DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">Códigos DARF</span></button></li>
+                <li class="menu-section">Tabelas de Apoio</li>
+                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn ativo" title="Nota de Empenho (NE)"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></button></li>
+                <li><button onclick="mostrarSecao('secao-lf', this)" class="menu-btn" title="Liquidação Financeira (LF)"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Liquidação Financeira (LF)</span></button></li>
+                <li><button onclick="mostrarSecao('secao-pf', this)" class="menu-btn" title="Pedido Financeiro (PF)"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Pedido Financeiro (PF)</span></button></li>
+                <li><button onclick="mostrarSecao('secao-op', this)" class="menu-btn" title="Operação de Pagamento (OP)"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Operação de Pagamento (OP)</span></button></li>
+                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></button></li>
+                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn" title="Contratos"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos</span></button></li>
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
                 <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></button></li>
                 <li data-permission="acesso_admin"><button onclick="window.location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
@@ -57,7 +60,7 @@
 
         <main class="content">
             
-            <section id="secao-titulos" class="secao ativa">
+            <section id="secao-titulos" class="secao" style="display: none;">
                 <div id="tela-lista-titulos" class="card">
                     <div class="header-lista">
                         <h2>Entrada de Títulos <span style="font-size: 14px; color: #777;">(HUB / FORM-3)</span></h2>
@@ -144,6 +147,25 @@
                             <button type="button" onclick="voltarParaListaTitulos()" class="btn-default">Cancelar</button>
                         </div>
                     </form>
+                </div>
+            </section>
+
+            <section id="secao-lf" class="secao" style="display: none;">
+                <div class="card">
+                    <h2>Liquidação Financeira (LF)</h2>
+                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
+                </div>
+            </section>
+            <section id="secao-pf" class="secao" style="display: none;">
+                <div class="card">
+                    <h2>Pedido Financeiro (PF)</h2>
+                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
+                </div>
+            </section>
+            <section id="secao-op" class="secao" style="display: none;">
+                <div class="card">
+                    <h2>Operação de Pagamento (OP)</h2>
+                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
                 </div>
             </section>
 
@@ -381,6 +403,7 @@
     <script src="admin-utils.js"></script>
     <script src="script.js"></script>
     <script src="script-titulos.js"></script>
+    <script src="script-sistema-init.js"></script>
     <script src="script-empenhos.js"></script>
     <script src="script-contratos.js"></script>
     <script src="script-darf.js"></script>

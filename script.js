@@ -192,12 +192,13 @@ auth.onAuthStateChanged(async (user) => {
         const corpoSistema = document.getElementById('corpo-sistema');
         const corpoAdmin = document.getElementById('corpo-admin');
         const corpoTitulos = document.getElementById('corpo-titulos');
+        const corpoDashboard = document.getElementById('corpo-dashboard');
 
         // Lógica de Rota: Estamos no Admin?
         if (corpoAdmin) {
             if (!permissoesEmCache.includes('acesso_admin')) {
                 alert("Acesso Negado! Redirecionando...");
-                window.location.replace('sistema.html');
+                window.location.replace('dashboard.html');
                 return;
             }
             corpoAdmin.style.display = 'block';
@@ -206,7 +207,7 @@ auth.onAuthStateChanged(async (user) => {
         else if (corpoTitulos) {
             if (!permissoesEmCache.includes('titulos_ler')) {
                 alert("Acesso Negado ao módulo TC. Redirecionando...");
-                window.location.replace('sistema.html');
+                window.location.replace('dashboard.html');
                 return;
             }
             renderizarElementosRBAC();
@@ -214,12 +215,19 @@ auth.onAuthStateChanged(async (user) => {
             corpoTitulos.style.display = 'block';
             if (typeof inicializarTitulosSPA === 'function') inicializarTitulosSPA();
         }
-        // Lógica de Rota: Estamos no Sistema?
+        // Lógica de Rota: Estamos no Sistema (Tabelas de Apoio)?
         else if (corpoSistema) {
             renderizarElementosRBAC();
             atualizarSeletorPerfil();
             corpoSistema.style.display = 'block';
             escutarFirebase();
+        }
+        // Lógica de Rota: Estamos no Dashboard?
+        else if (corpoDashboard) {
+            renderizarElementosRBAC();
+            atualizarSeletorPerfil();
+            corpoDashboard.style.display = 'block';
+            esconderLoading();
         }
         if (typeof iniciarWatcherInatividade === 'function') iniciarWatcherInatividade();
     } else {

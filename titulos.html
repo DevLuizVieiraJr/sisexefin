@@ -54,7 +54,7 @@
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span class="topbar-voltar" onclick="location.href='sistema.html'">⬅ Voltar</span>
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'">⬅ Voltar</span>
             <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
         </div>
     </header>
@@ -72,7 +72,7 @@
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Para Pagamento')" title="Para Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Para Pagamento</span></button></li>
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Devolvido')" title="Devolvido"><span class="menu-btn-icon">↩️</span><span class="menu-btn-text">Devolvido</span></button></li>
                 <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="location.href='sistema.html'" class="menu-btn" title="Dashboard"><span class="menu-btn-icon">🏠</span><span class="menu-btn-text">Dashboard</span></button></li>
+                <li><button onclick="location.href='dashboard.html'" class="menu-btn" title="Dashboard"><span class="menu-btn-icon">🏠</span><span class="menu-btn-text">Dashboard</span></button></li>
                 <li data-permission="acesso_admin"><button onclick="location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
             </ul>
         </nav>
