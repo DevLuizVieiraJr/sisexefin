@@ -112,7 +112,7 @@
                         </fieldset>
 
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Valor da Nota Fiscal (R$):</label><input type="number" id="valorNotaFiscal" step="0.01"></div>
+                            <div class="form-group flex-1"><label>Valor da Nota Fiscal:</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda></div>
                             <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmissao"></div>
                             <div class="form-group flex-1"><label>Data de Ateste:</label><input type="date" id="dataAteste"></div>
                         </div>
@@ -127,7 +127,7 @@
                             <div id="detalhesVinculoEmpenho" style="display: none; background: #e8f4f8; padding: 15px; margin-bottom: 10px;">
                                 <h4 id="empenhoSelecionadoTexto"></h4>
                                 <div class="form-row">
-                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="number" id="vinculoValor" step="0.01"></div>
+                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
                                     <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
                                     <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
                                 </div>
@@ -188,7 +188,7 @@
                         <div class="form-row">
                             <div class="form-group flex-1"><label>ID Contrato:</label><input type="text" id="idContrato" placeholder="Ex: 479217"></div>
                             <div class="form-group flex-1"><label>Nº Instrumento:</label><input type="text" id="numContrato" placeholder="Ex: 00006/2025"></div>
-                            <div class="form-group flex-1"><label>Situação:</label><input type="text" id="situacaoContrato" placeholder="Ex: Ativo"></div>
+                            <div class="form-group flex-1"><label>Situação:</label><select id="situacaoContrato"><option value="">Selecione</option><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></div>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-2"><label>Fornecedor (CNPJ - Nome):</label><input type="text" id="fornecedorContrato" placeholder="00.000.000/0000-00 - EMPRESA LTDA" required></div>
@@ -197,7 +197,7 @@
                         <div class="form-row">
                             <div class="form-group flex-1"><label>Data Início:</label><input type="text" id="dataInicio" placeholder="dd/mm/aa"></div>
                             <div class="form-group flex-1"><label>Data Fim:</label><input type="text" id="dataFim" placeholder="dd/mm/aa"></div>
-                            <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorContrato" step="0.01"></div>
+                            <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorContrato" inputmode="numeric" placeholder="0,00" data-moeda></div>
                         </div>
                         <div class="form-group" style="position: relative;">
                             <label>Vincular Cód. Receita (DARF):</label>
@@ -261,7 +261,7 @@
                                 <input type="text" id="numEmpenho" placeholder="Ex: 741000000012024NE000001" pattern="[0-9]{11}[0-9]{4}NE[0-9]{6}" title="Formato exigido: 15 números, letras NE e 6 números finais" required>
                             </div>
                             <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
-                            <div class="form-group flex-1"><label>Valor Global (R$):</label><input type="number" id="valorEmpenho" step="0.01" min="0"></div>
+                            <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>ND (Natureza Desp.):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
@@ -378,7 +378,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
     <script src="script.js"></script>
+    <script src="script-titulos.js"></script>
     <script src="script-empenhos.js"></script>
     <script src="script-contratos.js"></script>
     <script src="script-darf.js"></script>

@@ -21,9 +21,9 @@
         .stepper-tc .concluido { background: #27ae60; color: white; }
         .stepper-tc .bloqueado { background: #ddd; color: #777; }
         .tabs-tc { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
-        .tab-tc { padding: 12px 20px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; }
-        .tab-tc:hover:not(.bloqueado) { background: #eee; }
-        .tab-tc.ativo { background: white; margin-bottom: -2px; border-bottom: 2px solid white; }
+        .tab-tc { padding: 12px 20px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; }
+        .tab-tc:hover:not(.bloqueado) { background: #eee; color: #333; }
+        .tab-tc.ativo { background: #337ab7; color: white; margin-bottom: -2px; border-bottom: 2px solid #337ab7; border-color: #337ab7; font-weight: bold; box-shadow: 0 -2px 4px rgba(0,0,0,0.1); }
         .tab-tc.bloqueado { cursor: not-allowed; opacity: 0.6; color: #999; }
         .tab-panel-tc { display: none; padding: 20px 0; }
         .tab-panel-tc.visivel { display: block; }
@@ -163,7 +163,7 @@
                             <div class="form-group flex-1"><label>OI que entregou:</label>
                                 <select id="oiEntregou"><option value="">-- Nenhum --</option></select>
                             </div>
-                            <div class="form-group flex-1"><label>Valor da NF (R$):</label><input type="number" id="valorNotaFiscal" step="0.01"></div>
+                            <div class="form-group flex-1"><label>Valor da NF:</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda></div>
                             <div class="form-group flex-1"><label>Data Emissão:</label><input type="date" id="dataEmissao"></div>
                             <div class="form-group flex-1"><label>Data Ateste:</label><input type="date" id="dataAteste"></div>
                         </div>
@@ -180,7 +180,7 @@
                             <div id="detalhesVinculoEmpenho" style="display: none; background: #e8f4f8; padding: 15px; margin-bottom: 10px;">
                                 <h4 id="empenhoSelecionadoTexto"></h4>
                                 <div class="form-row">
-                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="number" id="vinculoValor" step="0.01"></div>
+                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
                                     <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
                                     <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
                                 </div>
@@ -238,6 +238,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
     <script src="script.js"></script>
     <script src="script-titulos-spa.js"></script>
 </body>

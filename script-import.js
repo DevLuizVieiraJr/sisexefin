@@ -92,7 +92,6 @@
                     if (numerosExistentes.has(numNorm)) { duplicados++; continue; }
                     const valorRaw = getVal(row, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
                     const numVal = parseFloat((valorRaw || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-                    const stringValor = numVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     const dados = {
                         idContrato: escapeHTML(getVal(row, ['idContrato', 'IdContrato', 'ID', 'id'])),
                         numContrato: escapeHTML(numContrato),
@@ -101,7 +100,7 @@
                         nup: escapeHTML(getVal(row, ['nup', 'NUP', 'Nup'])),
                         dataInicio: escapeHTML(getVal(row, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio'])),
                         dataFim: escapeHTML(getVal(row, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim'])),
-                        valorContrato: stringValor,
+                        valorContrato: numVal,
                         codigosReceita: []
                     };
                     await db.collection('contratos').add(dados);
@@ -137,7 +136,7 @@
                     const dados = {
                         numEmpenho: escapeHTML(numEmpenho),
                         dataEmissao: escapeHTML(getVal(row, ['dataEmissao', 'DataEmissao', 'data', 'Data', 'data_emissao'])),
-                        valorGlobal: escapeHTML(getVal(row, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor'])),
+                        valorGlobal: parseFloat((getVal(row, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']) || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
                         nd: escapeHTML(getVal(row, ['nd', 'ND'])),
                         subitem: escapeHTML(getVal(row, ['subitem', 'Subitem', 'SubEl', 'subel'])),
                         ptres: escapeHTML(getVal(row, ['ptres', 'PTRES'])),

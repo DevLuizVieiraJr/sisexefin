@@ -133,7 +133,7 @@
                     <td><strong>${escapeHTML(t.idProc || '-')}</strong></td>
                     <td>${escapeHTML(t.numTC || '-')}</td>
                     <td>${escapeHTML((t.fornecedor || '').substring(0, 40))}${(t.fornecedor || '').length > 40 ? '...' : ''}</td>
-                    <td>R$ ${escapeHTML(String(t.valorNotaFiscal || '0.00'))}</td>
+                    <td>R$ ${escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(t.valorNotaFiscal || 0) : String(t.valorNotaFiscal || '0.00'))}</td>
                     <td><span class="badge-status ${badgeCls}">${escapeHTML(status)}</span></td>
                     <td>${acoes}</td>`;
                 tbody.appendChild(tr);
@@ -262,7 +262,7 @@
         empenhosDaNotaAtual.forEach((v, i) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td title="${escapeHTML(v.numEmpenho || '')}">${escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-'))}</td>
-                <td>R$ ${escapeHTML(v.valorVinculado || '0')}</td>
+                <td>R$ ${escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0'))}</td>
                 <td><input type="text" data-index="${i}" data-field="lf" value="${escapeHTML(v.lf || '')}" placeholder="LF"></td>
                 <td><input type="text" data-index="${i}" data-field="pf" value="${escapeHTML(v.pf || '')}" placeholder="PF"></td>
                 <td><button type="button" class="btn-icon btn-rm-ne" data-index="${i}">🗑️</button></td>`;
@@ -356,11 +356,13 @@
     }
 
     window.adicionarEmpenhoNaNota = function() {
-        const valor = document.getElementById('vinculoValor')?.value;
-        if (!valor || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
+        const valorInput = document.getElementById('vinculoValor')?.value;
+        if (!valorInput || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
+        const valorNum = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorInput) : (parseFloat(valorInput) || 0);
+        if (valorNum <= 0) return alert("Informe um valor válido!");
         empenhosDaNotaAtual.push({
             numEmpenho: empenhoTemporarioSelecionado.numEmpenho,
-            valorVinculado: valor,
+            valorVinculado: valorNum,
             lf: document.getElementById('vinculoLF')?.value || '',
             pf: document.getElementById('vinculoPF')?.value || ''
         });
@@ -377,7 +379,8 @@
         document.getElementById('dataExefin').value = t.dataExefin || '';
         document.getElementById('numTC').value = t.numTC || '';
         document.getElementById('notaFiscal').value = t.notaFiscal || '';
-        document.getElementById('valorNotaFiscal').value = t.valorNotaFiscal || '';
+        const valNF = parseFloat(t.valorNotaFiscal) || 0;
+        document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
         document.getElementById('dataEmissao').value = t.dataEmissao || '';
         document.getElementById('dataAteste').value = t.dataAteste || '';
         document.getElementById('readFornecedor').value = t.fornecedor || '';
@@ -401,7 +404,7 @@
             (empenhosDaNotaAtual || []).forEach((v, i) => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : v.numEmpenho}</td>
-                    <td>R$ ${v.valorVinculado || '0'}</td>
+                    <td>R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')}</td>
                     <td><input type="text" data-index="${i}" data-field="lf" value="${escapeHTML(v.lf || '')}"></td>
                     <td><input type="text" data-index="${i}" data-field="pf" value="${escapeHTML(v.pf || '')}"></td>`;
                 tbodyLFPF.appendChild(tr);
@@ -452,7 +455,7 @@
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
             fornecedor: escapeHTML(document.getElementById('readFornecedor').value),
             instrumento: escapeHTML(document.getElementById('readInstrumento').value),
-            valorNotaFiscal: parseFloat(document.getElementById('valorNotaFiscal').value) || 0,
+            valorNotaFiscal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value) : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0),
             dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
             dataAteste: escapeHTML(document.getElementById('dataAteste').value),
             oiEntregou: document.getElementById('oiEntregou').value || null,

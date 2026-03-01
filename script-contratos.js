@@ -35,7 +35,10 @@
         itensExibidos.forEach(function(c) {
             var tr = document.createElement('tr');
             var acoesHTML = gerarBotoesAcao(c.id, 'contrato');
-            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + (escapeHTML(c.fornecedor) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(c.valorContrato) || '-') + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
+                        var valorExib = c.valorContrato;
+            if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
+            else if (valorExib == null || valorExib === '') valorExib = '-';
+            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + (escapeHTML(c.fornecedor) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
             tabelaContratosBody.appendChild(tr);
         });
         var total = Math.ceil(baseFiltrada.length / itensPorPaginaContratos) || 1;
@@ -64,8 +67,11 @@
             document.getElementById('dataInicio').value = c.dataInicio || '';
             document.getElementById('dataFim').value = c.dataFim || '';
             var valorTratado = c.valorContrato;
-            if (typeof valorTratado === 'string' && valorTratado.indexOf('R$') !== -1) { valorTratado = valorTratado.replace('R$', '').replace(/\./g, '').replace(',', '.').trim(); }
-            document.getElementById('valorContrato').value = parseFloat(valorTratado) || '';
+            var numVal = 0;
+            if (typeof valorMoedaParaNumero === 'function') numVal = valorMoedaParaNumero(valorTratado);
+            else if (typeof valorTratado === 'string' && valorTratado.indexOf('R$') !== -1) { valorTratado = valorTratado.replace('R$', '').replace(/\./g, '').replace(',', '.').trim(); numVal = parseFloat(valorTratado) || 0; }
+            else numVal = parseFloat(valorTratado) || 0;
+            document.getElementById('valorContrato').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(numVal)) : (numVal || '');
             darfsDoContratoAtual = (c.codigosReceita && Array.isArray(c.codigosReceita)) ? c.codigosReceita.slice() : [];
             desenharDarfsContrato();
         }
@@ -90,9 +96,8 @@
         e.preventDefault();
         mostrarLoading();
         var fbID = document.getElementById('editIndexContrato').value;
-        var numVal = parseFloat(document.getElementById('valorContrato').value) || 0;
-        var stringValor = numVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        var dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: stringValor, codigosReceita: darfsDoContratoAtual };
+        var numVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorContrato').value) : (parseFloat(document.getElementById('valorContrato').value) || 0);
+        var dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: numVal, codigosReceita: darfsDoContratoAtual };
         try {
             if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); }
             else { await db.collection('contratos').doc(fbID).update(dados); }

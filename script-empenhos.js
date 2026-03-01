@@ -83,7 +83,8 @@
             document.getElementById('editIndexEmpenho').value = e.id;
             document.getElementById('numEmpenho').value = e.numEmpenho || '';
             document.getElementById('dataEmpenho').value = e.dataEmissao || '';
-            document.getElementById('valorEmpenho').value = e.valorGlobal || '';
+            var valEmp = parseFloat(e.valorGlobal) || 0;
+            document.getElementById('valorEmpenho').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valEmp)) : (e.valorGlobal || '');
             document.getElementById('ndEmpenho').value = e.nd || '';
             document.getElementById('subitemEmpenho').value = e.subitem || '';
             document.getElementById('ptresEmpenho').value = e.ptres || '';
@@ -122,7 +123,7 @@
         const dados = {
             numEmpenho: escapeHTML(document.getElementById('numEmpenho').value),
             dataEmissao: escapeHTML(document.getElementById('dataEmpenho').value),
-            valorGlobal: escapeHTML(document.getElementById('valorEmpenho').value),
+            valorGlobal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorEmpenho').value) : (parseFloat(document.getElementById('valorEmpenho').value) || 0),
             nd: escapeHTML(document.getElementById('ndEmpenho').value),
             subitem: escapeHTML(document.getElementById('subitemEmpenho').value),
             ptres: escapeHTML(document.getElementById('ptresEmpenho').value),

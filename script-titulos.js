@@ -50,7 +50,10 @@
         itensExibidos.forEach(t => {
             const tr = document.createElement('tr');
             const acoesHTML = gerarBotoesAcao(t.id, 'titulo');
-            tr.innerHTML = '<td><strong>' + escapeHTML(t.idProc) + '</strong></td><td>' + (escapeHTML(t.numTC) || '-') + '</td><td>' + (escapeHTML(t.fornecedor) || '-') + '</td><td>R$ ' + (escapeHTML(t.valorNotaFiscal) || '0.00') + '</td><td>' + acoesHTML + '</td>';
+            var valorExib = t.valorNotaFiscal;
+            if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
+            else valorExib = valorExib != null && valorExib !== '' ? valorExib : '0,00';
+            tr.innerHTML = '<td><strong>' + escapeHTML(t.idProc) + '</strong></td><td>' + (escapeHTML(t.numTC) || '-') + '</td><td>' + (escapeHTML(t.fornecedor) || '-') + '</td><td>R$ ' + escapeHTML(String(valorExib)) + '</td><td>' + acoesHTML + '</td>';
             tbody.appendChild(tr);
         });
     }
@@ -125,11 +128,13 @@
     }
 
     function adicionarEmpenhoNaNota() {
-        const valor = document.getElementById('vinculoValor').value;
-        if (!valor || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
+        const valorInput = document.getElementById('vinculoValor').value;
+        if (!valorInput || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
+        const valorNum = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorInput) : (parseFloat(valorInput) || 0);
+        if (valorNum <= 0) return alert("Informe um valor válido!");
         empenhosDaNotaAtual.push({
             numEmpenho: escapeHTML(empenhoTemporarioSelecionado.numEmpenho),
-            valorVinculado: escapeHTML(valor),
+            valorVinculado: valorNum,
             lf: escapeHTML(document.getElementById('vinculoLF').value),
             pf: escapeHTML(document.getElementById('vinculoPF').value)
         });
@@ -143,7 +148,8 @@
         if (!tbody) return;
         tbody.innerHTML = '';
         empenhosDaNotaAtual.forEach((v, i) => {
-            tbody.innerHTML += '<tr><td title="' + escapeHTML(v.numEmpenho || '') + '">' + escapeHTML(formatarNumEmpenhoVisivel(v.numEmpenho)) + '</td><td>R$ ' + escapeHTML(v.valorVinculado) + '</td><td>' + escapeHTML(v.lf) + '</td><td>' + escapeHTML(v.pf) + '</td><td><button type="button" class="btn-icon btn-rm-empenhonota" data-index="' + i + '">🗑️</button></td></tr>';
+            var valVinc = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0');
+        tbody.innerHTML += '<tr><td title="' + escapeHTML(v.numEmpenho || '') + '">' + escapeHTML(formatarNumEmpenhoVisivel(v.numEmpenho)) + '</td><td>R$ ' + escapeHTML(valVinc) + '</td><td>' + escapeHTML(v.lf) + '</td><td>' + escapeHTML(v.pf) + '</td><td><button type="button" class="btn-icon btn-rm-empenhonota" data-index="' + i + '">🗑️</button></td></tr>';
         });
     }
 
@@ -167,7 +173,7 @@
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
             fornecedor: escapeHTML(document.getElementById('readFornecedor').value),
             instrumento: escapeHTML(document.getElementById('readInstrumento').value),
-            valorNotaFiscal: parseFloat(document.getElementById('valorNotaFiscal').value) || 0,
+            valorNotaFiscal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value) : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0),
             dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
             dataAteste: escapeHTML(document.getElementById('dataAteste').value),
             empenhosVinculados: empenhosDaNotaAtual,
@@ -198,7 +204,8 @@
             document.getElementById('dataExefin').value = t.dataExefin || '';
             document.getElementById('numTC').value = t.numTC || '';
             document.getElementById('notaFiscal').value = t.notaFiscal || '';
-            document.getElementById('valorNotaFiscal').value = t.valorNotaFiscal || '';
+            var valNF = parseFloat(t.valorNotaFiscal) || 0;
+            document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
             document.getElementById('dataEmissao').value = t.dataEmissao || '';
             document.getElementById('dataAteste').value = t.dataAteste || '';
             if (t.fornecedor) {

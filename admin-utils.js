@@ -47,4 +47,42 @@
     window.telefoneSomenteDigitos = function(tel) {
         return String(tel || '').replace(/\D/g, '').slice(0, 11);
     };
+
+    window.aplicarMascaraMoedaBR = function(input) {
+        if (!input || input.value === undefined) return;
+        let v = String(input.value || '').replace(/\D/g, '');
+        if (v.length > 15) v = v.slice(0, 15);
+        if (v.length === 0) { input.value = ''; return; }
+        const num = parseInt(v, 10) / 100;
+        input.value = 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    window.valorMoedaParaNumero = function(str) {
+        if (str === null || str === undefined || str === '') return 0;
+        const v = String(str).replace(/[^\d]/g, '');
+        if (v.length === 0) return 0;
+        return parseInt(v, 10) / 100;
+    };
+
+    window.formatarMoedaBR = function(num) {
+        const n = parseFloat(num);
+        if (isNaN(n)) return '0,00';
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    function initMascarasMoeda() {
+        document.querySelectorAll('[data-moeda]').forEach(function(inp) {
+            if (inp.dataset.moedaInit) return;
+            inp.dataset.moedaInit = '1';
+            inp.addEventListener('input', function() { aplicarMascaraMoedaBR(this); });
+            inp.addEventListener('blur', function() { aplicarMascaraMoedaBR(this); });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMascarasMoeda);
+    } else {
+        initMascarasMoeda();
+    }
+    window.initMascarasMoeda = initMascarasMoeda;
 })();
