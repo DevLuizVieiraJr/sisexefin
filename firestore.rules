@@ -45,7 +45,11 @@ service cloud.firestore {
       allow create: if logado() && request.auth.uid == userId
         && !request.resource.data.keys().hasAny(['perfis', 'perfil_ativo', 'bloqueado', 'perfil'])
         && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'pendente');
-      allow update, delete: if logado() && temPermissao('acesso_admin');
+      allow update: if logado() && (
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['perfil_ativo']))
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && temPermissao('acesso_admin');
     }
 
     match /auditoria/{docId} {

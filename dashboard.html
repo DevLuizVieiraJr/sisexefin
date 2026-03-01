@@ -41,12 +41,17 @@
         <nav class="sidebar" id="sidebar">
             <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <ul>
-                <li class="menu-section">Controle Orçamentário</li>
-                <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Solicitação de Empenho</span></button></li>
-                <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Alteração de Crédito</span></button></li>
-
-                <li class="menu-section" style="margin-top: 20px;">Títulos de Créditos (NF/Fat/Bol)</li>
-                <li><a href="titulos.html" class="menu-btn menu-link-externo" style="width:100%;" title="Entrada de TC"><span class="menu-btn-icon">📥</span><span class="menu-btn-text">Entrada de TC</span></a></li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="controle" title="Clique para expandir/recolher">Controle Orçamentário <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-controle">
+                        <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Solicitação de Empenho</span></button></li>
+                        <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Alteração de Crédito</span></button></li>
+                    </ul>
+                </li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="titulos" title="Clique para expandir/recolher">Títulos de Créditos (NF/Fat/Bol) <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-titulos">
+                        <li><a href="titulos.html" class="menu-btn menu-link-externo" style="width:100%;" title="Entrada de TC"><span class="menu-btn-icon">📥</span><span class="menu-btn-text">Entrada de TC</span></a></li>
                 <li><a href="titulos.html?status=Rascunho" class="menu-btn menu-link-externo" style="width:100%;" title="Rascunho"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Rascunho</span></a></li>
                 <li><a href="titulos.html?status=Em Processamento" class="menu-btn menu-link-externo" style="width:100%;" title="Em Processamento"><span class="menu-btn-icon">⏳</span><span class="menu-btn-text">Em Processamento</span></a></li>
                 <li><a href="titulos.html?status=Em Liquidação" class="menu-btn menu-link-externo" style="width:100%;" title="Em Liquidação"><span class="menu-btn-icon">🔄</span><span class="menu-btn-text">Em Liquidação</span></a></li>
@@ -55,26 +60,37 @@
                 <li><a href="titulos.html?status=Para Pagamento" class="menu-btn menu-link-externo" style="width:100%;" title="Para Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Para Pagamento (LF c/ PF)</span></a></li>
                 <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Pagos sem GEROP</span></button></li>
                 <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Pagos para Comprovação</span></button></li>
-                <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📌</span><span class="menu-btn-text">DEF</span></button></li>
-
-                <li class="menu-section" style="margin-top: 20px;">Tabelas de Apoio</li>
-                <li><a href="sistema.html?secao=empenhos" class="menu-btn menu-link-externo" style="width:100%;" title="Nota de Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></a></li>
+                        <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">📌</span><span class="menu-btn-text">DEF</span></button></li>
+                    </ul>
+                </li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="tabelas" title="Clique para expandir/recolher">Tabelas de Apoio <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-tabelas">
+                        <li><a href="sistema.html?secao=empenhos" class="menu-btn menu-link-externo" style="width:100%;" title="Nota de Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></a></li>
                 <li><a href="sistema.html?secao=lf" class="menu-btn menu-link-externo" style="width:100%;" title="Liquidação Financeira"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Liquidação Financeira (LF)</span></a></li>
                 <li><a href="sistema.html?secao=pf" class="menu-btn menu-link-externo" style="width:100%;" title="Pedido Financeiro"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Pedido Financeiro (PF)</span></a></li>
                 <li><a href="sistema.html?secao=op" class="menu-btn menu-link-externo" style="width:100%;" title="Operação de Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Operação de Pagamento (OP)</span></a></li>
                 <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">🏦</span><span class="menu-btn-text">Ordem Bancária (OB)</span></button></li>
-                <li><a href="sistema.html?secao=darf" class="menu-btn menu-link-externo" style="width:100%;" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></a></li>
-
-                <li class="menu-section" style="margin-top: 20px;">Links Rápido</li>
-                <li><a href="https://siplad.mb" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="SIPLAD"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">SIPLAD</span></a></li>
+                        <li><a href="sistema.html?secao=darf" class="menu-btn menu-link-externo" style="width:100%;" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></a></li>
+                    </ul>
+                </li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="links" title="Clique para expandir/recolher">Links Rápido <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-links">
+                        <li><a href="https://siplad.mb" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="SIPLAD"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">SIPLAD</span></a></li>
                 <li><a href="https://safin.mb" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="SAFIN"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">SAFIN</span></a></li>
                 <li><a href="https://siafi.tesouro.gov.br" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="SIAFI"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">SIAFI</span></a></li>
                 <li><a href="https://contratos.sistema.gov.br" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="Contratos"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">Contratos</span></a></li>
-                <li><a href="https://tesourogerencial.tesouro.gov.br" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="Tesouro Gerencial"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">Tesouro Gerencial</span></a></li>
-
-                <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><a href="sistema.html?secao=backup" class="menu-btn menu-link-externo" style="width:100%;" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></a></li>
-                <li data-permission="acesso_admin"><a href="admin.html" class="menu-btn menu-link-externo" style="width:100%; color:#f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></a></li>
+                        <li><a href="https://tesourogerencial.tesouro.gov.br" target="_blank" rel="noopener" class="menu-btn menu-link-externo" style="width:100%;" title="Tesouro Gerencial"><span class="menu-btn-icon">🔗</span><span class="menu-btn-text">Tesouro Gerencial</span></a></li>
+                    </ul>
+                </li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="sistema" title="Clique para expandir/recolher">SISTEMA <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-sistema">
+                        <li><a href="sistema.html?secao=backup" class="menu-btn menu-link-externo" style="width:100%;" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></a></li>
+                        <li data-permission="acesso_admin"><a href="admin.html" class="menu-btn menu-link-externo" style="width:100%; color:#f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></a></li>
+                    </ul>
+                </li>
             </ul>
         </nav>
 
@@ -92,5 +108,6 @@
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
     <script src="script-dashboard.js"></script>
+    <script src="script-menu-toggle.js"></script>
 </body>
 </html>

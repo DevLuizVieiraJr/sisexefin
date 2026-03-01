@@ -63,7 +63,9 @@
         <nav class="sidebar" id="sidebar">
             <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <ul>
-                <li class="menu-section">Títulos de Crédito</li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="titulos-tc" title="Clique para expandir/recolher">Títulos de Crédito <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-titulos-tc">
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Rascunho')" title="Em Rascunho"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Em Rascunho</span></button></li>
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Em Processamento')" title="Em Processamento"><span class="menu-btn-icon">⏳</span><span class="menu-btn-text">Em Processamento</span></button></li>
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Em Liquidação')" title="Em Liquidação"><span class="menu-btn-icon">🔄</span><span class="menu-btn-text">Em Liquidação</span></button></li>
@@ -71,9 +73,15 @@
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Aguardando Financeiro')" title="Aguardando Financeiro"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Aguardando Financeiro</span></button></li>
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Para Pagamento')" title="Para Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Para Pagamento</span></button></li>
                 <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Devolvido')" title="Devolvido"><span class="menu-btn-icon">↩️</span><span class="menu-btn-text">Devolvido</span></button></li>
-                <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
+                    </ul>
+                </li>
+                <li>
+                    <button type="button" class="menu-section-toggle" data-toggle="sistema-tc" title="Clique para expandir/recolher">SISTEMA <span class="menu-section-chevron">▼</span></button>
+                    <ul class="menu-subgroup" id="sub-sistema-tc">
                 <li><button onclick="location.href='dashboard.html'" class="menu-btn" title="Dashboard"><span class="menu-btn-icon">🏠</span><span class="menu-btn-text">Dashboard</span></button></li>
                 <li data-permission="acesso_admin"><button onclick="location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
+                    </ul>
+                </li>
             </ul>
         </nav>
 
@@ -241,5 +249,6 @@
     <script src="admin-utils.js"></script>
     <script src="script.js"></script>
     <script src="script-titulos-spa.js"></script>
+    <script src="script-menu-toggle.js"></script>
 </body>
 </html>

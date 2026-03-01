@@ -120,7 +120,7 @@ async function trocarPerfil(perfilId) {
     try {
         await db.collection('usuarios').doc(user.uid).update({ perfil_ativo: perfilId });
         window.location.reload();
-    } catch (err) { alert("Erro ao trocar perfil."); }
+    } catch (err) { alert("Erro ao trocar perfil: " + (err.message || err.code || err)); }
 }
 window.trocarPerfil = trocarPerfil;
 
