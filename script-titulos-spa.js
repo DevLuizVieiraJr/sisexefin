@@ -40,51 +40,168 @@
     }
 
     function inicializarTitulosSPA() {
-        db.collection('titulos').onSnapshot(snap => {
-            baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            atualizarTabelaTitulos();
+        mostrarLoading();
+        let carregamentoFinalizado = false;
+        let carregados = 0;
+        const TOTAL_COLECOES = 4;
+        const TIMEOUT_MS = 10000;
+
+        const finalizarCarregamento = () => {
+            if (carregamentoFinalizado) return;
+            carregamentoFinalizado = true;
+            clearTimeout(timeoutId);
             esconderLoading();
-        });
+            if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
+        };
+
+        const aoReceberSnapshot = () => {
+            carregados++;
+            if (carregados >= TOTAL_COLECOES) finalizarCarregamento();
+        };
+
+        const onErr = (err) => {
+            console.error('Erro ao carregar dados:', err);
+            finalizarCarregamento();
+            const tbody = document.getElementById('tbody-titulos');
+            if (tbody && !tbody.querySelector('tr')) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Erro ao carregar. Verifique a ligação e permissões.</td></tr>';
+            }
+        };
+
+        const timeoutId = setTimeout(finalizarCarregamento, TIMEOUT_MS);
+
+        db.collection('titulos').onSnapshot(
+            snap => {
+                try {
+                    baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    atualizarTabelaTitulos();
+                } catch (e) {
+                    console.error('Erro ao atualizar tabela de títulos:', e);
+                } finally {
+                    aoReceberSnapshot();
+                }
+            },
+            onErr
+        );
         db.collection('contratos').onSnapshot(snap => {
             baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        });
+            aoReceberSnapshot();
+        }, onErr);
         db.collection('empenhos').onSnapshot(snap => {
             baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        });
+            aoReceberSnapshot();
+        }, onErr);
         db.collection('oi').onSnapshot(snap => {
             listaOI = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             popularSelectOI();
-        });
+            aoReceberSnapshot();
+        }, onErr);
+
         const urlParams = new URLSearchParams(window.location.search);
         const st = urlParams.get('status');
         if (st) filtrarPorStatus(st);
+        desenharFiltrosStatus();
         ligarEventos();
     }
     window.inicializarTitulosSPA = inicializarTitulosSPA;
 
-    function popularSelectOI() {
-        const sel = document.getElementById('oiEntregou');
-        if (!sel) return;
-        const oisAtivas = listaOI.filter(o => o.situacao === 'Ativo');
-        sel.innerHTML = '<option value="">-- Nenhum --</option>';
-        oisAtivas.forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o.id;
-            opt.textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
-            sel.appendChild(opt);
+    function popularSelectOI() { /* OI agora é autocomplete; mantido para compatibilidade */ }
+
+    function removerAcentos(str) {
+        if (!str) return '';
+        return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    function textoCorresponde(busca, alvo, minLen) {
+        const b = removerAcentos(String(busca || '')).toLowerCase().trim();
+        const a = removerAcentos(String(alvo || '')).toLowerCase().trim();
+        const min = minLen != null ? minLen : 2;
+        if (b.length < min) return false;
+        if (a.includes(b)) return true;
+        let bi = 0;
+        for (let ai = 0; ai < a.length && bi < b.length; ai++) {
+            if (a[ai] === b[bi]) bi++;
+        }
+        return bi >= b.length;
+    }
+
+    function getOIValores(o) {
+        return {
+            num: String(o.numeroOI || o.numero || o.num || '').trim(),
+            nome: String(o.nomeOI || o.nome || '').trim()
+        };
+    }
+    function getContratoValores(c) {
+        return {
+            forn: String(c.fornecedor || c.razaoSocial || c.empresa || '').trim(),
+            num: String(c.numContrato || c.instrumento || c.numero || '').trim()
+        };
+    }
+
+    window.limparOISelecionada = function() {
+        document.getElementById('oiEntregou').value = '';
+        const el = document.getElementById('buscaOIT');
+        if (el) el.value = '';
+        const d = document.getElementById('dadosOISelecionado');
+        if (d) d.style.display = 'none';
+    };
+
+    function configurarAutocompleteOI() {
+        const inputBuscaOIT = document.getElementById('buscaOIT');
+        const listaOIT = document.getElementById('listaResultadosOIT');
+        if (!inputBuscaOIT || !listaOIT) return;
+        const MIN_CHARS = 4;
+        inputBuscaOIT.addEventListener('input', debounce(function() {
+            const texto = (this.value || '').trim();
+            listaOIT.innerHTML = '';
+            const minChars = texto.length >= MIN_CHARS ? MIN_CHARS : 2;
+            if (texto.length >= minChars) {
+                const oisAtivas = listaOI.filter(o => {
+                    const s = (o.situacao || '').toLowerCase();
+                    return s !== 'inativo';
+                });
+                oisAtivas.filter(o => {
+                    const v = getOIValores(o);
+                    return textoCorresponde(texto, v.num, minChars) || textoCorresponde(texto, v.nome, minChars);
+                }).forEach(o => {
+                    const v = getOIValores(o);
+                    const li = document.createElement('li');
+                    li.textContent = (v.num || '-') + ' - ' + (v.nome || '-');
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        document.getElementById('oiEntregou').value = o.id;
+                        inputBuscaOIT.value = '';
+                        listaOIT.innerHTML = '';
+                        const d = document.getElementById('dadosOISelecionado');
+                        const s = document.getElementById('readOISelecionada');
+                        if (d && s) { s.textContent = (v.num || '') + ' - ' + (v.nome || ''); d.style.display = 'block'; }
+                    });
+                    listaOIT.appendChild(li);
+                });
+            }
+        }, 200));
+        inputBuscaOIT.addEventListener('blur', function() { setTimeout(() => { if (listaOIT) listaOIT.innerHTML = ''; }, 250); });
+    }
+
+    function desenharFiltrosStatus() {
+        const container = document.getElementById('filtrosStatusTC');
+        if (!container) return;
+        const botoes = ['Todos', ...STATUS_ORDEM.filter(s => s !== 'Devolvido')];
+        container.innerHTML = botoes.map(s => {
+            const label = s === 'Todos' ? 'Todos' : s;
+            const cls = (!statusFiltroAtual && s === 'Todos') || statusFiltroAtual === s ? 'ativo' : '';
+            return `<button type="button" class="stepper-tc-btn ${cls}" data-status="${s === 'Todos' ? '' : s}">${escapeHTML(label)}</button>`;
+        }).join('');
+        container.querySelectorAll('.stepper-tc-btn').forEach(btn => {
+            btn.addEventListener('click', () => filtrarPorStatus(btn.getAttribute('data-status') || null));
         });
     }
 
     window.filtrarPorStatus = function(status) {
         statusFiltroAtual = status || null;
-        const subtitulo = document.getElementById('subtituloStatus');
-        if (subtitulo) subtitulo.textContent = status ? `(${status})` : '(Todos)';
-        document.querySelectorAll('.menu-btn-tc').forEach(btn => {
-            const match = status && (btn.textContent.trim() === status || btn.textContent.includes(status));
-            btn.classList.toggle('ativo', !!match);
-        });
         titulosSelecionados.clear();
         if (status && history.replaceState) history.replaceState({}, '', 'titulos.html?status=' + encodeURIComponent(status));
+        else if (history.replaceState) history.replaceState({}, '', 'titulos.html');
+        desenharFiltrosStatus();
         atualizarTabelaTitulos();
     };
 
@@ -142,11 +259,19 @@
 
         const total = Math.ceil(lista.length / itensPorPagina) || 1;
         const info = document.getElementById('infoPagina');
-        if (info) info.textContent = `Página ${paginaAtual} de ${total}`;
+        if (info) info.textContent = `${paginaAtual} de ${total}`;
+        const mostrandoDe = document.getElementById('mostrandoDe');
+        const mostrandoTotal = document.getElementById('mostrandoTotal');
+        if (mostrandoDe) mostrandoDe.textContent = itens.length;
+        if (mostrandoTotal) mostrandoTotal.textContent = lista.length;
+        const btnPrimeira = document.getElementById('btnPrimeira');
         const btnAnt = document.getElementById('btnAnterior');
         const btnProx = document.getElementById('btnProximo');
+        const btnUltima = document.getElementById('btnUltima');
+        if (btnPrimeira) btnPrimeira.disabled = paginaAtual <= 1;
         if (btnAnt) btnAnt.disabled = paginaAtual <= 1;
         if (btnProx) btnProx.disabled = paginaAtual >= total;
+        if (btnUltima) btnUltima.disabled = paginaAtual >= total;
 
         tbody.querySelectorAll('.btn-editar-titulo').forEach(btn => btn.addEventListener('click', () => editarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-apagar-titulo').forEach(btn => btn.addEventListener('click', () => apagarTitulo(btn.getAttribute('data-id'))));
@@ -186,6 +311,18 @@
         atualizarTabelaTitulos();
     };
 
+    window.irParaPrimeiraPagina = function() {
+        paginaAtual = 1;
+        atualizarTabelaTitulos();
+    };
+
+    window.irParaUltimaPagina = function() {
+        const lista = titulosFiltrados();
+        const total = Math.ceil(lista.length / itensPorPagina) || 1;
+        paginaAtual = total;
+        atualizarTabelaTitulos();
+    };
+
     document.getElementById('buscaTabelaTitulos')?.addEventListener('input', debounce(() => {
         termoBusca = document.getElementById('buscaTabelaTitulos').value || '';
         paginaAtual = 1;
@@ -203,6 +340,8 @@
         document.getElementById('editIndexTitulo').value = '-1';
         document.getElementById('idProc').value = '';
         document.getElementById('dadosContratoSelecionado').style.display = 'none';
+        document.getElementById('dadosOISelecionado').style.display = 'none';
+        document.getElementById('oiEntregou').value = '';
         empenhosDaNotaAtual = [];
         tributacoesAtual = [];
         desenharEmpenhosNota();
@@ -210,6 +349,8 @@
         mostrarStepper('Rascunho');
         ativarTab(0);
         bloquearTabsPorStatus('Rascunho');
+        const tituloEl = document.getElementById('tituloFormTC');
+        if (tituloEl) tituloEl.textContent = 'Entrada de Título de Crédito';
         document.getElementById('tela-lista-titulos').style.display = 'none';
         document.getElementById('tela-formulario-titulos').style.display = 'block';
     };
@@ -240,7 +381,8 @@
             tab.style.pointerEvents = isBloqueado ? 'none' : '';
         });
         const btnDevolver = document.getElementById('btnDevolver');
-        if (btnDevolver) btnDevolver.style.display = status !== 'Devolvido' && idx >= 0 ? 'inline-block' : 'none';
+        const tcSalvo = (document.getElementById('editIndexTitulo')?.value || '') !== '-1';
+        if (btnDevolver) btnDevolver.style.display = tcSalvo && status !== 'Devolvido' && idx >= 0 ? 'inline-block' : 'none';
     }
 
     function ativarTab(i) {
@@ -308,28 +450,47 @@
     };
 
     let empenhoTemporarioSelecionado = null;
-    const inputBuscaContratoT = document.getElementById('buscaContratoT');
-    const listaContratosT = document.getElementById('listaResultadosContratoT');
-    if (inputBuscaContratoT && listaContratosT) {
-        inputBuscaContratoT.addEventListener('input', debounce(function() {
-            const texto = (this.value || '').toLowerCase();
+
+    function configurarAutocompleteContrato() {
+        const inputBuscaContratoT = document.getElementById('buscaContratoT');
+        const listaContratosT = document.getElementById('listaResultadosContratoT');
+        if (!inputBuscaContratoT || !listaContratosT) return;
+        const MIN_CHARS = 4;
+        const handler = debounce(function() {
+            const texto = (this.value || '').trim();
             listaContratosT.innerHTML = '';
-            if (texto.length >= 2) {
-                baseContratos.filter(c => (c.fornecedor && c.fornecedor.toLowerCase().includes(texto)) || (c.numContrato && c.numContrato.toLowerCase().includes(texto)))
-                    .forEach(c => {
-                        const li = document.createElement('li');
-                        li.innerHTML = '<strong>' + escapeHTML(c.numContrato) + '</strong> - ' + escapeHTML(c.fornecedor);
-                        li.onclick = () => {
-                            document.getElementById('dadosContratoSelecionado').style.display = 'block';
-                            document.getElementById('readFornecedor').value = c.fornecedor || '';
-                            document.getElementById('readInstrumento').value = c.numContrato || '';
-                            listaContratosT.innerHTML = '';
-                            inputBuscaContratoT.value = '';
-                        };
-                        listaContratosT.appendChild(li);
+            const minChars = texto.length >= MIN_CHARS ? MIN_CHARS : 2;
+            if (texto.length >= minChars) {
+                const cnpjNorm = texto.replace(/\D/g, '');
+                baseContratos.filter(c => {
+                    const v = getContratoValores(c);
+                    const cnpjCont = v.forn.replace(/\D/g, '');
+                    return textoCorresponde(texto, v.forn, minChars) ||
+                        textoCorresponde(texto, v.num, minChars) ||
+                        (cnpjNorm.length >= 2 && cnpjCont.includes(cnpjNorm));
+                }).forEach(c => {
+                    const v = getContratoValores(c);
+                    const li = document.createElement('li');
+                    const cnpj = (v.forn.match(/[\d.\-\/]+/) || [])[0] || '-';
+                    const nomeEmp = v.forn.replace(/[\d.\-\/\s]+/, '').replace(/^[\s\-]+|[\s\-]+$/g, '').trim() || v.forn;
+                    li.innerHTML = '<strong>Instrumento:</strong> ' + escapeHTML(v.num || '-') + ' | <strong>Empresa:</strong> ' + escapeHTML(nomeEmp) + ' | <strong>CNPJ:</strong> ' + escapeHTML(cnpj);
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const dadosEl = document.getElementById('dadosContratoSelecionado');
+                        const readF = document.getElementById('readFornecedor');
+                        const readI = document.getElementById('readInstrumento');
+                        if (dadosEl) dadosEl.style.display = 'block';
+                        if (readF) readF.value = c.fornecedor || v.forn || '';
+                        if (readI) readI.value = c.numContrato || v.num || '';
+                        listaContratosT.innerHTML = '';
+                        inputBuscaContratoT.value = '';
                     });
+                    listaContratosT.appendChild(li);
+                });
             }
-        }));
+        }, 200);
+        inputBuscaContratoT.addEventListener('input', handler);
+        inputBuscaContratoT.addEventListener('blur', function() { setTimeout(() => { if (listaContratosT) listaContratosT.innerHTML = ''; }, 250); });
     }
 
     const inputBuscaEmpenhoT = document.getElementById('buscaEmpenhoT');
@@ -376,9 +537,10 @@
         abrirFormularioTitulo();
         document.getElementById('editIndexTitulo').value = t.id;
         document.getElementById('idProc').value = t.idProc || '';
+        const tituloEl = document.getElementById('tituloFormTC');
+        if (tituloEl && t.idProc) tituloEl.textContent = t.idProc + ' - Entrada de Título de Crédito';
         document.getElementById('dataExefin').value = t.dataExefin || '';
         document.getElementById('numTC').value = t.numTC || '';
-        document.getElementById('notaFiscal').value = t.notaFiscal || '';
         const valNF = parseFloat(t.valorNotaFiscal) || 0;
         document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
         document.getElementById('dataEmissao').value = t.dataEmissao || '';
@@ -386,6 +548,13 @@
         document.getElementById('readFornecedor').value = t.fornecedor || '';
         document.getElementById('readInstrumento').value = t.instrumento || '';
         document.getElementById('oiEntregou').value = t.oiEntregou || '';
+        if (t.oiEntregou) {
+            const o = listaOI.find(x => x.id === t.oiEntregou);
+            if (o) {
+                document.getElementById('readOISelecionada').textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
+                document.getElementById('dadosOISelecionado').style.display = 'block';
+            }
+        }
         document.getElementById('np').value = t.np || '';
         document.getElementById('dataLiquidacao').value = t.dataLiquidacao || '';
         document.getElementById('op').value = t.op || '';
@@ -444,21 +613,33 @@
 
     document.getElementById('formTitulo')?.addEventListener('submit', async function(e) {
         e.preventDefault();
-        if (empenhosDaNotaAtual.length === 0) return alert("Vincule ao menos um empenho!");
         const fbID = document.getElementById('editIndexTitulo').value;
         const statusAtual = fbID !== '-1' ? (baseTitulos.find(x => x.id === fbID)?.status || 'Rascunho') : 'Rascunho';
 
+        const dataExefin = (document.getElementById('dataExefin').value || '').trim();
+        const numTC = (document.getElementById('numTC').value || '').trim();
+        const fornecedor = (document.getElementById('readFornecedor').value || '').trim();
+        const instrumento = (document.getElementById('readInstrumento').value || '').trim();
+        const oiEntregou = (document.getElementById('oiEntregou').value || '').trim();
+        const valorVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value) : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0);
+
+        if (!dataExefin) return alert("Preencha a Data da EXEFIN.");
+        if (!numTC) return alert("Preencha o Número do TC.");
+        if (!fornecedor || !instrumento) return alert("Selecione um Contrato/Empresa.");
+        if (!oiEntregou) return alert("Selecione a OI de Origem.");
+        if (!valorVal || valorVal <= 0) return alert("Preencha o Valor do TC (maior que zero).");
+
         const dados = {
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
-            dataExefin: escapeHTML(document.getElementById('dataExefin').value),
-            numTC: escapeHTML(document.getElementById('numTC').value),
+            dataExefin: escapeHTML(dataExefin),
+            numTC: escapeHTML(numTC),
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
-            fornecedor: escapeHTML(document.getElementById('readFornecedor').value),
-            instrumento: escapeHTML(document.getElementById('readInstrumento').value),
-            valorNotaFiscal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value) : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0),
+            fornecedor: escapeHTML(fornecedor),
+            instrumento: escapeHTML(instrumento),
+            valorNotaFiscal: valorVal,
             dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
             dataAteste: escapeHTML(document.getElementById('dataAteste').value),
-            oiEntregou: document.getElementById('oiEntregou').value || null,
+            oiEntregou: oiEntregou || null,
             empenhosVinculados: empenhosDaNotaAtual,
             tributacoes: tributacoesAtual,
             np: escapeHTML(document.getElementById('np').value),
@@ -472,6 +653,10 @@
 
         if (statusAtual === 'Rascunho') {
             if (confirm("Deseja enviar para o processamento deste TC?")) {
+                if (empenhosDaNotaAtual.length === 0) {
+                    alert("Para enviar ao processamento, vincule ao menos um empenho na aba Processamento.");
+                    return;
+                }
                 novoStatus = 'Em Processamento';
                 dados.status = novoStatus;
             } else {
@@ -479,6 +664,10 @@
             }
         } else if (statusAtual === 'Em Processamento') {
             if (confirm("Deseja enviar para Liquidação?")) {
+                if (empenhosDaNotaAtual.length === 0) {
+                    alert("Para enviar à Liquidação, vincule ao menos um empenho na aba Processamento.");
+                    return;
+                }
                 novoStatus = 'Em Liquidação';
                 dados.status = novoStatus;
             } else {
@@ -488,6 +677,10 @@
             novoStatus = 'Liquidado';
             dados.status = novoStatus;
         } else if (statusAtual === 'Liquidado' || statusAtual === 'Aguardando Financeiro') {
+            if (empenhosDaNotaAtual.length === 0) {
+                alert("É necessário ter empenhos vinculados para avançar. Verifique a aba Processamento.");
+                return;
+            }
             const todosLF = empenhosDaNotaAtual.every(v => !!(v.lf || '').trim());
             const todosPF = empenhosDaNotaAtual.every(v => !!(v.pf || '').trim());
             if (todosLF && todosPF) novoStatus = 'Para Pagamento';
@@ -513,7 +706,7 @@
                 dados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
                 await db.collection('titulos').doc(fbID).update(dados);
             }
-            alert("TC salvo com sucesso.");
+            alert("TC salvo com sucesso." + (dados.idProc ? ' Número: ' + dados.idProc : ''));
             voltarParaListaTitulos();
         } catch (err) {
             alert("Erro ao gravar: " + (err.message || err));
@@ -717,7 +910,10 @@
         }
     });
 
-    function ligarEventos() {}
+    function ligarEventos() {
+        configurarAutocompleteOI();
+        configurarAutocompleteContrato();
+    }
 
     window.atualizarTabelaTitulos = atualizarTabelaTitulos;
 })();

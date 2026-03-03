@@ -37,6 +37,7 @@
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
             mostrarLoading();
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
@@ -66,7 +67,7 @@
                 }
                 alert('Importação DARF: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
             } catch (err) { alert('Erro na importação DARF: ' + (err.message || err)); }
-            finally { esconderLoading(); e.target.value = ''; }
+            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
         });
     }
 
@@ -78,6 +79,7 @@
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
             mostrarLoading();
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
@@ -109,7 +111,7 @@
                 }
                 alert('Importação Contratos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
             } catch (err) { alert('Erro na importação Contratos: ' + (err.message || err)); }
-            finally { esconderLoading(); e.target.value = ''; }
+            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
         });
     }
 
@@ -121,6 +123,7 @@
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
             mostrarLoading();
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
@@ -155,7 +158,7 @@
                 }
                 alert('Importação Empenhos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
             } catch (err) { alert('Erro na importação Empenhos: ' + (err.message || err)); }
-            finally { esconderLoading(); e.target.value = ''; }
+            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
         });
     }
 })();

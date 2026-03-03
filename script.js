@@ -13,6 +13,30 @@ function escapeHTML(str) {
 }
 function mostrarLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'flex'; }
 function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
+
+/** Barra de loading (Carregando / Processando / Salvando) - feedback visual para operações */
+function criarBarraLoading() {
+    if (document.getElementById('loadingBar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'loadingBar';
+    bar.className = 'loading-bar';
+    bar.style.position = 'relative';
+    bar.innerHTML = '<div class="loading-bar-spinner"></div><span class="loading-bar-text" id="loadingBarText">Processando...</span><div class="loading-bar-progress"></div>';
+    document.body.appendChild(bar);
+}
+function mostrarBarraLoading(texto) {
+    criarBarraLoading();
+    const bar = document.getElementById('loadingBar');
+    const txt = document.getElementById('loadingBarText');
+    if (txt) txt.textContent = texto || 'Processando...';
+    if (bar) bar.classList.add('visivel');
+}
+function esconderBarraLoading() {
+    const bar = document.getElementById('loadingBar');
+    if (bar) { bar.classList.remove('visivel'); bar.style.display = 'none'; }
+}
+window.mostrarBarraLoading = mostrarBarraLoading;
+window.esconderBarraLoading = esconderBarraLoading;
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
 function toggleSidebar() {
@@ -107,7 +131,19 @@ async function carregarPermissoes() {
         perfilAtualEmCache = perfilAtivo;
         perfisDoUsuario = perfis;
 
-        const perfilDoc = await db.collection('perfis').doc(perfilAtivo).get();
+        let perfilDoc = { exists: false };
+        const idsParaTentar = [];
+        if (perfilAtivo && typeof perfilAtivo === 'string') idsParaTentar.push(perfilAtivo.trim());
+        perfis.forEach(p => { if (p && typeof p === 'string' && !idsParaTentar.includes(p.trim())) idsParaTentar.push(p.trim()); });
+        for (const id of idsParaTentar) {
+            if (!id) continue;
+            perfilDoc = await db.collection('perfis').doc(id).get();
+            if (perfilDoc.exists) break;
+            if (id !== id.toLowerCase()) {
+                perfilDoc = await db.collection('perfis').doc(id.toLowerCase()).get();
+                if (perfilDoc.exists) break;
+            }
+        }
         permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
         return permissoesEmCache;
     } catch (error) { return []; }
@@ -125,12 +161,37 @@ async function trocarPerfil(perfilId) {
 window.trocarPerfil = trocarPerfil;
 
 
-function renderizarElementosRBAC() {
+/**
+ * Verifica se o utilizador tem permissão para UI (com fallback para admins).
+ * Regra de salvação: acesso_admin implica dashboard_ler, backup_ler e acesso às Tabelas de Apoio.
+ */
+function temPermissaoUI(perm) {
+    if (!perm || typeof perm !== 'string') return false;
+    if (permissoesEmCache.includes(perm)) return true;
+    // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
+    if (permissoesEmCache.includes('acesso_admin')) {
+        if (perm === 'dashboard_ler' || perm === 'backup_ler') return true;
+        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'darf', 'contratos', 'titulos'];
+        if (modulosSistema.some(m => perm === m + '_ler')) return true;
+    }
+    return false;
+}
+window.temPermissaoUI = temPermissaoUI;
+
+/**
+ * Motor de ocultação de UI (RBAC). Remove elementos sem permissão do DOM (el.remove).
+ * Deve ser chamada após carregarPermissoes().
+ */
+function aplicarPermissoesUI() {
     document.querySelectorAll('[data-permission]').forEach(el => {
         const req = el.getAttribute('data-permission');
-        if (!permissoesEmCache.includes(req)) el.remove();
+        if (!temPermissaoUI(req)) el.remove();
     });
 }
+window.aplicarPermissoesUI = aplicarPermissoesUI;
+
+/** @deprecated Use aplicarPermissoesUI */
+function renderizarElementosRBAC() { aplicarPermissoesUI(); }
 
 function atualizarSeletorPerfil() {
     const container = document.getElementById('containerSeletorPerfil');
@@ -210,21 +271,22 @@ auth.onAuthStateChanged(async (user) => {
                 window.location.replace('dashboard.html');
                 return;
             }
-            renderizarElementosRBAC();
+            aplicarPermissoesUI();
             atualizarSeletorPerfil();
             corpoTitulos.style.display = 'block';
             if (typeof inicializarTitulosSPA === 'function') inicializarTitulosSPA();
         }
         // Lógica de Rota: Estamos no Sistema (Tabelas de Apoio)?
         else if (corpoSistema) {
-            renderizarElementosRBAC();
+            aplicarPermissoesUI();
             atualizarSeletorPerfil();
             corpoSistema.style.display = 'block';
             escutarFirebase();
+            if (typeof window.inicializarSecaoSistema === 'function') window.inicializarSecaoSistema();
         }
         // Lógica de Rota: Estamos no Dashboard?
         else if (corpoDashboard) {
-            renderizarElementosRBAC();
+            aplicarPermissoesUI();
             atualizarSeletorPerfil();
             corpoDashboard.style.display = 'block';
             esconderLoading();
@@ -256,15 +318,19 @@ function iniciarWatcherInatividade() {
         window.location.replace('index.html');
     }
 
-    function fecharModalEResetar() {
-        if (modalEl && modalEl.parentNode) modalEl.remove();
-        modalEl = null;
-        if (timerAviso) { clearTimeout(timerAviso); timerAviso = null; }
-        reiniciarTimer();
+    const eventos = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const debouncedReset = debounce(reiniciarTimer, 1000);
+
+    function pausarListeners() {
+        eventos.forEach(ev => document.removeEventListener(ev, debouncedReset));
+    }
+    function retomarListeners() {
+        eventos.forEach(ev => document.addEventListener(ev, debouncedReset));
     }
 
     function mostrarModalAviso() {
         if (modalEl) return;
+        pausarListeners();
         modalEl = document.createElement('div');
         modalEl.id = 'modal-inatividade';
         modalEl.innerHTML = `
@@ -288,10 +354,15 @@ function iniciarWatcherInatividade() {
         timerPrincipal = setTimeout(mostrarModalAviso, INATIVIDADE_MS);
     }
 
-    const eventos = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-    const debouncedReset = debounce(reiniciarTimer, 1000);
-    eventos.forEach(ev => document.addEventListener(ev, debouncedReset));
+    function fecharModalEResetar() {
+        if (modalEl && modalEl.parentNode) modalEl.remove();
+        modalEl = null;
+        if (timerAviso) { clearTimeout(timerAviso); timerAviso = null; }
+        retomarListeners();
+        reiniciarTimer();
+    }
 
+    eventos.forEach(ev => document.addEventListener(ev, debouncedReset));
     reiniciarTimer();
 }
 window.iniciarWatcherInatividade = iniciarWatcherInatividade;
@@ -304,11 +375,13 @@ if (formPerfilAdmin) {
     formPerfilAdmin.addEventListener('submit', async function(e) {
         e.preventDefault();
         const nomePerfil = document.getElementById('adminNomePerfil').value.trim().toLowerCase();
-        const checkboxes = document.querySelectorAll('.cb-perm:checked');
+        const form = document.getElementById('formPerfilAdmin');
+        const checkboxes = form ? form.querySelectorAll('.cb-perm:checked') : document.querySelectorAll('.cb-perm:checked');
         const permissoesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
         const btn = formPerfilAdmin.querySelector('button[type="submit"]');
         if (typeof window.adminLoading === 'function') window.adminLoading(true);
         if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
+        mostrarBarraLoading('Salvando...');
         try {
             await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
             alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
@@ -317,6 +390,7 @@ if (formPerfilAdmin) {
             if (typeof window.voltarListaPerfis === 'function') window.voltarListaPerfis();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }
         finally {
+            esconderBarraLoading();
             if (typeof window.adminLoading === 'function') window.adminLoading(false);
             if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, false);
         }
@@ -353,7 +427,7 @@ if (formUsuarioAdmin) {
         const btn = formUsuarioAdmin.querySelector('button[type="submit"]');
         if (typeof window.adminLoading === 'function') window.adminLoading(true);
         if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
-
+        mostrarBarraLoading('Salvando...');
         try {
             let uidFinal = uid;
             if (!uid) {
@@ -396,6 +470,7 @@ if (formUsuarioAdmin) {
                 err.message || 'Erro ao salvar.';
             alert(msg);
         } finally {
+            esconderBarraLoading();
             if (typeof window.adminLoading === 'function') window.adminLoading(false);
             if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, false);
         }
@@ -481,21 +556,25 @@ function mostrarSecao(idSecao, botao) {
 }
 
 function escutarFirebase() {
-    const onError = () => esconderLoading();
+    mostrarBarraLoading('Carregando...');
+    let carregados = 0;
+    const total = 4;
+    const aoCarregar = () => { carregados++; if (carregados >= total) { esconderLoading(); esconderBarraLoading(); } };
+    const onError = () => { esconderLoading(); esconderBarraLoading(); };
     db.collection('empenhos').onSnapshot(
-        snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); esconderLoading(); },
+        snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
         onError
     );
     db.collection('contratos').onSnapshot(
-        snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); esconderLoading(); },
+        snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
         onError
     );
     db.collection('darf').onSnapshot(
-        snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); esconderLoading(); },
+        snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
         onError
     );
     db.collection('titulos').onSnapshot(
-        snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); esconderLoading(); },
+        snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
         onError
     );
 }

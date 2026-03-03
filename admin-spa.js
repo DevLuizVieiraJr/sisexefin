@@ -4,14 +4,20 @@
 (function() {
     if (!document.getElementById('corpo-admin')) return;
 
+    const COLUNAS_ACOES = ['ler', 'inserir', 'editar', 'excluir', 'status'];
     const MATRIZ_MODULOS = [
+        { modulo: 'dashboard', label: 'Dashboard', acoes: ['ler'] },
+        { modulo: 'titulos', label: 'Títulos de Crédito', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'empenhos', label: 'Empenhos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'lf', label: 'Liquidação (LF)', acoes: ['ler'] },
+        { modulo: 'pf', label: 'Pedido Financeiro (PF)', acoes: ['ler'] },
+        { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },
         { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'titulos', label: 'Títulos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'usuarios', label: 'Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'perfis', label: 'Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'oi', label: 'OI', acoes: ['ler', 'inserir', 'editar', 'excluir'] }
+        { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
+        { modulo: 'usuarios', label: 'Admin - Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'perfis', label: 'Admin - Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'oi', label: 'Admin - OI', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
+        { modulo: 'backup', label: 'Backup Global', acoes: ['ler'] }
     ];
 
     let listaUsuarios = [];
@@ -34,8 +40,8 @@
     window.btnLoading = btnLoading;
 
     function mostrarPainelAdmin(painel) {
-        document.querySelectorAll('.sidebar .menu-btn[data-painel]').forEach(t => t.classList.remove('ativo'));
-        const btnAtivo = document.querySelector('.sidebar .menu-btn[data-painel="' + painel + '"]');
+        document.querySelectorAll('.admin-tab[data-painel]').forEach(t => t.classList.remove('ativo'));
+        const btnAtivo = document.querySelector('.admin-tab[data-painel="' + painel + '"]');
         if (btnAtivo) btnAtivo.classList.add('ativo');
         document.querySelectorAll('.admin-painel').forEach(p => p.classList.remove('visivel'));
         const el = document.getElementById('painel-' + painel);
@@ -227,7 +233,7 @@
             alert('OI excluída.');
             voltarListaOI();
         } catch (err) { alert('Erro ao excluir: ' + (err.message || 'Acesso negado.')); }
-        finally { adminLoading(false); }
+        finally { if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); adminLoading(false); }
     }
 
     const formOI = document.getElementById('formOI');
@@ -256,6 +262,7 @@
             const btn = formOI.querySelector('button[type="submit"]');
             btnLoading(btn, true, 'A guardar...');
             adminLoading(true);
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
             try {
                 if (fbID === '-1' || fbID === '') await db.collection('oi').add(dados);
                 else await db.collection('oi').doc(fbID).update(dados);
@@ -267,15 +274,17 @@
                     err.code ? (err.code + ': ' + (err.message || '')) : (err.message || String(err));
                 alert('Erro ao salvar OI: ' + msg);
             }
-            finally { btnLoading(btn, false); adminLoading(false); }
+            finally { if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); btnLoading(btn, false); adminLoading(false); }
         });
     }
 
     window.abrirFormularioPerfil = function() {
-        document.getElementById('formPerfilAdmin').reset();
+        const form = document.getElementById('formPerfilAdmin');
+        if (form) form.reset();
         document.getElementById('adminNomePerfil').value = '';
         desenharMatrizPermissoes();
-        document.querySelectorAll('.cb-perm').forEach(cb => cb.checked = false);
+        const cbs = form ? form.querySelectorAll('.cb-perm') : document.querySelectorAll('.cb-perm');
+        cbs.forEach(cb => { cb.checked = false; });
         document.getElementById('tela-lista-perfis').style.display = 'none';
         document.getElementById('tela-formulario-perfis').style.display = 'block';
     };
@@ -292,10 +301,14 @@
         tbody.innerHTML = '';
         MATRIZ_MODULOS.forEach(m => {
             const tr = document.createElement('tr');
-            let cells = '<td><strong>' + escapeHTML(m.label) + '</strong></td>';
-            m.acoes.forEach(acao => {
-                const val = m.modulo + '_' + acao;
-                cells += '<td><label><input type="checkbox" class="cb-perm" value="' + escapeHTML(val) + '"></label></td>';
+            let cells = '<td class="matriz-modulo"><strong>' + escapeHTML(m.label) + '</strong></td>';
+            COLUNAS_ACOES.forEach(acao => {
+                if (m.acoes.includes(acao)) {
+                    const val = m.modulo + '_' + acao;
+                    cells += '<td class="matriz-cb"><label class="matriz-cb-label"><input type="checkbox" class="cb-perm" value="' + escapeHTML(val) + '"></label></td>';
+                } else {
+                    cells += '<td class="matriz-vazio">—</td>';
+                }
             });
             tr.innerHTML = cells;
             tbody.appendChild(tr);
@@ -410,6 +423,7 @@
         if (!confirm('Bloquear este usuário? Ele perderá o acesso ao sistema.')) return;
         adminLoading(true);
         if (btn) btnLoading(btn, true);
+        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
         try {
             await db.collection('usuarios').doc(uid).update({ bloqueado: true });
             alert('Usuário bloqueado.');
@@ -417,6 +431,7 @@
         } catch (err) {
             alert('Erro ao bloquear: ' + (err.message || 'Acesso negado.'));
         } finally {
+            if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
             adminLoading(false);
             if (btn) btnLoading(btn, false);
         }
@@ -429,6 +444,7 @@
     window.adminRejeitarUsuario = async function(uid) {
         if (!confirm('Rejeitar este cadastro? O utilizador ficará bloqueado e não poderá aceder ao sistema.')) return;
         adminLoading(true);
+        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
         try {
             await db.collection('usuarios').doc(uid).update({ status: 'bloqueado', bloqueado: true });
             const u = listaUsuarios.find(x => x.id === uid);
@@ -440,6 +456,7 @@
         } catch (err) {
             alert('Erro ao rejeitar: ' + (err.message || 'Acesso negado.'));
         } finally {
+            if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
             adminLoading(false);
         }
     };
@@ -447,6 +464,7 @@
     window.adminDesbloquearUsuario = async function(uid, btn) {
         adminLoading(true);
         if (btn) btnLoading(btn, true);
+        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
         try {
             await db.collection('usuarios').doc(uid).update({ bloqueado: false, status: 'ativo' });
             const u = listaUsuarios.find(x => x.id === uid);
@@ -456,6 +474,7 @@
         } catch (err) {
             alert('Erro ao desbloquear: ' + (err.message || 'Acesso negado.'));
         } finally {
+            if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
             adminLoading(false);
             if (btn) btnLoading(btn, false);
         }
@@ -487,9 +506,9 @@
         document.getElementById('adminNomePerfil').value = p.id;
         desenharMatrizPermissoes();
         const perms = Array.isArray(p.permissoes) ? p.permissoes : [];
-        document.querySelectorAll('.cb-perm').forEach(cb => {
-            cb.checked = perms.includes(cb.value);
-        });
+        const form = document.getElementById('formPerfilAdmin');
+        const cbs = form ? form.querySelectorAll('.cb-perm') : document.querySelectorAll('.cb-perm');
+        cbs.forEach(cb => { cb.checked = perms.includes(cb.value); });
         document.getElementById('tela-lista-perfis').style.display = 'none';
         document.getElementById('tela-formulario-perfis').style.display = 'block';
     };

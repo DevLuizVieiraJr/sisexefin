@@ -19,6 +19,9 @@
             animation: spin 1s linear infinite; 
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
+        .menu-link-externo:hover { color: #5dade2; }
+        .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
     </style>
 </head>
 <body style="display: none;" id="corpo-sistema"> 
@@ -44,23 +47,12 @@
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
             <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
-            <ul>
-                <li class="menu-section">Tabelas de Apoio</li>
-                <li><button onclick="mostrarSecao('secao-empenhos', this)" class="menu-btn ativo" title="Nota de Empenho (NE)"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></button></li>
-                <li><button onclick="mostrarSecao('secao-lf', this)" class="menu-btn" title="Liquidação Financeira (LF)"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Liquidação Financeira (LF)</span></button></li>
-                <li><button onclick="mostrarSecao('secao-pf', this)" class="menu-btn" title="Pedido Financeiro (PF)"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Pedido Financeiro (PF)</span></button></li>
-                <li><button onclick="mostrarSecao('secao-op', this)" class="menu-btn" title="Operação de Pagamento (OP)"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Operação de Pagamento (OP)</span></button></li>
-                <li><button onclick="mostrarSecao('secao-darf', this)" class="menu-btn" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></button></li>
-                <li><button onclick="mostrarSecao('secao-contratos', this)" class="menu-btn" title="Contratos"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos</span></button></li>
-                <li class="menu-section" style="margin-top: 20px;">SISTEMA</li>
-                <li><button onclick="mostrarSecao('secao-backup', this)" class="menu-btn" title="Backup / Exportação"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup / Exportação</span></button></li>
-                <li data-permission="acesso_admin"><button onclick="window.location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
-            </ul>
+            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
         </nav>
 
         <main class="content">
             
-            <section id="secao-titulos" class="secao" style="display: none;">
+            <section id="secao-titulos" class="secao" data-permission="titulos_ler" style="display: none;">
                 <div id="tela-lista-titulos" class="card">
                     <div class="header-lista">
                         <h2>Entrada de Títulos <span style="font-size: 14px; color: #777;">(HUB / FORM-3)</span></h2>
@@ -150,26 +142,26 @@
                 </div>
             </section>
 
-            <section id="secao-lf" class="secao" style="display: none;">
+            <section id="secao-lf" class="secao" data-permission="lf_ler" style="display: none;">
                 <div class="card">
                     <h2>Liquidação Financeira (LF)</h2>
                     <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
                 </div>
             </section>
-            <section id="secao-pf" class="secao" style="display: none;">
+            <section id="secao-pf" class="secao" data-permission="pf_ler" style="display: none;">
                 <div class="card">
                     <h2>Pedido Financeiro (PF)</h2>
                     <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
                 </div>
             </section>
-            <section id="secao-op" class="secao" style="display: none;">
+            <section id="secao-op" class="secao" data-permission="op_ler" style="display: none;">
                 <div class="card">
                     <h2>Operação de Pagamento (OP)</h2>
                     <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
                 </div>
             </section>
 
-            <section id="secao-contratos" class="secao" style="display: none;">
+            <section id="secao-contratos" class="secao" data-permission="contratos_ler" style="display: none;">
                 <div id="tela-lista-contratos" class="card">
                     <div class="header-lista">
                         <h2>Gestão de Contratos</h2>
@@ -235,7 +227,7 @@
                 </div>
             </section>
 
-            <section id="secao-empenhos" class="secao" style="display: none;">
+            <section id="secao-empenhos" class="secao" data-permission="empenhos_ler" style="display: none;">
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
                         <h2>Controle de Empenhos</h2>
@@ -313,7 +305,7 @@
                 </div>
             </section>
 
-            <section id="secao-darf" class="secao" style="display: none;">
+            <section id="secao-darf" class="secao" data-permission="darf_ler" style="display: none;">
                 <div id="tela-lista-darf" class="card">
                     <div class="header-lista">
                         <h2>Códigos DARF</h2>
@@ -372,13 +364,13 @@
                 </div>
             </section>
 
-            <section id="secao-backup" class="secao" style="display: none;">
+            <section id="secao-backup" class="secao" data-permission="backup_ler" style="display: none;">
                 <div class="card">
                     <h2>Sistema / Backup Global</h2>
                     <p style="color: #7f8c8d; margin-bottom: 20px;">Gere um arquivo de segurança com todos os registos atuais da nuvem.</p>
                     <hr>
                     <div style="margin: 20px 0;">
-                        <button onclick="exportarBancoDeDados()" class="btn-primary" data-permission="acesso_admin">📥 Fazer Backup Completo (.JSON)</button>
+                        <button onclick="exportarBancoDeDados()" class="btn-primary" data-permission="backup_ler">📥 Fazer Backup Completo (.JSON)</button>
                     </div>
                 </div>
             </section>
@@ -401,6 +393,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
     <script src="script-titulos.js"></script>
     <script src="script-sistema-init.js"></script>

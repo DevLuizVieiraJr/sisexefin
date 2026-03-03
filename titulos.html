@@ -16,8 +16,12 @@
         .sidebar-submenu .menu-btn { font-size: 13px; padding: 8px 15px; }
         .sidebar-expandido .menu-btn-tc { border-left-color: #3498db; }
         .stepper-tc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding: 15px; background: #f9fafc; border: 1px solid #e1e5eb; border-radius: 4px; }
-        .stepper-tc span { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .stepper-tc .ativo { background: #337ab7; color: white; }
+        .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
+        .menu-link-externo:hover { color: #5dade2; }
+        .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
+        .stepper-tc span, .stepper-tc button { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid #ddd; cursor: pointer; background: #fff; color: #333; }
+        .stepper-tc button:hover { background: #eee; }
+        .stepper-tc .ativo { background: #337ab7; color: white; border-color: #2c6ba0; }
         .stepper-tc .concluido { background: #27ae60; color: white; }
         .stepper-tc .bloqueado { background: #ddd; color: #777; }
         .tabs-tc { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
@@ -62,35 +66,16 @@
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
             <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
-            <ul>
-                <li>
-                    <button type="button" class="menu-section-toggle" data-toggle="titulos-tc" title="Clique para expandir/recolher">Títulos de Crédito <span class="menu-section-chevron">▼</span></button>
-                    <ul class="menu-subgroup" id="sub-titulos-tc">
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Rascunho')" title="Em Rascunho"><span class="menu-btn-icon">📝</span><span class="menu-btn-text">Em Rascunho</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Em Processamento')" title="Em Processamento"><span class="menu-btn-icon">⏳</span><span class="menu-btn-text">Em Processamento</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Em Liquidação')" title="Em Liquidação"><span class="menu-btn-icon">🔄</span><span class="menu-btn-text">Em Liquidação</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Liquidado')" title="Liquidado"><span class="menu-btn-icon">✅</span><span class="menu-btn-text">Liquidado</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Aguardando Financeiro')" title="Aguardando Financeiro"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Aguardando Financeiro</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Para Pagamento')" title="Para Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Para Pagamento</span></button></li>
-                <li><button class="menu-btn menu-btn-tc" onclick="filtrarPorStatus('Devolvido')" title="Devolvido"><span class="menu-btn-icon">↩️</span><span class="menu-btn-text">Devolvido</span></button></li>
-                    </ul>
-                </li>
-                <li>
-                    <button type="button" class="menu-section-toggle" data-toggle="sistema-tc" title="Clique para expandir/recolher">SISTEMA <span class="menu-section-chevron">▼</span></button>
-                    <ul class="menu-subgroup" id="sub-sistema-tc">
-                <li><button onclick="location.href='dashboard.html'" class="menu-btn" title="Dashboard"><span class="menu-btn-icon">🏠</span><span class="menu-btn-text">Dashboard</span></button></li>
-                <li data-permission="acesso_admin"><button onclick="location.href='admin.html'" class="menu-btn" style="color: #f39c12;" title="Gestão de Acessos"><span class="menu-btn-icon">🛡️</span><span class="menu-btn-text">Gestão de Acessos</span></button></li>
-                    </ul>
-                </li>
-            </ul>
+            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
         </nav>
 
         <main class="content">
             <div id="tela-lista-titulos" class="card">
                 <div class="header-lista">
-                    <h2>Títulos de Crédito <span id="subtituloStatus" style="font-size: 14px; color: #777;"></span></h2>
+                    <h2>Títulos de Crédito</h2>
                     <button onclick="abrirFormularioTitulo()" class="btn-primary" data-permission="titulos_inserir">+ Novo Título</button>
                 </div>
+                <div class="stepper-tc" id="filtrosStatusTC" style="margin-bottom: 15px;"></div>
                 <div class="toolbar">
                     <div class="import-group" data-permission="acesso_admin">
                         <label>Importar OP (NP→OP):</label>
@@ -99,7 +84,7 @@
                     </div>
                 </div>
                 <div class="controles-tabela">
-                    <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                    <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
                     <div class="search-box"><input type="text" id="buscaTabelaTitulos" placeholder="Pesquisar PROC, Empresa ou NE..."></div>
                 </div>
                 <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
@@ -122,17 +107,24 @@
                     </thead>
                     <tbody id="tbody-titulos"></tbody>
                 </table>
-                <div class="paginacao">
-                    <button onclick="mudarPagina(-1)" id="btnAnterior">Anterior</button>
-                    <span id="infoPagina">Página 1</span>
-                    <button onclick="mudarPagina(1)" id="btnProximo">Próximo</button>
+                <div class="paginacao" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: #666;">Mostrando <strong id="mostrandoDe">0</strong> de <strong id="mostrandoTotal">0</strong> registros</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="irParaPrimeiraPagina()" id="btnPrimeira" class="btn-outline btn-small">Primeira</button>
+                        <button onclick="mudarPagina(-1)" id="btnAnterior" class="btn-outline btn-small">Anterior</button>
+                        <span id="infoPagina">1 de 1</span>
+                        <button onclick="mudarPagina(1)" id="btnProximo" class="btn-outline btn-small">Próximo</button>
+                        <button onclick="irParaUltimaPagina()" id="btnUltima" class="btn-outline btn-small">Última</button>
+                    </div>
                 </div>
             </div>
 
             <div id="tela-formulario-titulos" style="display: none;" class="card">
                 <div style="margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
                     <div class="stepper-tc" id="stepperTC"></div>
-                    <h2 style="margin: 10px 0 0 0;">FORM-3: <span id="tituloFormTC">Cadastro de Título</span></h2>
+                    <h2 style="margin: 10px 0 0 0;"><span id="tituloFormTC">Entrada de Título de Crédito</span></h2>
                 </div>
 
                 <div class="tabs-tc" id="tabsTC">
@@ -149,32 +141,33 @@
 
                     <div class="tab-panel-tc visivel" id="panel0">
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Entrada (EXEFIN):</label><input type="date" id="dataExefin"></div>
-                            <div class="form-group flex-1"><label>Número do TC:</label><input type="text" id="numTC"></div>
-                            <div class="form-group flex-1"><label>Número da NF:</label><input type="text" id="notaFiscal"></div>
-                        </div>
-                        <fieldset class="gov-fieldset">
-                            <legend>Contrato e Fornecedor</legend>
-                            <div class="form-group" style="position: relative;">
-                                <label>Buscar Fornecedor ou Instrumento:</label>
-                                <input type="text" id="buscaContratoT" placeholder="Digite para pesquisar..." autocomplete="off">
-                                <ul id="listaResultadosContratoT" class="autocomplete-list"></ul>
+                            <div class="form-group flex-1"><label>Data da EXEFIN:</label><input type="date" id="dataExefin" required></div>
+                            <div class="form-group flex-1" style="position: relative;">
+                                <label>OI de Origem:</label>
+                                <input type="text" id="buscaOIT" placeholder="Digite para buscar (4+ caracteres)..." autocomplete="off">
+                                <input type="hidden" id="oiEntregou">
+                                <ul id="listaResultadosOIT" class="autocomplete-list"></ul>
+                                <div id="dadosOISelecionado" style="display: none; background: #f9f9f9; padding: 8px; margin-top: 6px;"><span id="readOISelecionada"></span> <button type="button" class="btn-outline btn-small" onclick="limparOISelecionada()">Limpar</button></div>
                             </div>
-                            <div id="dadosContratoSelecionado" style="display: none; background: #f9f9f9; padding: 15px;">
-                                <div class="form-row">
-                                    <div class="form-group flex-2"><label>Fornecedor:</label><input type="text" id="readFornecedor" readonly class="input-readonly"></div>
-                                    <div class="form-group flex-1"><label>Instrumento:</label><input type="text" id="readInstrumento" readonly class="input-readonly"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1" style="position: relative;">
+                                <label>Contrato/Empresa:</label>
+                                <input type="text" id="buscaContratoT" placeholder="Digite para buscar (4+ caracteres: CNPJ, nome ou instrumento)..." autocomplete="off">
+                                <ul id="listaResultadosContratoT" class="autocomplete-list"></ul>
+                                <div id="dadosContratoSelecionado" style="display: none; background: #f9f9f9; padding: 10px; margin-top: 8px;">
+                                    <div class="form-row">
+                                        <div class="form-group flex-2"><label>Fornecedor:</label><input type="text" id="readFornecedor" readonly class="input-readonly"></div>
+                                        <div class="form-group flex-1"><label>Instrumento:</label><input type="text" id="readInstrumento" readonly class="input-readonly"></div>
+                                    </div>
                                 </div>
                             </div>
-                        </fieldset>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>OI que entregou:</label>
-                                <select id="oiEntregou"><option value="">-- Nenhum --</option></select>
-                            </div>
-                            <div class="form-group flex-1"><label>Valor da NF:</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda></div>
-                            <div class="form-group flex-1"><label>Data Emissão:</label><input type="date" id="dataEmissao"></div>
-                            <div class="form-group flex-1"><label>Data Ateste:</label><input type="date" id="dataAteste"></div>
+                            <div class="form-group flex-1"><label>Nº TC:</label><input type="text" id="numTC" required></div>
+                            <div class="form-group flex-1"><label>Valor do TC (R$):</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda required></div>
                         </div>
+                        <input type="hidden" id="dataEmissao">
+                        <input type="hidden" id="dataAteste">
+                        <input type="hidden" id="notaFiscal">
                     </div>
 
                     <div class="tab-panel-tc" id="panel1">
@@ -247,6 +240,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
     <script src="script-titulos-spa.js"></script>
     <script src="script-menu-toggle.js"></script>
