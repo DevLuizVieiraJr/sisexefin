@@ -14,8 +14,8 @@
     }
 
     function getVal(row, keys) {
-        for (const k of keys) {
-            const v = row[k];
+        for (var i = 0; i < keys.length; i++) {
+            var v = row[keys[i]];
             if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
         }
         return '';
@@ -132,25 +132,43 @@
                 const nesExistentes = new Set((typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []).map(e => String((e.numEmpenho || '')).toLowerCase().trim()));
                 let inseridos = 0, duplicados = 0;
                 for (const row of rows) {
-                    const numEmpenho = getVal(row, ['numEmpenho', 'NumEmpenho', 'NE', 'ne', 'numeroEmpenho', 'NumeroEmpenho']);
+                    var rowNorm = {};
+                    Object.keys(row).forEach(function(k) {
+                        var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
+                        rowNorm[kNorm] = row[k];
+                    });
+                    var numEmpenho = getVal(rowNorm, ['NE', 'numEmpenho', 'NumEmpenho', 'ne', 'numeroEmpenho', 'NumeroEmpenho']);
                     if (!numEmpenho) continue;
-                    const neNorm = numEmpenho.toLowerCase();
+                    var neNorm = numEmpenho.toLowerCase().trim();
                     if (nesExistentes.has(neNorm)) { duplicados++; continue; }
-                    const dados = {
+                    var dados = {
                         numEmpenho: escapeHTML(numEmpenho),
-                        dataEmissao: escapeHTML(getVal(row, ['dataEmissao', 'DataEmissao', 'data', 'Data', 'data_emissao'])),
-                        valorGlobal: parseFloat((getVal(row, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']) || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
-                        nd: escapeHTML(getVal(row, ['nd', 'ND'])),
-                        subitem: escapeHTML(getVal(row, ['subitem', 'Subitem', 'SubEl', 'subel'])),
-                        ptres: escapeHTML(getVal(row, ['ptres', 'PTRES'])),
-                        fr: escapeHTML(getVal(row, ['fr', 'FR'])),
-                        docOrig: escapeHTML(getVal(row, ['docOrig', 'DocOrig', 'AES', 'aes', 'AES/SOLEMP'])),
-                        oi: escapeHTML(getVal(row, ['oi', 'OI', 'oi'])),
-                        contrato: escapeHTML(getVal(row, ['contrato', 'Contrato'])),
-                        cap: escapeHTML(getVal(row, ['cap', 'CAP'])),
-                        altcred: escapeHTML(getVal(row, ['altcred', 'Altcred'])),
-                        meio: escapeHTML(getVal(row, ['meio', 'Meio'])),
-                        descricao: escapeHTML(getVal(row, ['descricao', 'Descricao']))
+                        dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'dataEmissao', 'DataEmissao', 'data', 'Data'])),
+                        valorGlobal: parseFloat((getVal(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']) || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
+                        nd: escapeHTML(getVal(rowNorm, ['ND', 'nd'])),
+                        subitem: escapeHTML(getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel'])),
+                        ptres: escapeHTML(getVal(rowNorm, ['PTRES', 'ptres'])),
+                        fr: escapeHTML(getVal(rowNorm, ['FR', 'fr'])),
+                        docOrig: escapeHTML(getVal(rowNorm, ['AES/SOLEMP', 'docOrig', 'DocOrig', 'AES', 'aes'])),
+                        oi: escapeHTML(getVal(rowNorm, ['OI', 'oi'])),
+                        contrato: escapeHTML(getVal(rowNorm, ['CONTRATO', 'contrato', 'Contrato'])),
+                        cap: escapeHTML(getVal(rowNorm, ['CAP', 'cap'])),
+                        altcred: escapeHTML(getVal(rowNorm, ['ALTCRED', 'altcred', 'Altcred'])),
+                        meio: escapeHTML(getVal(rowNorm, ['MEIO', 'meio', 'Meio'])),
+                        descricao: escapeHTML(getVal(rowNorm, ['OBS', 'descricao', 'Descricao', 'obs'])),
+                        pi: escapeHTML(getVal(rowNorm, ['PI', 'pi'])),
+                        tipoNE: escapeHTML(getVal(rowNorm, ['TIPO NE', 'tipoNE', 'TipoNE', 'tipo ne'])),
+                        numModal: escapeHTML(getVal(rowNorm, ['NUM MODAL', 'numModal', 'NumModal', 'num modal'])),
+                        descModal: escapeHTML(getVal(rowNorm, ['DESC MODAL', 'descModal', 'DescModal', 'desc modal'])),
+                        codAmp: escapeHTML(getVal(rowNorm, ['COD AMP', 'codAmp', 'CodAmp', 'cod amp'])),
+                        inciso: escapeHTML(getVal(rowNorm, ['INCISO', 'inciso', 'Inciso'])),
+                        lei: escapeHTML(getVal(rowNorm, ['LEI', 'lei', 'Lei'])),
+                        processo: escapeHTML(getVal(rowNorm, ['PROCESSO', 'processo', 'Processo'])),
+                        cnpj: escapeHTML(getVal(rowNorm, ['CNPJ', 'cnpj'])),
+                        favorecido: escapeHTML(getVal(rowNorm, ['FAVORECIDO', 'favorecido', 'Favorecido'])),
+                        pjPf: escapeHTML(getVal(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf'])),
+                        gerencia: escapeHTML(getVal(rowNorm, ['GERÊNCIA', 'GERENCIA', 'gerencia', 'Gerencia'])),
+                        projeto: escapeHTML(getVal(rowNorm, ['PROJETO', 'projeto', 'Projeto']))
                     };
                     await db.collection('empenhos').add(dados);
                     nesExistentes.add(neNorm);

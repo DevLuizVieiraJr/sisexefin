@@ -106,6 +106,14 @@ function formatarNumEmpenhoVisivel(numEmpenho) {
     return s.slice(-12);
 }
 
+/** Formata CNPJ como 00.000.000/0000-00 */
+function formatarCNPJ(val) {
+    if (!val) return '-';
+    const d = String(val).replace(/\D/g, '');
+    if (d.length !== 14) return val;
+    return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+}
+
 // ==========================================
 // MÓDULO RBAC - Multi-perfis + Role Switching (Princípio do Menor Privilégio)
 // ==========================================

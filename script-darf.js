@@ -23,6 +23,7 @@
         document.getElementById('tela-lista-darf').style.display = 'block';
         atualizarTabelaDarf();
     }
+    window.voltarParaListaDarf = voltarParaListaDarf;
 
     function atualizarTabelaDarf() {
         tabelaDarfBody.innerHTML = '';

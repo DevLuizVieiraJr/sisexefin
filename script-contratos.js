@@ -18,6 +18,7 @@
         document.getElementById('tela-lista-contratos').style.display = 'block';
         atualizarTabelaContratos();
     }
+    window.voltarParaListaContratos = voltarParaListaContratos;
     function atualizarTabelaContratos() {
         tabelaContratosBody.innerHTML = '';
         var baseFiltrada = baseContratos.map(function(c, index) { return Object.assign({}, c, { indexOriginal: index }); });

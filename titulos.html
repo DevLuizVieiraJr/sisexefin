@@ -108,8 +108,12 @@
                     <tbody id="tbody-titulos"></tbody>
                 </table>
                 <div class="paginacao" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; margin-top: 15px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="font-size: 12px; color: #666;">Mostrando <strong id="mostrandoDe">0</strong> de <strong id="mostrandoTotal">0</strong> registros</span>
+                        <label data-permission="titulos_ver_inativos" style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" id="filtroInativosTitulos">
+                            Incluir inativos
+                        </label>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button onclick="irParaPrimeiraPagina()" id="btnPrimeira" class="btn-outline btn-small">Primeira</button>
@@ -128,7 +132,7 @@
                 </div>
 
                 <div class="tabs-tc" id="tabsTC">
-                    <div class="tab-tc ativo" data-tab="0">Rascunho</div>
+                    <div class="tab-tc ativo" data-tab="0">Dados Básicos</div>
                     <div class="tab-tc" data-tab="1">Processamento</div>
                     <div class="tab-tc" data-tab="2">Liquidação</div>
                     <div class="tab-tc" data-tab="3">Financeiro</div>
@@ -144,7 +148,7 @@
                             <div class="form-group flex-1"><label>Data da EXEFIN:</label><input type="date" id="dataExefin" required></div>
                             <div class="form-group flex-1" style="position: relative;">
                                 <label>OI de Origem:</label>
-                                <input type="text" id="buscaOIT" placeholder="Digite para buscar (4+ caracteres)..." autocomplete="off">
+                                <input type="text" id="buscaOIT" placeholder="Digite 2+ caracteres para buscar (número, nome, contacto, telefone)..." autocomplete="off">
                                 <input type="hidden" id="oiEntregou">
                                 <ul id="listaResultadosOIT" class="autocomplete-list"></ul>
                                 <div id="dadosOISelecionado" style="display: none; background: #f9f9f9; padding: 8px; margin-top: 6px;"><span id="readOISelecionada"></span> <button type="button" class="btn-outline btn-small" onclick="limparOISelecionada()">Limpar</button></div>
@@ -153,19 +157,43 @@
                         <div class="form-row">
                             <div class="form-group flex-1" style="position: relative;">
                                 <label>Contrato/Empresa:</label>
-                                <input type="text" id="buscaContratoT" placeholder="Digite para buscar (4+ caracteres: CNPJ, nome ou instrumento)..." autocomplete="off">
+                                <input type="text" id="buscaContratoT" placeholder="Digite 4+ caracteres (CNPJ, fornecedor, instrumento, NUP)..." autocomplete="off">
                                 <ul id="listaResultadosContratoT" class="autocomplete-list"></ul>
                                 <div id="dadosContratoSelecionado" style="display: none; background: #f9f9f9; padding: 10px; margin-top: 8px;">
                                     <div class="form-row">
                                         <div class="form-group flex-2"><label>Fornecedor:</label><input type="text" id="readFornecedor" readonly class="input-readonly"></div>
                                         <div class="form-group flex-1"><label>Instrumento:</label><input type="text" id="readInstrumento" readonly class="input-readonly"></div>
                                     </div>
+                                    <div class="form-row">
+                                        <div class="form-group flex-1">
+                                            <label>Registro de Controle (RC):</label>
+                                            <select id="rcSelecionada" style="display:none;"></select>
+                                            <input type="text" id="rcSelecionadaTexto" readonly class="input-readonly" style="display:none;">
+                                        </div>
+                                        <div class="form-group flex-1">
+                                            <label>Vigência do Contrato:</label>
+                                            <input type="text" id="vigenciaContrato" readonly class="input-readonly">
+                                            <p id="avisoVigenciaContrato" style="display:none;color:#e74c3c;font-size:12px;margin-top:4px;"></p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="form-group flex-1"><label>Nº TC:</label><input type="text" id="numTC" required></div>
                             <div class="form-group flex-1"><label>Valor do TC (R$):</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda required></div>
                         </div>
-                        <input type="hidden" id="dataEmissao">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Data da Emissão:</label><input type="date" id="dataEmissao"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>Observações:</label>
+                                <textarea id="observacoesTC" rows="3" placeholder="Registe informações adicionais relevantes para este TC..."></textarea>
+                            </div>
+                        </div>
+                        <div id="acoesAbaDadosBasicos" class="form-row" style="display: none; margin-top: 15px; gap: 10px;">
+                            <button type="button" id="btnEditarAbaDadosBasicos" class="btn-default">Editar Aba</button>
+                            <button type="button" id="btnSalvarAbaDadosBasicos" class="btn-primary" style="display: none;">Salvar Aba</button>
+                        </div>
                         <input type="hidden" id="dataAteste">
                         <input type="hidden" id="notaFiscal">
                     </div>
@@ -228,7 +256,7 @@
                     <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px;">
                         <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;">↩ Devolver TC</button>
                         <button type="submit" class="btn-primary" data-permission="titulos_inserir">💾 Salvar</button>
-                        <button type="button" onclick="voltarParaListaTitulos()" class="btn-default">Cancelar</button>
+                        <button type="button" id="btnCancelarTitulo" class="btn-default">Cancelar</button>
                     </div>
                 </form>
             </div>
@@ -242,6 +270,7 @@
     <script src="admin-utils.js"></script>
     <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script-titulos-spa.js"></script>
     <script src="script-menu-toggle.js"></script>
 </body>

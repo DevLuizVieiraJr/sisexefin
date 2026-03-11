@@ -22,6 +22,15 @@
         .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
         .menu-link-externo:hover { color: #5dade2; }
         .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
+        .tabs-ne { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+        .tab-ne { padding: 10px 18px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; font-size: 14px; }
+        .tab-ne:hover { background: #eee; color: #333; }
+        .tab-ne.ativo { background: #337ab7; color: white; margin-bottom: -2px; border-bottom: 2px solid #337ab7; border-color: #337ab7; font-weight: bold; }
+        .tab-panel-ne { display: none; padding: 20px 0; }
+        .tab-panel-ne.visivel { display: block; }
+        .tabela-empenhos-compact { font-size: 11px; }
+        .tabela-empenhos-compact th, .tabela-empenhos-compact td { padding: 6px 8px; }
+        .tabela-empenhos-compact td:nth-child(4) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     </style>
 </head>
 <body style="display: none;" id="corpo-sistema"> 
@@ -239,22 +248,24 @@
                     </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPaginaEmpenhos" onchange="mudarTamanhoPaginaEmpenhos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
-                        <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar NE ou Contrato..."></div>
+                        <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar NE, CNPJ, Contrato, Favorecido ou Processo..."></div>
                     </div>
                     <div style="overflow-x: auto;">
-                        <table id="tabelaEmpenhos" class="tabela-gov">
+                        <table id="tabelaEmpenhos" class="tabela-gov tabela-empenhos-compact">
                             <thead>
                                 <tr>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')" title="Exibe ano+tipo+sequencial (ex: 2024NE000001). Passe o rato para ver o número completo.">NE <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'nd')">ND <span class="sort-icon" id="sort-empenhos-nd"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'subitem')">Sub.El <span class="sort-icon" id="sort-empenhos-subitem"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')" title="Ano+tipo+sequencial">NE <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'tipoNE')">Tipo <span class="sort-icon" id="sort-empenhos-tipoNE"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'cnpj')">CNPJ <span class="sort-icon" id="sort-empenhos-cnpj"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'favorecido')">Favorecido <span class="sort-icon" id="sort-empenhos-favorecido"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'ptres')">PTRES <span class="sort-icon" id="sort-empenhos-ptres"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'fr')">Fonte Rec. <span class="sort-icon" id="sort-empenhos-fr"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'fr')">FR <span class="sort-icon" id="sort-empenhos-fr"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'pi')">PI <span class="sort-icon" id="sort-empenhos-pi"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'nd')">ND <span class="sort-icon" id="sort-empenhos-nd"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'docOrig')">AES/SOLEMP <span class="sort-icon" id="sort-empenhos-docOrig"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'oi')">Org. Int. <span class="sort-icon" id="sort-empenhos-oi"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'oi')">OI <span class="sort-icon" id="sort-empenhos-oi"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('empenhos', 'contrato')">Contrato <span class="sort-icon" id="sort-empenhos-contrato"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'cap')">CAP <span class="sort-icon" id="sort-empenhos-cap"></span></th>
-                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'meio')">Meio OM <span class="sort-icon" id="sort-empenhos-meio"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'processo')">Processo <span class="sort-icon" id="sort-empenhos-processo"></span></th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -268,38 +279,86 @@
 
                 <div id="tela-formulario-empenhos" style="display: none;" class="card">
                     <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
+                    <div class="tabs-ne" id="tabsNE">
+                        <div class="tab-ne ativo" data-tab="0">Identificação e Dados Básicos</div>
+                        <div class="tab-ne" data-tab="1">Favorecido e Vínculos</div>
+                        <div class="tab-ne" data-tab="2">Contrato e Descrição</div>
+                    </div>
                     <form id="formEmpenho">
-                        <input type="hidden" id="editIndexEmpenho" value="-1"> 
-                        <div class="form-row">
-                            <div class="form-group flex-2"><label>NE Completa:</label>
-                                <input type="text" id="numEmpenho" placeholder="Ex: 741000000012024NE000001" pattern="[0-9]{11}[0-9]{4}NE[0-9]{6}" title="Formato exigido: 15 números, letras NE e 6 números finais" required>
+                        <input type="hidden" id="editIndexEmpenho" value="-1">
+                        <div class="tab-panel-ne visivel" id="panelNE0">
+                            <div class="form-row">
+                                <div class="form-group flex-2"><label>NE Completa:</label>
+                                    <input type="text" id="numEmpenho" placeholder="Ex: 741000000012024NE000001" pattern="[0-9]{11}[0-9]{4}NE[0-9]{6}" title="15 números, letras NE e 6 números finais" required>
+                                </div>
+                                <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
+                                <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
                             </div>
-                            <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
-                            <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Tipo NE:</label>
+                                    <select id="tipoNEEmpenho">
+                                        <option value="GLOBAL" selected>Global</option>
+                                        <option value="ORDINARIO">Ordinário</option>
+                                        <option value="ESTIMATIVO">Estimativo</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1"><label>PI:</label><input type="text" id="piEmpenho" placeholder="Ex: K4D101001L0" maxlength="20"></div>
+                                <div class="form-group flex-1"><label>ND (Natureza Desp.):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
+                                <div class="form-group flex-1"><label>Subelemento:</label><input type="text" id="subitemEmpenho" maxlength="4"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
+                                <div class="form-group flex-1"><label>Fonte Recurso (FR):</label><input type="text" id="frEmpenho" maxlength="11"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
+                                <div class="form-group flex-1"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
+                                <div class="form-group flex-1"><label>Meio OM:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                            </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>ND (Natureza Desp.):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>Subelemento:</label><input type="text" id="subitemEmpenho" maxlength="2"></div>
-                            <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>Fonte Recurso (FR):</label><input type="text" id="frEmpenho" maxlength="11"></div>
+                        <div class="tab-panel-ne" id="panelNE1">
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpenho" placeholder="Ex: 00.000.000/0000-00" maxlength="20"></div>
+                                <div class="form-group flex-2"><label>Favorecido:</label><input type="text" id="favorecidoEmpenho" placeholder="Nome do favorecido" maxlength="200"></div>
+                                <div class="form-group flex-1"><label>PJ/PF:</label>
+                                    <select id="pjPfEmpenho">
+                                        <option value="">Selecione</option>
+                                        <option value="PESSOA FISICA">Pessoa Física</option>
+                                        <option value="PESSOA JURIDICA">Pessoa Jurídica</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Gerência:</label><input type="text" id="gerenciaEmpenho" maxlength="50"></div>
+                                <div class="form-group flex-1"><label>OI:</label><input type="text" id="oiEmpenho" placeholder="Org. Interna" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-2"><label>AES / SOLEMP:</label><input type="text" id="docOrigEmpenho" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="30"></div>
+                                <div class="form-group flex-1"><label>Projeto:</label><input type="text" id="projetoEmpenho" maxlength="50"></div>
+                            </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>AES / SOLEMP:</label><input type="text" id="docOrigEmpenho" maxlength="20"></div>
-                            <div class="form-group flex-1"><label>Org. Interna (OI):</label><input type="text" id="oiEmpenho" maxlength="20"></div>
-                            <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="20"></div>
-                            <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
+                        <div class="tab-panel-ne" id="panelNE2">
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Nº Modal:</label><input type="text" id="numModalEmpenho" maxlength="4"></div>
+                                <div class="form-group flex-1"><label>Desc. Modal:</label><input type="text" id="descModalEmpenho" placeholder="Ex: PREGAO" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Cod. Amp:</label><input type="text" id="codAmpEmpenho" maxlength="10"></div>
+                                <div class="form-group flex-1"><label>Inciso:</label><input type="text" id="incisoEmpenho" maxlength="10"></div>
+                                <div class="form-group flex-1"><label>Lei:</label><input type="text" id="leiEmpenho" placeholder="Ex: LEI 14.133/2021" maxlength="30"></div>
+                                <div class="form-group flex-1"><label>Processo (NUP):</label><input type="text" id="processoEmpenho" placeholder="Ex: 63014.000584/2026-21" maxlength="30"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Descrição / Finalidade do Empenho:</label>
+                                <textarea id="descricaoEmpenho" rows="4" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
+                            </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
-                            <div class="form-group flex-1"><label>Meio OM:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
-                        </div>
-                        <div class="form-group">
-                            <label>Descrição / Finalidade do Empenho:</label>
-                            <textarea id="descricaoEmpenho" rows="3" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
-                        </div>
-                        <div class="form-acoes">
+                        <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px;">
                             <button type="submit" class="btn-primary">💾 Salvar</button>
-                            <button type="button" onclick="voltarParaListaEmpenhos()" class="btn-default">Cancelar</button>
+                            <button type="button" id="btnCancelarEmpenho" class="btn-default">Cancelar</button>
                         </div>
                     </form>
                 </div>
