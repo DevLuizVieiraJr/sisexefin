@@ -158,27 +158,17 @@
                         <button onclick="abrirFormularioLfPf(false)" class="btn-primary" data-permission="lf_inserir">+ Nova LF</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="lf_inserir">
-                            <label>Importar CSV:</label>
-                            <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls">
-                            <span id="ultimoImportLfPf" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span>
+                        <div class="import-group">
+                            <span data-permission="lf_inserir"><label>Importar CSV:</label>
+                            <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls" title="Selecionar arquivo CSV ou Excel"></span>
+                            <span id="ultimoImportLfPf" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
                         </div>
                         <div class="export-group"><button onclick="exportarLfPf('csv')" class="btn-outline">CSV</button><button onclick="exportarLfPf('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPaginaLfPf" onchange="mudarTamanhoPaginaLfPf()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> registros</label>
-                        <div class="filtros-lfpf" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                            <input type="text" id="filtroLf" placeholder="Nº LF" style="width:120px;">
-                            <input type="text" id="filtroPf" placeholder="Nº PF" style="width:120px;">
-                            <select id="filtroSituacaoLf"><option value="">Situação</option><option value="Aguardando Priorização">Aguardando Priorização</option><option value="Aguardando Processamento">Aguardando Processamento</option><option value="Atendido">Atendido</option><option value="Cancelado">Cancelado</option><option value="Priorização Encerrada">Priorização Encerrada</option><option value="Processamento Agendado">Processamento Agendado</option></select>
-                            <input type="text" id="filtroFr" placeholder="FR" style="width:100px;">
-                            <input type="text" id="filtroVinculacao" placeholder="Vinculação" style="width:90px;" maxlength="3">
-                            <select id="filtroOrigem"><option value="">Origem</option><option value="LOA">LOA</option><option value="Destaque">Destaque</option><option value="Emenda">Emenda</option></select>
-                            <input type="date" id="filtroDataCriacaoDe" placeholder="Data De" title="Data Criação De">
-                            <input type="date" id="filtroDataCriacaoAte" placeholder="Data Até" title="Data Criação Até">
-                            <select id="filtroTipoLiquidacao"><option value="">Tipo Liq.</option><option value="RP">RP</option><option value="Exercício">Exercício</option></select>
-                            <button type="button" onclick="aplicarFiltrosLfPf()" class="btn-outline">Filtrar</button>
-                            <button type="button" onclick="limparFiltrosLfPf()" class="btn-default">Limpar</button>
+                        <div class="search-box">
+                            <input type="text" id="buscaTabelaLfPf" placeholder="Pesquisar LF, PF, Situação, FR, Vinculação ou Origem..." autocomplete="off">
                         </div>
                     </div>
                     <div style="overflow-x: auto;">
@@ -362,7 +352,7 @@
                         <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="empenhos_inserir">+ Adicionar Empenho</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"><span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
+                        <div class="import-group"><span data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></span><span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span></div>
                         <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
@@ -392,7 +382,12 @@
                         </table>
                     </div>
                     <div class="paginacao">
-                        <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button><span id="infoPaginaEmpenhos">Página 1</span><button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
+                        <span id="mostrandoEmpenhos" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaEmpenhos('primeiro')" id="btnPrimeiroEmpenhos">Primeiro</button>
+                        <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button>
+                        <span id="infoPaginaEmpenhos">Página 1 de 1</span>
+                        <button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
+                        <button type="button" onclick="mudarPaginaEmpenhos('ultimo')" id="btnUltimoEmpenhos">Último</button>
                     </div>
                 </div>
 

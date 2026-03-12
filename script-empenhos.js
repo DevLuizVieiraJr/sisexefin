@@ -43,7 +43,8 @@
 
     function atualizarTabelaEmpenhos() {
         tabelaEmpenhosBody.innerHTML = '';
-        let baseFiltrada = baseEmpenhos.map((e, index) => ({ ...e, indexOriginal: index }));
+        let baseAtiva = baseEmpenhos.filter(e => e.ativo !== false);
+        let baseFiltrada = baseAtiva.map((e, index) => ({ ...e, indexOriginal: index }));
         if (termoBuscaEmpenhos.trim() !== "") {
             const q = termoBuscaEmpenhos.toLowerCase();
             baseFiltrada = baseFiltrada.filter(e =>
@@ -56,50 +57,66 @@
         }
         baseFiltrada = aplicarOrdenacao(baseFiltrada, 'empenhos');
 
-        const inicio = (paginaAtualEmpenhos - 1) * itensPorPaginaEmpenhos;
-        const fim = inicio + parseInt(itensPorPaginaEmpenhos);
-        let itensExibidos = baseFiltrada.slice(inicio, fim);
+        const totalRegistros = baseFiltrada.length;
+        const totalPaginas = Math.max(1, Math.ceil(totalRegistros / itensPorPaginaEmpenhos));
+        const paginaAtualAjustada = Math.min(Math.max(1, paginaAtualEmpenhos), totalPaginas);
+        paginaAtualEmpenhos = paginaAtualAjustada;
+        const inicio = (paginaAtualAjustada - 1) * itensPorPaginaEmpenhos;
+        let itensExibidos = baseFiltrada.slice(inicio, inicio + parseInt(itensPorPaginaEmpenhos));
         if (itensExibidos.length === 0) {
             tabelaEmpenhosBody.innerHTML = '<tr><td colspan="13" style="text-align:center;">Nenhum empenho encontrado.</td></tr>';
-            return;
+        } else {
+            itensExibidos.forEach((e) => {
+                const tr = document.createElement('tr');
+                const acoesHTML = gerarBotoesAcao(e.id, 'empenho');
+                const fav = (e.favorecido || '').substring(0, 35);
+                const cnpjFmt = typeof formatarCNPJ === 'function' ? formatarCNPJ(e.cnpj) : (e.cnpj || '-');
+                tr.innerHTML = `
+                    <td title="${escapeHTML(e.numEmpenho) || ''}"><strong>${escapeHTML(formatarNumEmpenhoVisivel(e.numEmpenho)) || '-'}</strong></td>
+                    <td>${escapeHTML(e.tipoNE) || '-'}</td>
+                    <td title="${escapeHTML(e.cnpj || '')}">${escapeHTML(cnpjFmt)}</td>
+                    <td title="${escapeHTML(e.favorecido || '')}">${escapeHTML(fav) || '-'}${(e.favorecido || '').length > 35 ? '...' : ''}</td>
+                    <td>${escapeHTML(e.ptres) || '-'}</td>
+                    <td>${escapeHTML(e.fr) || '-'}</td>
+                    <td>${escapeHTML(e.pi) || '-'}</td>
+                    <td>${escapeHTML(e.nd) || '-'}</td>
+                    <td>${escapeHTML(e.docOrig) || '-'}</td>
+                    <td>${escapeHTML(e.oi) || '-'}</td>
+                    <td>${escapeHTML(e.contrato) || '-'}</td>
+                    <td>${escapeHTML(e.processo) || '-'}</td>
+                    <td>${acoesHTML}</td>`;
+                tabelaEmpenhosBody.appendChild(tr);
+            });
         }
-
-        itensExibidos.forEach((e) => {
-            const tr = document.createElement('tr');
-            const acoesHTML = gerarBotoesAcao(e.id, 'empenho');
-            const fav = (e.favorecido || '').substring(0, 35);
-            const cnpjFmt = typeof formatarCNPJ === 'function' ? formatarCNPJ(e.cnpj) : (e.cnpj || '-');
-            tr.innerHTML = `
-                <td title="${escapeHTML(e.numEmpenho) || ''}"><strong>${escapeHTML(formatarNumEmpenhoVisivel(e.numEmpenho)) || '-'}</strong></td>
-                <td>${escapeHTML(e.tipoNE) || '-'}</td>
-                <td title="${escapeHTML(e.cnpj || '')}">${escapeHTML(cnpjFmt)}</td>
-                <td title="${escapeHTML(e.favorecido || '')}">${escapeHTML(fav) || '-'}${(e.favorecido || '').length > 35 ? '...' : ''}</td>
-                <td>${escapeHTML(e.ptres) || '-'}</td>
-                <td>${escapeHTML(e.fr) || '-'}</td>
-                <td>${escapeHTML(e.pi) || '-'}</td>
-                <td>${escapeHTML(e.nd) || '-'}</td>
-                <td>${escapeHTML(e.docOrig) || '-'}</td>
-                <td>${escapeHTML(e.oi) || '-'}</td>
-                <td>${escapeHTML(e.contrato) || '-'}</td>
-                <td>${escapeHTML(e.processo) || '-'}</td>
-                <td>${acoesHTML}</td>`;
-            tabelaEmpenhosBody.appendChild(tr);
-        });
-        const total = Math.ceil(baseFiltrada.length / itensPorPaginaEmpenhos) || 1;
-        document.getElementById('infoPaginaEmpenhos').textContent = `Página ${paginaAtualEmpenhos} de ${total}`;
-        document.getElementById('btnAnteriorEmpenhos').disabled = paginaAtualEmpenhos === 1;
-        document.getElementById('btnProximoEmpenhos').disabled = paginaAtualEmpenhos === total;
+        const mostrando = document.getElementById('mostrandoEmpenhos');
+        if (mostrando) mostrando.textContent = 'Mostrando ' + (totalRegistros === 0 ? 0 : (inicio + 1)) + ' de ' + totalRegistros + ' registros';
+        document.getElementById('infoPaginaEmpenhos').textContent = `Página ${paginaAtualAjustada} de ${totalPaginas}`;
+        document.getElementById('btnAnteriorEmpenhos').disabled = paginaAtualAjustada <= 1;
+        document.getElementById('btnProximoEmpenhos').disabled = paginaAtualAjustada >= totalPaginas;
+        const btnPrimeiro = document.getElementById('btnPrimeiroEmpenhos');
+        const btnUltimo = document.getElementById('btnUltimoEmpenhos');
+        if (btnPrimeiro) btnPrimeiro.disabled = paginaAtualAjustada <= 1;
+        if (btnUltimo) btnUltimo.disabled = paginaAtualAjustada >= totalPaginas;
     }
 
     tabelaEmpenhosBody.addEventListener('click', function(e) {
         const btnEditar = e.target.closest('.btn-editar-empenho');
-        const btnApagar = e.target.closest('.btn-apagar-empenho');
+        const btnInativar = e.target.closest('.btn-inativar-empenho');
+        const btnApagar = e.target.closest('.btn-apagar-empenho-permanente');
         if (btnEditar) editarEmpenho(btnEditar.getAttribute('data-id'));
+        if (btnInativar) inativarEmpenho(btnInativar.getAttribute('data-id'));
         if (btnApagar) apagarEmpenho(btnApagar.getAttribute('data-id'));
     });
 
     window.mudarTamanhoPaginaEmpenhos = function() { itensPorPaginaEmpenhos = document.getElementById('itensPorPaginaEmpenhos').value; paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); };
-    window.mudarPaginaEmpenhos = function(direcao) { paginaAtualEmpenhos += direcao; atualizarTabelaEmpenhos(); };
+    window.mudarPaginaEmpenhos = function(direcao) {
+        const totalRegistros = baseEmpenhos.filter(e => e.ativo !== false).length;
+        const totalPaginas = Math.max(1, Math.ceil(totalRegistros / itensPorPaginaEmpenhos));
+        if (direcao === 'primeiro') paginaAtualEmpenhos = 1;
+        else if (direcao === 'ultimo') paginaAtualEmpenhos = totalPaginas;
+        else paginaAtualEmpenhos += (direcao || 0);
+        atualizarTabelaEmpenhos();
+    };
 
     function dataParaInputDate(val) {
         if (!val) return '';
@@ -147,6 +164,23 @@
         }
     }
 
+    async function inativarEmpenho(id) {
+        const e = baseEmpenhos.find(item => item.id === id);
+        if (!e) return;
+        if (!confirm('Deseja inativar/cancelar este empenho? O registro permanecerá no sistema com situação Cancelado.')) return;
+        mostrarLoading();
+        try {
+            await db.collection('empenhos').doc(id).update({
+                ativo: false,
+                situacao: 'Cancelado',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : ''
+            });
+            atualizarTabelaEmpenhos();
+        } catch (err) { alert('Erro ao inativar.'); }
+        finally { esconderLoading(); }
+    }
+
     async function apagarEmpenho(id) {
         const e = baseEmpenhos.find(item => item.id === id);
         if (e && (typeof baseTitulos !== 'undefined')) {
@@ -156,12 +190,13 @@
                 return;
             }
         }
-        if (confirm("Apagar o Empenho permanentemente?")) {
-            mostrarLoading();
-            try { await db.collection('empenhos').doc(id).delete(); }
-            catch (err) { alert("Acesso Negado."); }
-            finally { esconderLoading(); }
-        }
+        if (!confirm('Excluir PERMANENTEMENTE este empenho? Esta ação não pode ser desfeita.')) return;
+        mostrarLoading();
+        try {
+            await db.collection('empenhos').doc(id).delete();
+            atualizarTabelaEmpenhos();
+        } catch (err) { alert('Acesso negado ou erro ao excluir.'); }
+        finally { esconderLoading(); }
     }
 
     formEmpenho.addEventListener('submit', async function(e) {
@@ -172,6 +207,7 @@
             numEmpenho: escapeHTML(document.getElementById('numEmpenho').value),
             dataEmissao: escapeHTML(document.getElementById('dataEmpenho').value),
             valorGlobal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorEmpenho').value) : (parseFloat(document.getElementById('valorEmpenho').value) || 0),
+            ativo: true,
             nd: escapeHTML(document.getElementById('ndEmpenho').value),
             subitem: escapeHTML(document.getElementById('subitemEmpenho').value),
             ptres: escapeHTML(document.getElementById('ptresEmpenho').value),

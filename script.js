@@ -232,6 +232,12 @@ function gerarBotoesAcao(id, modulo) {
         if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-lfpf-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
+    if (modulo === 'empenho') {
+        if (permissoesEmCache.includes('empenhos_editar')) html += `<button type="button" class="btn-icon btn-editar-empenho" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (permissoesEmCache.includes('empenhos_excluir')) html += `<button type="button" class="btn-icon btn-inativar-empenho" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-empenho-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        return html;
+    }
     if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
     if (permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
     return html;
@@ -500,7 +506,7 @@ let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpe
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
 let paginaAtualDarf = 1; let itensPorPaginaDarf = 10; let termoBuscaDarf = "";
 let paginaAtualTitulos = 1; let itensPorPaginaTitulos = 10; let termoBuscaTitulos = "";
-let paginaAtualLfPf = 1; let itensPorPaginaLfPf = 10;
+let paginaAtualLfPf = 1; let itensPorPaginaLfPf = 10; let termoBuscaLfPf = "";
 let darfsDoContratoAtual = []; 
 let empenhosDaNotaAtual = []; 
 let empenhoTemporarioSelecionado = null;

@@ -41,36 +41,13 @@
     }
     window.voltarParaListaLfPf = voltarParaListaLfPf;
 
-    function aplicarFiltrosLfPf() {
-        if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
-    }
-    window.aplicarFiltrosLfPf = aplicarFiltrosLfPf;
-
-    function limparFiltrosLfPf() {
-        document.getElementById('filtroLf').value = '';
-        document.getElementById('filtroPf').value = '';
-        document.getElementById('filtroSituacaoLf').value = '';
-        document.getElementById('filtroFr').value = '';
-        document.getElementById('filtroVinculacao').value = '';
-        document.getElementById('filtroOrigem').value = '';
-        document.getElementById('filtroDataCriacaoDe').value = '';
-        document.getElementById('filtroDataCriacaoAte').value = '';
-        document.getElementById('filtroTipoLiquidacao').value = '';
-        if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
-    }
-    window.limparFiltrosLfPf = limparFiltrosLfPf;
-
-    function filtrosLfPf() {
-        const lf = (document.getElementById('filtroLf') || {}).value || '';
-        const pf = (document.getElementById('filtroPf') || {}).value || '';
-        const situacao = (document.getElementById('filtroSituacaoLf') || {}).value || '';
-        const fr = (document.getElementById('filtroFr') || {}).value || '';
-        const vinc = (document.getElementById('filtroVinculacao') || {}).value || '';
-        const origem = (document.getElementById('filtroOrigem') || {}).value || '';
-        const dataDe = (document.getElementById('filtroDataCriacaoDe') || {}).value || '';
-        const dataAte = (document.getElementById('filtroDataCriacaoAte') || {}).value || '';
-        const tipoLiq = (document.getElementById('filtroTipoLiquidacao') || {}).value || '';
-        return { lf, pf, situacao, fr, vinc, origem, dataDe, dataAte, tipoLiq };
+    const buscaTabelaLfPfEl = document.getElementById('buscaTabelaLfPf');
+    if (buscaTabelaLfPfEl) {
+        buscaTabelaLfPfEl.addEventListener('input', typeof debounce === 'function' ? debounce(function() {
+            termoBuscaLfPf = (buscaTabelaLfPfEl.value || '').toLowerCase().trim();
+            if (typeof paginaAtualLfPf !== 'undefined') window.paginaAtualLfPf = 1;
+            if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
+        }, 300) : function() {});
     }
 
     function dataParaComparacao(val) {
@@ -86,24 +63,15 @@
         if (!tabelaLfPfBody) return;
         tabelaLfPfBody.innerHTML = '';
         let base = (typeof baseLfPf !== 'undefined' ? baseLfPf : []).filter(function(r) { return r.ativo !== false; });
-        const f = filtrosLfPf();
-        if (f.lf) base = base.filter(function(r) { return (r.lf || '').toLowerCase().indexOf(f.lf.toLowerCase()) !== -1; });
-        if (f.pf) base = base.filter(function(r) { return (r.pf || '').toLowerCase().indexOf(f.pf.toLowerCase()) !== -1; });
-        if (f.situacao) base = base.filter(function(r) { return (r.situacao || '') === f.situacao; });
-        if (f.fr) base = base.filter(function(r) { return (r.fr || '').indexOf(f.fr) !== -1; });
-        if (f.vinc) base = base.filter(function(r) { return (r.vinculacao || '').indexOf(f.vinc) !== -1; });
-        if (f.origem) base = base.filter(function(r) { return (r.origem || '') === f.origem; });
-        if (f.tipoLiq) base = base.filter(function(r) { return (r.tipoLiquidacao || '') === f.tipoLiq; });
-        if (f.dataDe) {
+        const q = (typeof termoBuscaLfPf !== 'undefined' ? termoBuscaLfPf : '').toLowerCase().trim();
+        if (q) {
             base = base.filter(function(r) {
-                const d = dataParaComparacao(r.dataCriacao);
-                return d && d >= f.dataDe;
-            });
-        }
-        if (f.dataAte) {
-            base = base.filter(function(r) {
-                const d = dataParaComparacao(r.dataCriacao);
-                return d && d <= f.dataAte;
+                return (r.lf || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.pf || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.situacao || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.fr || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.vinculacao || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.origem || '').toLowerCase().indexOf(q) !== -1;
             });
         }
 
