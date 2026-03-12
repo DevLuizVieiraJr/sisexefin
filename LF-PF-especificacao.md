@@ -20,9 +20,9 @@ Arquivo CSV analisado:
 
 - `C:\Users\87212374\Downloads\LF_PF.csv`
 
-Colunas identificadas no CSV:
+Colunas utilizadas no sistema (CSV de referência):
 
-- `N° do Pedido`
+- `N° do Pedido` → no sistema: **LF** (Liquidação Financeira)
 - `Data de Criação`
 - `Valor (R$)`
 - `Tipo de Liquidação`
@@ -30,12 +30,13 @@ Colunas identificadas no CSV:
 - `Última Atualização`
 - `PF`
 - `RP`
-- `Categoria DFM`
 - `FR`
 - `Vinculação`
 - `Origem`
 
-Observação: no sistema, `N° do Pedido` deve ser tratado como **LF** ou **Liquidação Financeira**.
+**Removido:** `Categoria DFM` (não será utilizada no formulário nem no upload).
+
+**Adicionado no formulário:** lista/grade de **Empenhos vinculados (NE)** — Nº NE, Valor, PTRES, FR, ND, com botão "Vincular Empenhos".
 
 ---
 
@@ -43,7 +44,7 @@ Observação: no sistema, `N° do Pedido` deve ser tratado como **LF** ou **Liqu
 
 ## 1. Campos do formulário
 
-Todos os campos do CSV serão campos do formulário:
+Campos do formulário (sem Categoria DFM):
 
 - `LF`
 - `Data de Criação`
@@ -53,10 +54,10 @@ Todos os campos do CSV serão campos do formulário:
 - `Última Atualização`
 - `PF`
 - `RP`
-- `Categoria DFM`
 - `FR`
 - `Vinculação`
 - `Origem`
+- **Lista de Empenhos vinculados (NE)** — grade com colunas: Nº NE, Valor, PTRES, FR, ND; botão "Vincular Empenhos" para buscar e amarrar NEs a esta LF.
 
 ### Regras de cada campo
 
@@ -103,9 +104,7 @@ Todos os campos do CSV serão campos do formulário:
   - Valores aceitos:
     - `Não Processado`
     - `Processado`
-
-- `Categoria DFM`
-  - Campo geralmente vazio ou `-`.
+  - Editável em tela por qualquer perfil (normal e Admin) e também pode ser atualizado por upload.
 
 - `FR`
   - Fonte de Recurso.
@@ -124,55 +123,59 @@ Todos os campos do CSV serão campos do formulário:
 
 ## 2. Origem dos dados e atualização por upload
 
-- Todos os campos podem vir por **upload de CSV**.
+- Os dados podem vir por **upload de CSV** (na inserção, todos os campos do CSV são considerados; **Categoria DFM não existe** no formulário nem no CSV de importação).
 - O upload **não substitui toda a base**.
-- O upload deve:
-  - inserir novas LFs
-  - atualizar registros existentes com a mesma LF
-- Não pode haver **duas LFs idênticas**.
+- Não pode haver **duas LFs idênticas** no BD (a LF é a chave de identificação).
+
+### Fluxo do upload: verificação no BD
+
+Para **cada linha** do arquivo CSV, o sistema deve:
+
+1. **Verificar se a LF já existe no BD** (pelo número da LF).
+2. **Se NÃO existir:** registrar **nova linha** com os dados da linha do CSV (todos os campos aceitos na inserção).
+3. **Se JÁ existir:** **atualizar apenas** os campos permitidos no registro existente:
+   - `Situação`
+   - `PF`
+   - `Última Atualização`  
+   Os demais campos do registro **não são alterados** pelo upload.
+
+Resumo: **não existe → insere; existe → atualiza só Situação, PF e Última Atualização.**
 
 ### Regra funcional importante
 
-Fluxo esperado informado pelo usuário:
+Fluxo esperado:
 
 - O sistema externo (ex.: SIPLAD) gera um CSV inicial com a LF e parte dos dados.
 - Em um momento posterior, outro CSV pode trazer:
   - novas LFs
-  - atualização de LFs já existentes
+  - atualização de LFs já existentes (Somente Situação, PF, Última Atualização)
   - inclusão do número de PF para LFs já atendidas/processadas
 
 ### Tratamento de erro no upload
 
-- O sistema **não deve rejeitar o arquivo inteiro**.
+- O sistema **não rejeita o arquivo inteiro**.
 - Deve:
   - importar o que for válido
   - ignorar linhas inválidas
-  - gerar um relatório de erros das linhas não lidas
-
-### Ponto ainda em aberto
-
-Ainda falta o usuário definir **quais campos poderão ser atualizados via upload** em registros já existentes.
-
-Exemplo citado na conversa:
-
-- certamente devem ser considerados pelo menos:
-  - `Situação`
-  - `PF`
-
-Mas a lista final de colunas atualizáveis ainda precisa ser confirmada.
+  - **gerar um relatório de erros** das linhas não lidas
 
 ---
 
 ## 3. Relação com outros módulos
 
 - Cada registro de **LF** estará ligado a:
-  - **um ou mais Empenhos (NE)**
+  - **um ou mais Empenhos (NE)** — vinculação feita no formulário da LF e também no módulo Título de Crédito / Empenho
   - **somente um PF**
 
-### Observação importante
+### Vinculação com Empenhos (NE) na interface
+
+- **No formulário da LF:** grade "Empenhos vinculados" com colunas: **Nº NE, Valor, PTRES, FR, ND** (semelhante ao TC), com botão **"Vincular Empenhos"** para buscar NEs e amarrar à LF.
+- **No módulo Título de Crédito / Empenho:** a vinculação NE ↔ LF também poderá ser feita (ambos os lados).
+
+### Observação sobre PF
 
 - O campo `PF` **não é chave estrangeira de outro cadastro com autocomplete**.
-- Ele é um dado recebido/atualizado principalmente por upload.
+- É um dado recebido/atualizado principalmente por upload.
 
 ---
 
@@ -184,12 +187,20 @@ O formulário deve ser **semelhante ao módulo Empenho**.
 
 Haverá **2 abas**:
 
-- `Dados Básicos`
-- `Auditoria` (visível apenas para Admin)
+- **Dados Básicos** — com seções; inclui a grade de Empenhos vinculados (NE) e o botão "Vincular Empenhos".
+- **Auditoria** — visível **apenas para Admin**, **somente leitura**.
+
+### Conteúdo da aba Auditoria
+
+- Data de criação do registro
+- Usuário criador
+- Data da última alteração
+- Usuário da última alteração
+- Histórico de alterações (mantido pelo sistema)
 
 ### Organização interna
 
-- A preferência do usuário é por **seções** dentro da aba, e não uma tela única sem organização.
+- Uso de **seções** dentro da aba Dados Básicos.
 
 ---
 
@@ -259,63 +270,49 @@ Pode:
 
 ---
 
-## 7. Edição de campos
+## 7. Edição de campos e transição de Situação/RP
 
-- O usuário informou explicitamente:
-  - **todos os campos poderão ser editados pelo Admin**
-
-### Ponto ainda em aberto
-
-Ainda falta confirmar:
-
-- se usuários não-admin poderão editar todos os campos livremente
-- ou se haverá restrições por perfil/status
+- **Admin:** pode editar todos os campos.
+- **Usuário não-admin:** pode editar todos os campos; **não há restrição** por status ou perfil além da regra de exclusão (apenas Admin exclui permanentemente).
+- **Situação:** qualquer usuário (normal ou Admin) pode mudar **livremente** entre os 6 valores.
+- **RP:** editável em tela por perfis normais e Admin; também pode ser atualizado por upload (conforme definido no item 2).
 
 ---
 
-## 8. Dúvidas ainda pendentes para fechar antes da implementação
+## 8. Data/hora do último upload (Importar CSV)
 
-Estes pontos ainda precisam ser alinhados:
+- **Requisito:** ao lado do botão **Importar CSV**, exibir a **data e hora do último upload** realizada naquela tela.
+- **Escopo:** replicar essa funcionalidade em todas as telas que possuem importação CSV:
+  - **LF/PF** (Liquidação Financeira x Pedido Financeiro)
+  - **NE** (Nota de Empenho)
+  - **Contratos**
+  - **TC** (Título de Crédito)
 
-1. **Quais campos o upload pode atualizar**
-   - Definir lista exata de colunas atualizáveis quando a LF já existir.
+(O sistema deve armazenar e exibir a data/hora do último import por módulo/tela.)
 
-2. **Regras de transição de `Situação`**
-   - Verificar se qualquer perfil pode trocar livremente entre todos os status
-   - ou se haverá fluxo controlado entre etapas
+---
 
-3. **Regra de edição do campo `RP`**
-   - Confirmar se:
-     - é editável em tela por usuário comum
-     - editável só por Admin
-     - ou atualizado apenas por upload
+## 9. Resumo — pontos alinhados (sem dúvidas pendentes)
 
-4. **Vinculação com Empenhos (NE) na interface**
-   - Confirmar se a vinculação LF x NE será feita também dentro do formulário LF
-   - ou apenas em outro módulo relacionado
-
-5. **Conteúdo da aba `Auditoria`**
-   - Confirmar quais informações o Admin verá:
-     - usuário criador
-     - data de criação
-     - usuário da última alteração
-     - data da última alteração
-     - histórico de mudanças
-   - e se será somente leitura
-
-6. **Restrições para edição por usuário não-admin**
-   - Confirmar se existirão limitações por status ou perfil
+- Campos do formulário definidos; Categoria DFM removida; lista de NE adicionada.
+- Upload: apenas Situação, PF e Última Atualização atualizam registro existente.
+- Situação e RP: edição livre em tela; RP também pode ser atualizado por upload.
+- Vinculação NE: grade no formulário LF + botão "Vincular Empenhos"; também no módulo TC/Empenho.
+- Auditoria: Data criação, Usuário criador, Data última alteração, Usuário última alteração, Histórico — somente leitura, só Admin.
+- Não há restrição de edição para usuário não-admin (apenas perfil e regra de exclusão).
+- Exibir data/hora do último upload ao lado do botão Importar CSV (LF, NE, Contratos, TC).
 
 ---
 
 ## Próximo passo sugerido
 
-Após esclarecer os pontos pendentes, o próximo passo é desenhar:
+Com os detalhes fechados, o próximo passo é implementar ou desenhar em detalhe:
 
 - tela inicial da lista LF/PF
 - filtros e paginação
 - botões visíveis por perfil
-- formulário com abas `Dados Básicos` e `Auditoria`
-- regras de CRUD
-- fluxo detalhado de upload CSV
+- formulário com abas Dados Básicos e Auditoria
+- grade de Empenhos vinculados + Vincular Empenhos
+- regras de CRUD e upload CSV
+- exibição da data/hora do último upload nas telas de importação (LF, NE, Contratos, TC)
 

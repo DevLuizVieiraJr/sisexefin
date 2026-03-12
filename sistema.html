@@ -152,9 +152,128 @@
             </section>
 
             <section id="secao-lf" class="secao" data-permission="lf_ler" style="display: none;">
-                <div class="card">
-                    <h2>Liquidação Financeira (LF)</h2>
-                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
+                <div id="tela-lista-lfpf" class="card">
+                    <div class="header-lista">
+                        <h2>Liquidação Financeira (LF) x Pedido Financeiro (PF)</h2>
+                        <button onclick="abrirFormularioLfPf(false)" class="btn-primary" data-permission="lf_inserir">+ Nova LF</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group" data-permission="lf_inserir">
+                            <label>Importar CSV:</label>
+                            <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls">
+                            <span id="ultimoImportLfPf" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span>
+                        </div>
+                        <div class="export-group"><button onclick="exportarLfPf('csv')" class="btn-outline">CSV</button><button onclick="exportarLfPf('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaLfPf" onchange="mudarTamanhoPaginaLfPf()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> registros</label>
+                        <div class="filtros-lfpf" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                            <input type="text" id="filtroLf" placeholder="Nº LF" style="width:120px;">
+                            <input type="text" id="filtroPf" placeholder="Nº PF" style="width:120px;">
+                            <select id="filtroSituacaoLf"><option value="">Situação</option><option value="Aguardando Priorização">Aguardando Priorização</option><option value="Aguardando Processamento">Aguardando Processamento</option><option value="Atendido">Atendido</option><option value="Cancelado">Cancelado</option><option value="Priorização Encerrada">Priorização Encerrada</option><option value="Processamento Agendado">Processamento Agendado</option></select>
+                            <input type="text" id="filtroFr" placeholder="FR" style="width:100px;">
+                            <input type="text" id="filtroVinculacao" placeholder="Vinculação" style="width:90px;" maxlength="3">
+                            <select id="filtroOrigem"><option value="">Origem</option><option value="LOA">LOA</option><option value="Destaque">Destaque</option><option value="Emenda">Emenda</option></select>
+                            <input type="date" id="filtroDataCriacaoDe" placeholder="Data De" title="Data Criação De">
+                            <input type="date" id="filtroDataCriacaoAte" placeholder="Data Até" title="Data Criação Até">
+                            <select id="filtroTipoLiquidacao"><option value="">Tipo Liq.</option><option value="RP">RP</option><option value="Exercício">Exercício</option></select>
+                            <button type="button" onclick="aplicarFiltrosLfPf()" class="btn-outline">Filtrar</button>
+                            <button type="button" onclick="limparFiltrosLfPf()" class="btn-default">Limpar</button>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaLfPf" class="tabela-gov">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'lf')">LF <span class="sort-icon" id="sort-lfpf-lf"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'dataCriacao')">Data Criação <span class="sort-icon" id="sort-lfpf-dataCriacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'valor')">Valor (R$) <span class="sort-icon" id="sort-lfpf-valor"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'tipoLiquidacao')">Tipo <span class="sort-icon" id="sort-lfpf-tipoLiquidacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'situacao')">Situação <span class="sort-icon" id="sort-lfpf-situacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'pf')">PF <span class="sort-icon" id="sort-lfpf-pf"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'rp')">RP <span class="sort-icon" id="sort-lfpf-rp"></span></th>
+                                    <th>FR</th><th>Vinc.</th><th>Origem</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-lfpf"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoLfPf" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaLfPf('primeiro')" id="btnPrimeiroLfPf">Primeiro</button>
+                        <button type="button" onclick="mudarPaginaLfPf(-1)" id="btnAnteriorLfPf">Anterior</button>
+                        <span id="infoPaginaLfPf">Página 1 de 1</span>
+                        <button type="button" onclick="mudarPaginaLfPf(1)" id="btnProximoLfPf">Próximo</button>
+                        <button type="button" onclick="mudarPaginaLfPf('ultimo')" id="btnUltimoLfPf">Último</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-lfpf" style="display: none;" class="card">
+                    <h2 id="tituloFormLfPf">Liquidação Financeira (LF) x PF</h2>
+                    <div class="tabs-ne" id="tabsLfPf">
+                        <div class="tab-ne ativo" data-tab="0">Dados Básicos</div>
+                        <div class="tab-ne tab-auditoria" data-tab="1" data-permission="acesso_admin">Auditoria</div>
+                    </div>
+                    <form id="formLfPf">
+                        <input type="hidden" id="editIndexLfPf" value="-1">
+                        <div class="tab-panel-ne visivel" id="panelLfPf0">
+                            <fieldset class="gov-fieldset"><legend>Identificação</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>LF (Nº Liquidação):</label><input type="text" id="lfNum" placeholder="Ex: 2026LF033314" maxlength="20"></div>
+                                    <div class="form-group flex-1"><label>Data de Criação:</label><input type="date" id="lfDataCriacao"></div>
+                                    <div class="form-group flex-1"><label>Valor (R$):</label><input type="text" id="lfValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Tipo de Liquidação:</label><select id="lfTipoLiquidacao"><option value="RP">RP</option><option value="Exercício">Exercício</option></select></div>
+                                    <div class="form-group flex-1"><label>Situação:</label><select id="lfSituacao"><option value="Aguardando Priorização">Aguardando Priorização</option><option value="Aguardando Processamento">Aguardando Processamento</option><option value="Atendido">Atendido</option><option value="Cancelado">Cancelado</option><option value="Priorização Encerrada">Priorização Encerrada</option><option value="Processamento Agendado">Processamento Agendado</option></select></div>
+                                    <div class="form-group flex-1"><label>Última Atualização:</label><input type="date" id="lfUltimaAtualizacao"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>PF (Nº Processamento):</label><input type="text" id="lfPf" placeholder="Ex: 2026PF000001" maxlength="20"></div>
+                                    <div class="form-group flex-1"><label>RP:</label><select id="lfRp"><option value="Não Processado">Não Processado</option><option value="Processado">Processado</option></select></div>
+                                    <div class="form-group flex-1"><label>FR (Fonte Recurso):</label><input type="text" id="lfFr" maxlength="15"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Vinculação (3 dígitos):</label><input type="text" id="lfVinculacao" maxlength="3" pattern="[0-9]{3}" placeholder="Ex: 415"></div>
+                                    <div class="form-group flex-1"><label>Origem:</label><select id="lfOrigem"><option value="LOA">LOA</option><option value="Destaque">Destaque</option><option value="Emenda">Emenda</option></select></div>
+                                </div>
+                            </fieldset>
+                            <fieldset class="gov-fieldset"><legend>Empenhos vinculados (NE)</legend>
+                                <div class="form-group" style="position:relative;">
+                                    <label>Buscar NE:</label>
+                                    <input type="text" id="buscaNeLfPf" placeholder="Nº NE ou parte..." autocomplete="off">
+                                    <ul id="listaResultadosNeLfPf" class="autocomplete-list"></ul>
+                                </div>
+                                <div id="detalhesNeLfPf" style="display:none;background:#e8f4f8;padding:12px;margin-bottom:10px;">
+                                    <h4 id="empenhoSelecionadoLfPf"></h4>
+                                    <p style="margin:4px 0;">PTRES: <span id="nePtreLfPf"></span> | FR: <span id="neFrLfPf"></span> | ND: <span id="neNdLfPf"></span> | Valor: <span id="neValorLfPf"></span></p>
+                                    <button type="button" onclick="adicionarNeNaLfPf()" class="btn-primary">Adicionar à lista</button>
+                                </div>
+                                <table id="tabelaNeLfPf" class="tabela-gov">
+                                    <thead><tr><th>Nº NE</th><th>Valor</th><th>PTRES</th><th>FR</th><th>ND</th><th>Ações</th></tr></thead>
+                                    <tbody id="tbodyNeLfPf"></tbody>
+                                </table>
+                            </fieldset>
+                        </div>
+                        <div class="tab-panel-ne" id="panelLfPf1">
+                            <fieldset class="gov-fieldset"><legend>Auditoria (somente leitura)</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data de criação do registro:</label><input type="text" id="audDataCriacao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário criador:</label><input type="text" id="audUsuarioCriador" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data da última alteração:</label><input type="text" id="audDataAlteracao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário da última alteração:</label><input type="text" id="audUsuarioAlteracao" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-group"><label>Histórico de alterações:</label><textarea id="audHistorico" rows="6" readonly class="input-readonly" style="width:100%;"></textarea></div>
+                            </fieldset>
+                        </div>
+                        <div class="form-acoes" style="margin-top:20px;">
+                            <button type="submit" class="btn-primary" data-permission="lf_editar">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaLfPf()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             </section>
             <section id="secao-pf" class="secao" data-permission="pf_ler" style="display: none;">
@@ -177,7 +296,7 @@
                         <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Contrato</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"></div>
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"><span id="ultimoImportContratos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
                         <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
@@ -243,7 +362,7 @@
                         <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="empenhos_inserir">+ Adicionar Empenho</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></div>
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"><span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
                         <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
@@ -459,6 +578,7 @@
     <script src="script-menu-toggle.js"></script>
     <script src="script-empenhos.js"></script>
     <script src="script-contratos.js"></script>
+    <script src="script-lfpf.js"></script>
     <script src="script-darf.js"></script>
     <script src="script-import.js"></script>
 </body>

@@ -223,9 +223,15 @@ window.atualizarSeletorPerfil = atualizarSeletorPerfil;
 
 function gerarBotoesAcao(id, modulo) {
     const safeId = escapeHTML(id);
-    const modMap = { empenho: 'empenhos', contrato: 'contratos', titulo: 'titulos', darf: 'darf' };
+    const modMap = { empenho: 'empenhos', contrato: 'contratos', titulo: 'titulos', darf: 'darf', lfpf: 'lf' };
     const mod = modMap[modulo] || modulo;
     let html = '';
+    if (modulo === 'lfpf') {
+        if (permissoesEmCache.includes('lf_editar')) html += `<button type="button" class="btn-icon btn-editar-lfpf" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (permissoesEmCache.includes('lf_excluir')) html += `<button type="button" class="btn-icon btn-inativar-lfpf" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-lfpf-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        return html;
+    }
     if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
     if (permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
     return html;
@@ -489,11 +495,12 @@ if (formUsuarioAdmin) {
 // ==========================================
 // VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================
-let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = [];
+let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = [];
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
 let paginaAtualDarf = 1; let itensPorPaginaDarf = 10; let termoBuscaDarf = "";
 let paginaAtualTitulos = 1; let itensPorPaginaTitulos = 10; let termoBuscaTitulos = "";
+let paginaAtualLfPf = 1; let itensPorPaginaLfPf = 10;
 let darfsDoContratoAtual = []; 
 let empenhosDaNotaAtual = []; 
 let empenhoTemporarioSelecionado = null;
@@ -505,7 +512,8 @@ let estadoOrdenacao = {
     empenhos: { coluna: 'numEmpenho', direcao: 'asc' },
     contratos: { coluna: 'fornecedor', direcao: 'asc' },
     darf: { coluna: 'codigo', direcao: 'asc' },
-    titulos: { coluna: 'idProc', direcao: 'asc' }
+    titulos: { coluna: 'idProc', direcao: 'asc' },
+    lfpf: { coluna: 'lf', direcao: 'asc' }
 };
 
 function ordenarTabela(modulo, coluna) {
@@ -519,6 +527,7 @@ function ordenarTabela(modulo, coluna) {
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
     if (modulo === 'darf') { paginaAtualDarf = 1; atualizarTabelaDarf(); }
     if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
+    if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
 }
 
 function aplicarOrdenacao(array, modulo) {
@@ -535,7 +544,8 @@ function aplicarOrdenacao(array, modulo) {
 }
 
 function inicializarSetasOrdenacao() {
-    ['empenhos', 'contratos', 'darf', 'titulos'].forEach(modulo => {
+    ['empenhos', 'contratos', 'darf', 'titulos', 'lfpf'].forEach(modulo => {
+        if (!estadoOrdenacao[modulo]) return;
         const col = estadoOrdenacao[modulo].coluna; 
         const iconEl = document.getElementById(`sort-${modulo}-${col}`);
         if(iconEl) iconEl.textContent = estadoOrdenacao[modulo].direcao === 'asc' ? '▲' : '▼';
@@ -560,13 +570,14 @@ function mostrarSecao(idSecao, botao) {
     if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos();
     if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf();
     if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
+    if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
     inicializarSetasOrdenacao();
 }
 
 function escutarFirebase() {
     mostrarBarraLoading('Carregando...');
     let carregados = 0;
-    const total = 4;
+    const total = 6;
     const aoCarregar = () => { carregados++; if (carregados >= total) { esconderLoading(); esconderBarraLoading(); } };
     const onError = () => { esconderLoading(); esconderBarraLoading(); };
     db.collection('empenhos').onSnapshot(
@@ -585,12 +596,41 @@ function escutarFirebase() {
         snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
         onError
     );
+    db.collection('lfpf').onSnapshot(
+        snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); },
+        onError
+    );
+    db.collection('config').doc('imports').onSnapshot(
+        function(snap) {
+            if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data());
+            aoCarregar();
+        },
+        onError
+    );
 }
 
 // ==========================================
 // MÓDULOS (script-empenhos.js, script-contratos.js, script-darf.js, script-titulos.js)
 // ==========================================
 // Funções atualizarTabela* são definidas pelos módulos. mostrarSecao chama-as.
+
+/** Atualiza os spans de "Último upload" nas telas de importação (LF, NE, Contratos). */
+function atualizarUltimoImportUI(data) {
+    if (!data || typeof data !== 'object') return;
+    function formatarData(ts) {
+        if (!ts) return '';
+        if (ts.toDate && typeof ts.toDate === 'function') return ts.toDate().toLocaleString('pt-BR');
+        if (ts instanceof Date) return ts.toLocaleString('pt-BR');
+        return String(ts);
+    }
+    const elLf = document.getElementById('ultimoImportLfPf');
+    const elNe = document.getElementById('ultimoImportEmpenhos');
+    const elContratos = document.getElementById('ultimoImportContratos');
+    if (elLf && data.lfpf) elLf.textContent = 'Último upload: ' + formatarData(data.lfpf);
+    if (elNe && data.empenhos) elNe.textContent = 'Último upload: ' + formatarData(data.empenhos);
+    if (elContratos && data.contratos) elContratos.textContent = 'Último upload: ' + formatarData(data.contratos);
+}
+window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 
 // Stub - DARF e Títulos definidos em script-darf.js e script-titulos.js
 
@@ -603,7 +643,8 @@ function exportarBancoDeDados() {
             empenhos: baseEmpenhos,
             contratos: baseContratos,
             darf: baseDarf,
-            titulos: baseTitulos
+            titulos: baseTitulos,
+            lfpf: baseLfPf
         };
 
         const dataStr = JSON.stringify(backupData, null, 2);

@@ -29,6 +29,14 @@
         return true;
     }
 
+    async function salvarUltimoImport(modulo) {
+        try {
+            await db.collection('config').doc('imports').set({ [modulo]: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            var snap = await db.collection('config').doc('imports').get();
+            if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data());
+        } catch (e) { console.warn('Erro ao salvar último import:', e); }
+    }
+
     // --- IMPORT DARF (chave única: codigo) ---
     const fileImportDarf = document.getElementById('fileImportDarf');
     if (fileImportDarf) {
@@ -110,6 +118,7 @@
                     inseridos++;
                 }
                 alert('Importação Contratos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
+                await salvarUltimoImport('contratos');
             } catch (err) { alert('Erro na importação Contratos: ' + (err.message || err)); }
             finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
         });
@@ -175,7 +184,93 @@
                     inseridos++;
                 }
                 alert('Importação Empenhos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
+                await salvarUltimoImport('empenhos');
             } catch (err) { alert('Erro na importação Empenhos: ' + (err.message || err)); }
+            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
+        });
+    }
+
+    // --- IMPORT LF/PF (Liquidação Financeira): se LF não existe insere; se existe atualiza apenas Situação, PF, Última Atualização
+    const fileImportLfPf = document.getElementById('fileImportLfPf');
+    if (fileImportLfPf) {
+        fileImportLfPf.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!verificarAdmin()) { e.target.value = ''; return; }
+            mostrarLoading();
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando CSV LF/PF...');
+            try {
+                const data = await readFileAsArrayBuffer(file);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+                const baseLf = typeof baseLfPf !== 'undefined' ? baseLfPf : [];
+                const mapLfPorNumero = {};
+                baseLf.forEach(function(d) {
+                    var num = String(d.lf || '').trim().toLowerCase();
+                    if (num) mapLfPorNumero[num] = d.id;
+                });
+                var inseridos = 0, atualizados = 0, erros = [];
+                var userEmail = (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var keys = Object.keys(row);
+                    var rowNorm = {};
+                    keys.forEach(function(k) { rowNorm[(k.replace(/^\ufeff/, '') || k).trim()] = row[k]; });
+                    var lfNum = getVal(rowNorm, ['N° do Pedido', 'Nº do Pedido', 'LF', 'lf', 'Numero', 'numero']);
+                    if (!lfNum || String(lfNum).trim() === '') { erros.push('Linha ' + (i + 2) + ': LF vazia'); continue; }
+                    var lfNorm = String(lfNum).trim().toLowerCase();
+                    var valorRaw = getVal(rowNorm, ['Valor (R$)', 'Valor', 'valor']);
+                    var numVal = parseFloat((valorRaw || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+                    var dataCriacao = getVal(rowNorm, ['Data de Criação', 'Data de Criacao', 'Data Criacao', 'dataCriacao']);
+                    var ultimaAtual = getVal(rowNorm, ['Última Atualização', 'Ultima Atualizacao', 'ultimaAtualizacao']);
+                    if (dataCriacao && dataCriacao.match(/^\d{2}\/\d{2}\/\d{4}$/)) dataCriacao = dataCriacao.split('/').reverse().join('-');
+                    if (ultimaAtual && ultimaAtual.match(/^\d{2}\/\d{2}\/\d{4}$/)) ultimaAtual = ultimaAtual.split('/').reverse().join('-');
+                    var situacao = getVal(rowNorm, ['Situação', 'Situacao', 'situacao']);
+                    var pf = getVal(rowNorm, ['PF', 'pf']);
+                    var docId = mapLfPorNumero[lfNorm];
+                    if (docId) {
+                        try {
+                            var updateData = { updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: userEmail };
+                            if (situacao) updateData.situacao = situacao;
+                            if (pf !== undefined && pf !== null && String(pf).trim() !== '') updateData.pf = escapeHTML(String(pf).trim());
+                            if (ultimaAtual) updateData.ultimaAtualizacao = ultimaAtual;
+                            await db.collection('lfpf').doc(docId).update(updateData);
+                            atualizados++;
+                        } catch (err) { erros.push('Linha ' + (i + 2) + ': ' + (err.message || err)); }
+                    } else {
+                        try {
+                            var dados = {
+                                lf: escapeHTML(lfNum),
+                                dataCriacao: dataCriacao || '',
+                                valor: numVal,
+                                tipoLiquidacao: getVal(rowNorm, ['Tipo de Liquidação', 'Tipo de Liquidacao', 'tipoLiquidacao']) === 'Exercício' ? 'Exercício' : 'RP',
+                                situacao: situacao || 'Aguardando Priorização',
+                                ultimaAtualizacao: ultimaAtual || '',
+                                pf: escapeHTML(pf),
+                                rp: getVal(rowNorm, ['RP', 'rp']) === 'Processado' ? 'Processado' : 'Não Processado',
+                                fr: escapeHTML(getVal(rowNorm, ['FR', 'fr'])),
+                                vinculacao: escapeHTML(getVal(rowNorm, ['Vinculação', 'Vinculacao', 'vinculacao'])),
+                                origem: (['LOA', 'Destaque', 'Emenda'].indexOf(getVal(rowNorm, ['Origem', 'origem'])) >= 0 ? getVal(rowNorm, ['Origem', 'origem']) : 'LOA'),
+                                empenhosVinculados: [],
+                                ativo: true,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                createdBy: userEmail,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                updatedBy: userEmail,
+                                historico: ['Importado em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail]
+                            };
+                            var ref = await db.collection('lfpf').add(dados);
+                            mapLfPorNumero[lfNorm] = ref.id;
+                            inseridos++;
+                        } catch (err) { erros.push('Linha ' + (i + 2) + ': ' + (err.message || err)); }
+                    }
+                }
+                var msg = 'Importação LF/PF: ' + inseridos + ' inseridos, ' + atualizados + ' atualizados.';
+                if (erros.length > 0) msg += '\n\nErros (' + erros.length + '):\n' + erros.slice(0, 20).join('\n') + (erros.length > 20 ? '\n...' : '');
+                alert(msg);
+                await salvarUltimoImport('lfpf');
+            } catch (err) { alert('Erro na importação LF/PF: ' + (err.message || err)); }
             finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
         });
     }
