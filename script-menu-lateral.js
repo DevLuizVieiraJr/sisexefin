@@ -1,6 +1,10 @@
 // ==========================================
-// MENU LATERAL - Fonte única para todas as páginas
-// Atualize aqui e todas as páginas refletirão a mudança
+// MENU LATERAL - FONTE ÚNICA (não duplique em outras páginas)
+// ==========================================
+// Este arquivo é a ÚNICA fonte do menu. As páginas dashboard.html, sistema.html,
+// titulos.html e admin.html possuem apenas <ul><!-- Menu injetado por script-menu-lateral.js --></ul>
+// e carregam este script. Qualquer alteração no menu deve ser feita SOMENTE aqui;
+// assim todas as telas são atualizadas de uma só vez, sem risco de esquecer alguma.
 // ==========================================
 (function() {
     const MENU_HTML = `
@@ -21,10 +25,8 @@
             <button type="button" class="menu-section-toggle" data-toggle="tabelas" title="Clique para expandir/recolher">Tabelas de Apoio <span class="menu-section-chevron">▼</span></button>
             <ul class="menu-subgroup" id="sub-tabelas">
                 <li data-permission="empenhos_ler"><a href="sistema.html?secao=empenhos" class="menu-btn menu-link-externo" style="width:100%;" title="Nota de Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></a></li>
-                <li data-permission="lf_ler"><a href="sistema.html?secao=lf" class="menu-btn menu-link-externo" style="width:100%;" title="Liquidação Financeira"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Liquidação Financeira (LF)</span></a></li>
-                <li data-permission="pf_ler"><a href="sistema.html?secao=pf" class="menu-btn menu-link-externo" style="width:100%;" title="Pedido Financeiro"><span class="menu-btn-icon">📋</span><span class="menu-btn-text">Pedido Financeiro (PF)</span></a></li>
-                <li data-permission="op_ler"><a href="sistema.html?secao=op" class="menu-btn menu-link-externo" style="width:100%;" title="Operação de Pagamento"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Operação de Pagamento (OP)</span></a></li>
-                <li><button type="button" class="menu-btn emdesevolvimento" onclick="alert('Em desenvolvimento.');" title="Em desenvolvimento"><span class="menu-btn-icon">🏦</span><span class="menu-btn-text">Ordem Bancária (OB)</span></button></li>
+                <li data-permission="lf_ler"><a href="sistema.html?secao=lf" class="menu-btn menu-link-externo" style="width:100%;" title="Controle de LF x PF"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Controle de LF x PF</span></a></li>
+                <li data-permission="op_ler"><a href="sistema.html?secao=op" class="menu-btn menu-link-externo" style="width:100%;" title="Controle de OP x OB"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Controle de OP x OB</span></a></li>
                 <li data-permission="darf_ler"><a href="sistema.html?secao=darf" class="menu-btn menu-link-externo" style="width:100%;" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></a></li>
                 <li data-permission="contratos_ler"><a href="sistema.html?secao=contratos" class="menu-btn menu-link-externo" style="width:100%;" title="Gestão de Contratos"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos</span></a></li>
             </ul>
@@ -65,7 +67,7 @@
         const elAtivo = ul.querySelector('[data-menu-ativo="' + ativo + '"]');
         if (elAtivo) {
             elAtivo.classList.add('ativo');
-        } else if (ativo === 'sistema' || ['empenhos','lf','pf','op','darf','contratos','titulos','backup'].indexOf(ativo) >= 0) {
+        } else if (ativo === 'sistema' || ['empenhos','lf','op','darf','contratos','titulos','backup'].indexOf(ativo) >= 0) {
             const secao = ativo === 'sistema' ? (new URLSearchParams(window.location.search).get('secao') || 'empenhos') : ativo;
             const linkSecao = ul.querySelector('a[href*="secao=' + secao + '"]');
             if (linkSecao) linkSecao.classList.add('ativo');

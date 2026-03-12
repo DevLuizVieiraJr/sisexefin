@@ -7,7 +7,6 @@
     const mapSecao = {
         empenhos: 'secao-empenhos',
         lf: 'secao-lf',
-        pf: 'secao-pf',
         op: 'secao-op',
         darf: 'secao-darf',
         contratos: 'secao-contratos',
@@ -17,7 +16,6 @@
     const mapSecaoPermissao = {
         'secao-empenhos': 'empenhos_ler',
         'secao-lf': 'lf_ler',
-        'secao-pf': 'pf_ler',
         'secao-op': 'op_ler',
         'secao-darf': 'darf_ler',
         'secao-contratos': 'contratos_ler',
@@ -26,7 +24,7 @@
     };
     const params = new URLSearchParams(window.location.search);
     let secaoParam = params.get('secao');
-    const ordemSecoes = ['empenhos', 'lf', 'pf', 'op', 'darf', 'contratos', 'titulos', 'backup'];
+    const ordemSecoes = ['empenhos', 'lf', 'op', 'darf', 'contratos', 'titulos', 'backup'];
 
     function executarInicializacao() {
         let idSecao, permissaoRequerida;
