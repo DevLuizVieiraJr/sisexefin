@@ -1,4 +1,4 @@
-Titulo de Crédito (TC)
+Titulo de Crédito (TC) - vs1
 
 Tela Inicial = Lista de todos os títulos de créditos (mostrando conforme a paginação)
  - 4 botões para cada linha de TC exibidos conforme permissões (visualizar, editar, excluir, inativar/ativar e pdf)

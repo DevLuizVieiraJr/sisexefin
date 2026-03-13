@@ -8,9 +8,8 @@
     const MATRIZ_MODULOS = [
         { modulo: 'dashboard', label: 'Dashboard', acoes: ['ler'] },
         { modulo: 'titulos', label: 'Títulos de Crédito', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'empenhos', label: 'Empenhos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'lf', label: 'Liquidação (LF)', acoes: ['ler'] },
-        { modulo: 'pf', label: 'Pedido Financeiro (PF)', acoes: ['ler'] },
+        { modulo: 'empenhos', label: 'Empenhos (NE)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'lf', label: 'LF x PF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },
         { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
