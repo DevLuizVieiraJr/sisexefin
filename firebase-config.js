@@ -18,3 +18,14 @@ if (!firebase.apps.length) {
 // Exporta as instâncias globalmente para o padrão Compat
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// Persistência local: reduz leituras ao voltar à página (dados em cache)
+try {
+    db.enablePersistence().catch(function(err) {
+        if (err.code === 'failed-precondition') {
+            console.warn('Firestore: Persistência não ativada (múltiplas abas abertas).');
+        } else if (err.code === 'unimplemented') {
+            console.warn('Firestore: Persistência não suportada neste browser.');
+        }
+    });
+} catch (e) { /* ignorar se db ainda não estiver pronto */ }

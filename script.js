@@ -301,7 +301,6 @@ auth.onAuthStateChanged(async (user) => {
             aplicarPermissoesUI();
             atualizarSeletorPerfil();
             corpoSistema.style.display = 'block';
-            escutarFirebase();
             if (typeof window.inicializarSecaoSistema === 'function') window.inicializarSecaoSistema();
         }
         // Lógica de Rota: Estamos no Dashboard?
@@ -562,6 +561,9 @@ function inicializarSetasOrdenacao() {
 // NAVEGAÇÃO PRINCIPAL E SINCRONIZAÇÃO
 // ==========================================
 function mostrarSecao(idSecao, botao) {
+    window.secaoAtualSistema = idSecao;
+    if (typeof escutarColecaoSecao === 'function') escutarColecaoSecao(idSecao);
+
     document.querySelectorAll('.secao').forEach(s => s.style.display = 'none');
     const secaoAlvo = document.getElementById(idSecao);
     if(secaoAlvo) secaoAlvo.style.display = 'block';
@@ -580,39 +582,58 @@ function mostrarSecao(idSecao, botao) {
     inicializarSetasOrdenacao();
 }
 
-function escutarFirebase() {
+// Unsubscribes ativos (Fase 2 - assinar só coleção da seção ativa)
+let escutaUnsubs = [];
+
+function escutarColecaoSecao(idSecao) {
+    const mapa = {
+        'secao-empenhos': ['empenhos'],
+        'secao-lf': ['lfpf'],
+        'secao-op': [],
+        'secao-darf': ['darf'],
+        'secao-contratos': ['contratos'],
+        'secao-titulos': ['titulos'],
+        'secao-backup': ['empenhos', 'contratos', 'darf', 'titulos', 'lfpf']
+    };
+    const colecoes = mapa[idSecao] || ['empenhos'];
+    const incluiConfig = true;
+    const total = colecoes.length + (incluiConfig ? 1 : 0);
+    if (total === 0) { esconderLoading(); esconderBarraLoading(); return; }
+
+    // Cancela listeners anteriores
+    escutaUnsubs.forEach(fn => { try { fn(); } catch (e) {} });
+    escutaUnsubs = [];
+
     mostrarBarraLoading('Carregando...');
     let carregados = 0;
-    const total = 6;
     const aoCarregar = () => { carregados++; if (carregados >= total) { esconderLoading(); esconderBarraLoading(); } };
     const onError = () => { esconderLoading(); esconderBarraLoading(); };
-    db.collection('empenhos').onSnapshot(
-        snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
-        onError
-    );
-    db.collection('contratos').onSnapshot(
-        snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
-        onError
-    );
-    db.collection('darf').onSnapshot(
-        snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
-        onError
-    );
-    db.collection('titulos').onSnapshot(
-        snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
-        onError
-    );
-    db.collection('lfpf').onSnapshot(
-        snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); },
-        onError
-    );
-    db.collection('config').doc('imports').onSnapshot(
-        function(snap) {
-            if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data());
-            aoCarregar();
-        },
-        onError
-    );
+
+    const handlers = {
+        empenhos: snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
+        contratos: snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
+        darf: snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
+        titulos: snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
+        lfpf: snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); }
+    };
+
+    colecoes.forEach(col => {
+        const unsub = db.collection(col).onSnapshot(handlers[col], onError);
+        escutaUnsubs.push(unsub);
+    });
+
+    if (incluiConfig) {
+        const unsub = db.collection('config').doc('imports').onSnapshot(
+            snap => { if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data()); aoCarregar(); },
+            onError
+        );
+        escutaUnsubs.push(unsub);
+    }
+}
+window.escutarColecaoSecao = escutarColecaoSecao;
+
+function escutarFirebase() {
+    escutarColecaoSecao(window.secaoAtualSistema || 'secao-empenhos');
 }
 
 // ==========================================
