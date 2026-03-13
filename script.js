@@ -533,7 +533,7 @@ function ordenarTabela(modulo, coluna) {
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
     if (modulo === 'darf') { paginaAtualDarf = 1; atualizarTabelaDarf(); }
     if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
-    if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
+    if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { window.paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
 }
 
 function aplicarOrdenacao(array, modulo) {

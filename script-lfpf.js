@@ -53,7 +53,7 @@
     if (buscaTabelaLfPfEl) {
         buscaTabelaLfPfEl.addEventListener('input', typeof debounce === 'function' ? debounce(function() {
             termoBuscaLfPf = (buscaTabelaLfPfEl.value || '').toLowerCase().trim();
-            if (typeof paginaAtualLfPf !== 'undefined') window.paginaAtualLfPf = 1;
+            window.paginaAtualLfPf = 1;
             if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
         }, 300) : function() {});
     }
@@ -87,10 +87,10 @@
         if (typeof aplicarOrdenacao === 'function') base = aplicarOrdenacao(base, 'lfpf');
         const totalRegistros = base.length;
         const itensPorPagina = parseInt((document.getElementById('itensPorPaginaLfPf') || {}).value || 10, 10);
-        const paginaAtual = typeof paginaAtualLfPf !== 'undefined' ? paginaAtualLfPf : 1;
+        const paginaAtual = (typeof window.paginaAtualLfPf !== 'undefined' && window.paginaAtualLfPf != null) ? window.paginaAtualLfPf : 1;
         const totalPaginas = Math.max(1, Math.ceil(totalRegistros / itensPorPagina));
         const paginaAtualAjustada = Math.min(paginaAtual, totalPaginas);
-        if (typeof window.paginaAtualLfPf !== 'undefined') window.paginaAtualLfPf = paginaAtualAjustada;
+        window.paginaAtualLfPf = paginaAtualAjustada;
         const inicio = (paginaAtualAjustada - 1) * itensPorPagina;
         const itensExibidos = base.slice(inicio, inicio + itensPorPagina);
 
@@ -130,17 +130,35 @@
     });
 
     window.mudarTamanhoPaginaLfPf = function() {
-        if (typeof paginaAtualLfPf !== 'undefined') window.paginaAtualLfPf = 1;
+        window.paginaAtualLfPf = 1;
         atualizarTabelaLfPf();
     };
 
+    function obterBaseFiltradaLfPf() {
+        var base = (typeof baseLfPf !== 'undefined' ? baseLfPf : []).filter(function(r) { return r.ativo !== false; });
+        var q = (typeof termoBuscaLfPf !== 'undefined' ? termoBuscaLfPf : '').toLowerCase().trim();
+        if (q) {
+            base = base.filter(function(r) {
+                return (r.lf || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.pf || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.situacao || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.fr || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.vinculacao || '').toLowerCase().indexOf(q) !== -1 ||
+                    (r.origem || '').toLowerCase().indexOf(q) !== -1;
+            });
+        }
+        return base;
+    }
+
     window.mudarPaginaLfPf = function(direcao) {
-        const totalRegistros = (typeof baseLfPf !== 'undefined' ? baseLfPf : []).filter(function(r) { return r.ativo !== false; }).length;
-        const itensPorPagina = parseInt((document.getElementById('itensPorPaginaLfPf') || {}).value || 10, 10);
-        const totalPaginas = Math.max(1, Math.ceil(totalRegistros / itensPorPagina));
+        var base = obterBaseFiltradaLfPf();
+        var totalRegistros = base.length;
+        var itensPorPagina = parseInt((document.getElementById('itensPorPaginaLfPf') || {}).value || 10, 10);
+        var totalPaginas = Math.max(1, Math.ceil(totalRegistros / itensPorPagina));
+        var atual = (typeof window.paginaAtualLfPf !== 'undefined' && window.paginaAtualLfPf != null) ? window.paginaAtualLfPf : 1;
         if (direcao === 'primeiro') window.paginaAtualLfPf = 1;
         else if (direcao === 'ultimo') window.paginaAtualLfPf = totalPaginas;
-        else window.paginaAtualLfPf = (paginaAtualLfPf || 1) + (direcao || 0);
+        else window.paginaAtualLfPf = Math.max(1, Math.min(totalPaginas, atual + (direcao || 0)));
         atualizarTabelaLfPf();
     };
 
@@ -335,29 +353,37 @@
         el.addEventListener('input', function() { formLfPf.dataset.dirty = '1'; });
     });
 
+    var CABECALHOS_LFPF = ['N° do Pedido', 'Data de Criação', 'Valor (R$)', 'Tipo de Liquidação', 'Situação', 'Última Atualização', 'PF', 'RP', 'FR', 'Vinculação', 'Origem'];
+
     window.exportarLfPf = function(formato) {
         if (typeof XLSX === 'undefined') return alert('Biblioteca XLSX não carregada.');
         try {
             const base = (typeof baseLfPf !== 'undefined' ? baseLfPf : []).filter(function(r) { return r.ativo !== false; });
-            const dados = base.map(function(r) {
-                return {
-                    'N° do Pedido': r.lf,
-                    'Data de Criação': r.dataCriacao,
-                    'Valor (R$)': typeof formatarMoedaBR === 'function' ? formatarMoedaBR(r.valor || 0) : r.valor,
-                    'Tipo de Liquidação': r.tipoLiquidacao,
-                    'Situação': r.situacao,
-                    'Última Atualização': r.ultimaAtualizacao,
-                    'PF': r.pf,
-                    'RP': r.rp,
-                    'FR': r.fr,
-                    'Vinculação': r.vinculacao,
-                    'Origem': r.origem
-                };
-            });
+            var dados;
+            if (base.length === 0) {
+                dados = [CABECALHOS_LFPF.reduce(function(o, k) { o[k] = ''; return o; }, {})];
+            } else {
+                dados = base.map(function(r) {
+                    return {
+                        'N° do Pedido': r.lf,
+                        'Data de Criação': r.dataCriacao,
+                        'Valor (R$)': typeof formatarMoedaBR === 'function' ? formatarMoedaBR(r.valor || 0) : r.valor,
+                        'Tipo de Liquidação': r.tipoLiquidacao,
+                        'Situação': r.situacao,
+                        'Última Atualização': r.ultimaAtualizacao,
+                        'PF': r.pf,
+                        'RP': r.rp,
+                        'FR': r.fr,
+                        'Vinculação': r.vinculacao,
+                        'Origem': r.origem
+                    };
+                });
+            }
             const ws = XLSX.utils.json_to_sheet(dados);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'LF_PF');
-            XLSX.writeFile(wb, 'lf_pf.' + (formato === 'csv' ? 'csv' : 'xlsx'));
+            var nomeArquivo = base.length === 0 ? 'lf_pf_modelo' : 'lf_pf';
+            XLSX.writeFile(wb, nomeArquivo + '.' + (formato === 'csv' ? 'csv' : 'xlsx'));
         } catch (err) { alert('Erro ao exportar.'); }
     };
 
