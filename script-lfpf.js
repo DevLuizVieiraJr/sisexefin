@@ -9,13 +9,21 @@
     let empenhosVinculadosLfPf = []; // lista de { numNE, valor, ptres, fr, nd }
     let empenhoSelecionadoLfPf = null;
 
+    function formatarHojeDdMmAaaa() {
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const ano = hoje.getFullYear();
+        return dia + '/' + mes + '/' + ano;
+    }
+
     function abrirFormularioLfPf(isEdit) {
         if (!isEdit) {
             formLfPf.reset();
             document.getElementById('editIndexLfPf').value = '-1';
             empenhosVinculadosLfPf = [];
-            document.getElementById('lfDataCriacao').value = new Date().toISOString().slice(0, 10);
-            document.getElementById('lfUltimaAtualizacao').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('lfDataCriacao').value = formatarHojeDdMmAaaa();
+            document.getElementById('lfUltimaAtualizacao').value = formatarHojeDdMmAaaa();
             desenharTabelaNeLfPf();
             limparAuditoria();
         }
@@ -136,12 +144,15 @@
         atualizarTabelaLfPf();
     };
 
-    function dataParaInputDate(val) {
+    function normalizarDataParaCampo(val) {
         if (!val) return '';
-        const m = String(val).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        if (m) return m[3] + '-' + m[2] + '-' + m[1];
-        if (String(val).match(/^\d{4}-\d{2}-\d{2}/)) return String(val).substring(0, 10);
-        return val;
+        const s = String(val).trim();
+        // Se já estiver em dd/mm/aaaa, mantém
+        if (s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)) return s;
+        // Se vier em yyyy-mm-dd (formato antigo ou padrão do Firestore/UI), converte para dd/mm/aaaa
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return m[3] + '/' + m[2] + '/' + m[1];
+        return s;
     }
 
     function limparAuditoria() {
@@ -165,11 +176,11 @@
         abrirFormularioLfPf(true);
         document.getElementById('editIndexLfPf').value = r.id;
         document.getElementById('lfNum').value = r.lf || '';
-        document.getElementById('lfDataCriacao').value = dataParaInputDate(r.dataCriacao) || '';
+        document.getElementById('lfDataCriacao').value = normalizarDataParaCampo(r.dataCriacao) || '';
         document.getElementById('lfValor').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(parseFloat(r.valor) || 0)) : (r.valor || '');
         document.getElementById('lfTipoLiquidacao').value = (r.tipoLiquidacao === 'Exercício' ? 'Exercício' : 'RP');
         document.getElementById('lfSituacao').value = r.situacao || 'Aguardando Priorização';
-        document.getElementById('lfUltimaAtualizacao').value = dataParaInputDate(r.ultimaAtualizacao) || '';
+        document.getElementById('lfUltimaAtualizacao').value = normalizarDataParaCampo(r.ultimaAtualizacao) || '';
         document.getElementById('lfPf').value = r.pf || '';
         document.getElementById('lfRp').value = (r.rp === 'Processado' ? 'Processado' : 'Não Processado');
         document.getElementById('lfFr').value = r.fr || '';

@@ -222,10 +222,8 @@
                     var lfNorm = String(lfNum).trim().toLowerCase();
                     var valorRaw = getVal(rowNorm, ['Valor (R$)', 'Valor', 'valor']);
                     var numVal = parseFloat((valorRaw || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-                    var dataCriacao = getVal(rowNorm, ['Data de Criação', 'Data de Criacao', 'Data Criacao', 'dataCriacao']);
-                    var ultimaAtual = getVal(rowNorm, ['Última Atualização', 'Ultima Atualizacao', 'ultimaAtualizacao']);
-                    if (dataCriacao && dataCriacao.match(/^\d{2}\/\d{2}\/\d{4}$/)) dataCriacao = dataCriacao.split('/').reverse().join('-');
-                    if (ultimaAtual && ultimaAtual.match(/^\d{2}\/\d{2}\/\d{4}$/)) ultimaAtual = ultimaAtual.split('/').reverse().join('-');
+                    var dataCriacao = getVal(rowNorm, ['Data de Criação', 'Data de Criacao', 'Data Criacao', 'dataCriacao', 'DT_CRIACAO', 'DtCriacao', 'dt_criacao']);
+                    var ultimaAtual = getVal(rowNorm, ['Última Atualização', 'Ultima Atualizacao', 'ultimaAtualizacao', 'ULTIMA_DT', 'UltimaDt', 'ultima_dt']);
                     var situacao = getVal(rowNorm, ['Situação', 'Situacao', 'situacao']);
                     var pf = getVal(rowNorm, ['PF', 'pf']);
                     var docId = mapLfPorNumero[lfNorm];
