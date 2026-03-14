@@ -24,6 +24,7 @@
     let empenhosDaNotaAtual = [];
     let tributacoesAtual = [];
     let salvandoApenasAbaDadosBasicos = false;
+    let enviandoParaProcessamento = false;
     let paginaAtual = 1;
     let itensPorPagina = 10;
     let termoBusca = '';
@@ -215,6 +216,41 @@
         inputBuscaOIT.addEventListener('blur', () => { setTimeout(() => { if (listaOIT) listaOIT.innerHTML = ''; }, 200); });
     }
 
+    function configurarAutocompleteOIGenerico(inputId, listaId, hiddenId, displayDivId, displaySpanId) {
+        const input = document.getElementById(inputId);
+        const lista = document.getElementById(listaId);
+        if (!input || !lista || input.dataset.autocompleteBound === '1') return;
+        input.dataset.autocompleteBound = '1';
+        const mostrar = () => {
+            const texto = (input.value || '').trim().toLowerCase();
+            const textoSemAcento = removerAcentos(texto);
+            lista.innerHTML = '';
+            if (texto.length < 2) return;
+            const oisAtivas = listaOI.filter(o => (o.situacao || '').toLowerCase() !== 'inativo');
+            const resultados = oisAtivas.filter(o => {
+                const campos = camposOIParaBusca(o);
+                return campos.some(campo => removerAcentos(campo).toLowerCase().includes(textoSemAcento));
+            });
+            resultados.forEach(o => {
+                const li = document.createElement('li');
+                li.textContent = (o.numeroOI || '-') + ' - ' + (o.nomeOI || '-');
+                li.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    document.getElementById(hiddenId).value = o.id;
+                    input.value = '';
+                    lista.innerHTML = '';
+                    const div = displayDivId ? document.getElementById(displayDivId) : null;
+                    const span = displaySpanId ? document.getElementById(displaySpanId) : null;
+                    if (div && span) { span.textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || ''); div.style.display = 'block'; }
+                });
+                lista.appendChild(li);
+            });
+        };
+        input.addEventListener('input', debounce(mostrar, 300));
+        input.addEventListener('focus', function() { if ((this.value || '').trim().length >= 2) mostrar(); });
+        input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
+    }
+
     function desenharFiltrosStatus() {
         const container = document.getElementById('filtrosStatusTC');
         if (!container) return;
@@ -303,6 +339,9 @@
                     if (permissoesEmCache.includes('titulos_pdf')) {
                         acoes += `<button type="button" class="btn-icon btn-pdf-titulo" data-id="${escapeHTML(t.id)}" title="Gerar PDF">📄</button>`;
                     }
+                    if (status === 'Devolvido') {
+                        acoes += `<button type="button" class="btn-icon btn-nova-entrada-titulo" data-id="${escapeHTML(t.id)}" title="Dar nova entrada">↪</button>`;
+                    }
                 }
                 const checked = titulosSelecionados.has(t.id) ? ' checked' : '';
                 tr.innerHTML = `<td><input type="checkbox" class="check-tc check-titulo" data-id="${escapeHTML(t.id)}"${checked}></td>
@@ -334,6 +373,7 @@
 
         tbody.querySelectorAll('.btn-ver-titulo').forEach(btn => btn.addEventListener('click', () => visualizarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-editar-titulo').forEach(btn => btn.addEventListener('click', () => editarTitulo(btn.getAttribute('data-id'))));
+        tbody.querySelectorAll('.btn-nova-entrada-titulo').forEach(btn => btn.addEventListener('click', () => { editarTitulo(btn.getAttribute('data-id')); }));
         tbody.querySelectorAll('.btn-apagar-titulo').forEach(btn => btn.addEventListener('click', () => apagarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-toggle-ativo-titulo').forEach(btn => btn.addEventListener('click', () => toggleInativoTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-pdf-titulo').forEach(btn => btn.addEventListener('click', () => gerarPDFTitulo(btn.getAttribute('data-id'))));
@@ -406,9 +446,15 @@
         document.getElementById('formTitulo')?.reset();
         document.getElementById('editIndexTitulo').value = '-1';
         document.getElementById('idProc').value = '';
-        document.getElementById('dadosContratoSelecionado').style.display = 'none';
+        document.getElementById('anoTC').value = '2026';
+        document.getElementById('ugTC').value = '741000';
+        document.getElementById('tipoTC').value = 'NF';
+        document.getElementById('fornecedorSelecionado').style.display = 'none';
         document.getElementById('dadosOISelecionado').style.display = 'none';
         document.getElementById('oiEntregou').value = '';
+        document.getElementById('fornecedorValor').value = '';
+        document.getElementById('contratoIdSelecionado').value = '';
+        limparFornecedorSelecionado();
         empenhosDaNotaAtual = [];
         tributacoesAtual = [];
         desenharEmpenhosNota();
@@ -420,6 +466,7 @@
         if (tituloEl) tituloEl.textContent = 'Entrada de Título de Crédito';
         setCamposDadosBasicosHabilitados(true);
         atualizarBotoesAbaDadosBasicos(false);
+        atualizarBotoesFormulario('Rascunho', false);
         const dataExefinEl = document.getElementById('dataExefin');
         if (dataExefinEl && !dataExefinEl.value) dataExefinEl.value = new Date().toISOString().slice(0, 10);
         document.getElementById('tela-lista-titulos').style.display = 'none';
@@ -431,15 +478,17 @@
         document.getElementById('tela-lista-titulos').style.display = 'block';
     };
 
-    /** Habilita ou desabilita os campos da aba Dados Básicos (exceto Observações). */
+    /** Habilita ou desabilita os campos da aba Dados Básicos (exceto Observações, Ano, UG). */
     function setCamposDadosBasicosHabilitados(habilitado) {
-        const ids = ['dataExefin', 'buscaOIT', 'buscaContratoT', 'numTC', 'valorNotaFiscal', 'dataEmissao'];
+        const ids = ['tipoTC', 'dataExefin', 'buscaOIT', 'buscaFornecedorT', 'contratoSelecionado', 'numTC', 'valorNotaFiscal', 'dataEmissao', 'dataAteste'];
         ids.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = !habilitado;
         });
         const limparOI = document.querySelector('#dadosOISelecionado button');
         if (limparOI) limparOI.disabled = !habilitado;
+        const limparForn = document.querySelector('#fornecedorSelecionado button');
+        if (limparForn) limparForn.disabled = !habilitado;
     }
 
     /** Exibe/oculta botões Editar Aba e Salvar Aba na aba Dados Básicos (apenas quando TC já salvo). */
@@ -487,9 +536,18 @@
             tab.classList.toggle('bloqueado', isBloqueado);
             tab.style.pointerEvents = isBloqueado ? 'none' : '';
         });
+        const tcSalvo = (document.getElementById('editIndexTitulo')?.value || '') !== '-1' && (document.getElementById('editIndexTitulo')?.value || '') !== '';
+        atualizarBotoesFormulario(status, tcSalvo);
+    }
+
+    /** Mostra/oculta Enviar para Processamento, Devolver, Dar nova entrada */
+    function atualizarBotoesFormulario(status, tcSalvo) {
         const btnDevolver = document.getElementById('btnDevolver');
-        const tcSalvo = (document.getElementById('editIndexTitulo')?.value || '') !== '-1';
-        if (btnDevolver) btnDevolver.style.display = tcSalvo && status !== 'Devolvido' && idx >= 0 ? 'inline-block' : 'none';
+        const btnEnviar = document.getElementById('btnEnviarProcessamento');
+        const btnNovaEntrada = document.getElementById('btnDarNovaEntrada');
+        if (btnDevolver) btnDevolver.style.display = (tcSalvo && status !== 'Devolvido') ? 'inline-block' : 'none';
+        if (btnEnviar) btnEnviar.style.display = (tcSalvo && status === 'Rascunho') ? 'inline-block' : 'none';
+        if (btnNovaEntrada) btnNovaEntrada.style.display = (status === 'Devolvido') ? 'inline-block' : 'none';
     }
 
     function ativarTab(i) {
@@ -558,120 +616,144 @@
 
     let empenhoTemporarioSelecionado = null;
 
-    function mostrarSugestoesContrato() {
-        const inputBuscaContratoT = document.getElementById('buscaContratoT');
-        const listaContratosT = document.getElementById('listaResultadosContratoT');
-        if (!inputBuscaContratoT || !listaContratosT) return;
-        const texto = (inputBuscaContratoT.value || '').trim().toLowerCase();
-        const textoSemAcento = removerAcentos(texto);
-        const textoApenasNumeros = texto.replace(/\D/g, '');
-        listaContratosT.innerHTML = '';
-        listaContratosT.style.display = '';
-        if (texto.length < 4) return;
-        const resultados = baseContratos.filter(c => {
-            const campos = camposContratoParaBusca(c);
-            const matchCampos = campos.some(campo => removerAcentos(campo).toLowerCase().includes(textoSemAcento));
-            const forn = campos[3];
-            const cnpjApenasNumeros = forn.replace(/\D/g, '');
-            const matchCNPJ = textoApenasNumeros.length >= 4 && cnpjApenasNumeros.includes(textoApenasNumeros);
-            return matchCampos || matchCNPJ;
+    /** Fornecedores únicos da coleção contratos */
+    function fornecedoresUnicos() {
+        const set = new Set();
+        baseContratos.forEach(c => {
+            const f = (c.fornecedor || c.razaoSocial || c.empresa || '').trim();
+            if (f) set.add(f);
         });
-        if (resultados.length === 0) {
-            listaContratosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">' + (baseContratos.length === 0 ? 'Nenhum contrato cadastrado. Cadastre em Sistema > Contratos.' : 'Nenhum contrato/empresa encontrado.') + '</li>';
+        return Array.from(set);
+    }
+
+    function mostrarSugestoesFornecedor() {
+        const input = document.getElementById('buscaFornecedorT');
+        const lista = document.getElementById('listaResultadosFornecedorT');
+        if (!input || !lista) return;
+        const texto = (input.value || '').trim().toLowerCase();
+        const textoSemAcento = removerAcentos(texto);
+        lista.innerHTML = '';
+        if (texto.length < 2) return;
+        const fornecedores = fornecedoresUnicos().filter(f => removerAcentos(f).toLowerCase().includes(textoSemAcento));
+        if (fornecedores.length === 0) {
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Nenhum fornecedor encontrado.</li>';
         } else {
-            resultados.forEach(c => {
+            fornecedores.forEach(forn => {
                 const li = document.createElement('li');
-                const nomeForn = c.fornecedor || 'Fornecedor não informado';
-                li.innerHTML = '<strong>Inst:</strong> ' + escapeHTML(c.numContrato || '-') + ' | <strong>Empresa:</strong> ' + escapeHTML(nomeForn);
+                li.textContent = forn;
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault();
-                    const painel = document.getElementById('dadosContratoSelecionado');
-                    const readF = document.getElementById('readFornecedor');
-                    const readI = document.getElementById('readInstrumento');
-                    const rcSelect = document.getElementById('rcSelecionada');
-                    const rcTexto = document.getElementById('rcSelecionadaTexto');
-                    const vigInput = document.getElementById('vigenciaContrato');
-                    const avisoVig = document.getElementById('avisoVigenciaContrato');
-
-                    if (painel) painel.style.display = 'block';
-                    if (readF) readF.value = c.fornecedor || '';
-                    if (readI) readI.value = c.numContrato || '';
-
-                    // RCs do contrato (se houver)
-                    const rcs = Array.isArray(c.rcs) ? c.rcs : [];
-                    if (rcSelect && rcTexto) {
-                        rcSelect.innerHTML = '';
-                        if (rcs.length > 1) {
-                            rcSelect.style.display = '';
-                            rcTexto.style.display = 'none';
-                            rcs.forEach(rc => {
-                                const opt = document.createElement('option');
-                                opt.value = rc;
-                                opt.textContent = rc;
-                                rcSelect.appendChild(opt);
-                            });
-                        } else if (rcs.length === 1) {
-                            rcSelect.style.display = 'none';
-                            rcTexto.style.display = '';
-                            rcTexto.value = rcs[0];
-                        } else {
-                            rcSelect.style.display = 'none';
-                            rcTexto.style.display = 'none';
-                            rcTexto.value = '';
-                        }
-                    }
-
-                    // Vigência informativa
-                    if (vigInput && avisoVig) {
-                        const ini = c.dataInicio || '';
-                        const fim = c.dataFim || '';
-                        if (ini || fim) {
-                            const fmt = (d) => {
-                                if (!d) return '';
-                                // assume formato YYYY-MM-DD
-                                const [y, m, dia] = String(d).split('-');
-                                return dia && m && y ? `${dia}/${m}/${y}` : d;
-                            };
-                            vigInput.value = `${fmt(ini)} ${ini && fim ? 'até' : ''} ${fmt(fim)}`.trim();
-
-                            const dataEmissao = (document.getElementById('dataEmissao').value || document.getElementById('dataExefin').value || '').trim();
-                            if (dataEmissao && ini && fim) {
-                                const base = new Date(dataEmissao);
-                                const dIni = new Date(ini);
-                                const dFim = new Date(fim);
-                                if (base < dIni || base > dFim) {
-                                    avisoVig.style.display = 'block';
-                                    avisoVig.textContent = 'Atenção: este TC está fora da vigência do contrato.';
-                                } else {
-                                    avisoVig.style.display = 'none';
-                                    avisoVig.textContent = '';
-                                }
-                            } else {
-                                avisoVig.style.display = 'none';
-                                avisoVig.textContent = '';
-                            }
-                        } else {
-                            vigInput.value = '';
-                            avisoVig.style.display = 'none';
-                            avisoVig.textContent = '';
-                        }
-                    }
-
-                    listaContratosT.innerHTML = '';
-                    inputBuscaContratoT.value = '';
+                    selecionarFornecedor(forn);
+                    input.value = '';
+                    lista.innerHTML = '';
                 });
-                listaContratosT.appendChild(li);
+                lista.appendChild(li);
             });
         }
     }
-    function configurarAutocompleteContrato() {
-        const inputBuscaContratoT = document.getElementById('buscaContratoT');
-        const listaContratosT = document.getElementById('listaResultadosContratoT');
-        if (!inputBuscaContratoT || !listaContratosT || inputBuscaContratoT.dataset.autocompleteBound === '1') return;
-        inputBuscaContratoT.dataset.autocompleteBound = '1';
-        inputBuscaContratoT.addEventListener('input', debounce(mostrarSugestoesContrato, 300));
-        inputBuscaContratoT.addEventListener('focus', function() { if ((this.value || '').trim().length >= 4) mostrarSugestoesContrato(); });
-        inputBuscaContratoT.addEventListener('blur', () => { setTimeout(() => { if (listaContratosT) listaContratosT.innerHTML = ''; }, 200); });
+
+    function selecionarFornecedor(fornecedor) {
+        document.getElementById('fornecedorValor').value = fornecedor || '';
+        const span = document.getElementById('readFornecedor');
+        if (span) span.textContent = fornecedor || '';
+        const div = document.getElementById('fornecedorSelecionado');
+        if (div) div.style.display = fornecedor ? 'block' : 'none';
+        document.getElementById('contratoIdSelecionado').value = '';
+        const sel = document.getElementById('contratoSelecionado');
+        if (sel) {
+            sel.disabled = !fornecedor;
+            sel.innerHTML = '<option value="">Selecione o contrato</option>';
+            if (fornecedor) {
+                const contratosDoFornecedor = baseContratos.filter(c => (c.fornecedor || c.razaoSocial || c.empresa || '').trim() === fornecedor);
+                contratosDoFornecedor.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.numContrato || c.instrumento || '-';
+                    sel.appendChild(opt);
+                });
+            }
+        }
+        preencherDadosContrato(null);
+    }
+
+    window.limparFornecedorSelecionado = function() {
+        document.getElementById('fornecedorValor').value = '';
+        const span = document.getElementById('readFornecedor');
+        if (span) span.textContent = '';
+        document.getElementById('fornecedorSelecionado').style.display = 'none';
+        document.getElementById('contratoIdSelecionado').value = '';
+        const sel = document.getElementById('contratoSelecionado');
+        if (sel) {
+            sel.innerHTML = '<option value="">Selecione o fornecedor primeiro</option>';
+            sel.disabled = true;
+        }
+        preencherDadosContrato(null);
+    };
+
+    function preencherDadosContrato(contrato) {
+        const fmtMoeda = (v) => typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v || 0) : String(v || '');
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+        if (!contrato) {
+            set('valorContrato', '');
+            const rcS = document.getElementById('rcSelecionada');
+            if (rcS) { rcS.innerHTML = '<option value="">Selecione o contrato</option>'; }
+            set('inicioVigencia', '');
+            set('fimVigencia', '');
+            set('fiscalContrato', '');
+            set('contatoFiscal', '');
+            const av = document.getElementById('avisoVigenciaContrato');
+            if (av) av.style.display = 'none';
+            return;
+        }
+        set('valorContrato', contrato.valorContrato ? ('R$ ' + fmtMoeda(contrato.valorContrato)) : '');
+        const rcs = Array.isArray(contrato.rcs) ? contrato.rcs : [];
+        const rcS = document.getElementById('rcSelecionada');
+        if (rcS) {
+            rcS.innerHTML = rcs.length ? rcs.map(r => '<option value="' + escapeHTML(r) + '">' + escapeHTML(r) + '</option>').join('') : '<option value="">Sem RC</option>';
+        }
+        const toYYYYMMDD = (d) => {
+            if (!d) return '';
+            const s = String(d).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            if (m) return m[3].length === 2 ? '20' + m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0') : m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+            return s;
+        };
+        set('inicioVigencia', toYYYYMMDD(contrato.dataInicio));
+        set('fimVigencia', toYYYYMMDD(contrato.dataFim));
+        set('fiscalContrato', contrato.fiscal || contrato.fiscalContrato || '');
+        set('contatoFiscal', contrato.contatoFiscal || contrato.contato_fiscal || '');
+        const aviso = document.getElementById('avisoVigenciaContrato');
+        const dataEmissao = (document.getElementById('dataEmissao').value || document.getElementById('dataExefin').value || '').trim();
+        if (aviso && dataEmissao && contrato.dataInicio && contrato.dataFim) {
+            const base = new Date(dataEmissao);
+            const dIni = new Date(contrato.dataInicio);
+            const dFim = new Date(contrato.dataFim);
+            aviso.style.display = (base < dIni || base > dFim) ? 'block' : 'none';
+            aviso.textContent = (base < dIni || base > dFim) ? 'Atenção: este TC está fora da vigência do contrato.' : '';
+        } else if (aviso) aviso.style.display = 'none';
+    }
+
+    function configurarSelectContrato() {
+        const sel = document.getElementById('contratoSelecionado');
+        if (!sel || sel.dataset.bound === '1') return;
+        sel.dataset.bound = '1';
+        sel.addEventListener('change', function() {
+            const id = this.value;
+            document.getElementById('contratoIdSelecionado').value = id || '';
+            const c = id ? baseContratos.find(x => x.id === id) : null;
+            preencherDadosContrato(c);
+        });
+    }
+
+    function configurarAutocompleteFornecedor() {
+        const input = document.getElementById('buscaFornecedorT');
+        const lista = document.getElementById('listaResultadosFornecedorT');
+        if (!input || !lista || input.dataset.autocompleteBound === '1') return;
+        input.dataset.autocompleteBound = '1';
+        input.addEventListener('input', debounce(mostrarSugestoesFornecedor, 300));
+        input.addEventListener('focus', function() { if ((this.value || '').trim().length >= 2) mostrarSugestoesFornecedor(); });
+        input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
     }
 
     function mostrarSugestoesEmpenho() {
@@ -750,76 +832,27 @@
         document.getElementById('idProc').value = t.idProc || '';
         const tituloEl = document.getElementById('tituloFormTC');
         if (tituloEl && t.idProc) tituloEl.textContent = t.idProc + ' - Entrada de Título de Crédito';
+        document.getElementById('anoTC').value = t.ano || '2026';
+        document.getElementById('ugTC').value = t.ug || '741000';
+        document.getElementById('tipoTC').value = t.tipoTC || 'NF';
         document.getElementById('dataExefin').value = t.dataExefin || '';
         document.getElementById('numTC').value = t.numTC || '';
         const valNF = parseFloat(t.valorNotaFiscal) || 0;
         document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
         document.getElementById('dataEmissao').value = t.dataEmissao || '';
         document.getElementById('dataAteste').value = t.dataAteste || '';
-        document.getElementById('readFornecedor').value = t.fornecedor || '';
-        document.getElementById('readInstrumento').value = t.instrumento || '';
-        // RC e vigência ao reabrir TC
-        const painelContrato = document.getElementById('dadosContratoSelecionado');
-        const rcSelect = document.getElementById('rcSelecionada');
-        const rcTexto = document.getElementById('rcSelecionadaTexto');
-        const vigInput = document.getElementById('vigenciaContrato');
-        const avisoVig = document.getElementById('avisoVigenciaContrato');
-        if (painelContrato && t.fornecedor) painelContrato.style.display = 'block';
-        const contratoLigado = baseContratos.find(c => (c.numContrato || '') === (t.instrumento || '')) || null;
-        if (rcSelect && rcTexto) {
-            const rcs = contratoLigado && Array.isArray(contratoLigado.rcs) ? contratoLigado.rcs : [];
-            rcSelect.innerHTML = '';
-            const rcAtual = t.rc || '';
-            if (rcs.length > 1) {
-                rcSelect.style.display = '';
-                rcTexto.style.display = 'none';
-                rcs.forEach(rc => {
-                    const opt = document.createElement('option');
-                    opt.value = rc;
-                    opt.textContent = rc;
-                    if (rc === rcAtual) opt.selected = true;
-                    rcSelect.appendChild(opt);
-                });
-            } else if (rcs.length === 1 || rcAtual) {
-                rcSelect.style.display = 'none';
-                rcTexto.style.display = '';
-                rcTexto.value = rcAtual || rcs[0];
-            } else {
-                rcSelect.style.display = 'none';
-                rcTexto.style.display = 'none';
-                rcTexto.value = '';
-            }
-        }
-        if (vigInput && avisoVig) {
-            if (contratoLigado && (contratoLigado.dataInicio || contratoLigado.dataFim)) {
-                const fmt = (d) => {
-                    if (!d) return '';
-                    const [y, m, dia] = String(d).split('-');
-                    return dia && m && y ? `${dia}/${m}/${y}` : d;
-                };
-                const ini = contratoLigado.dataInicio || '';
-                const fim = contratoLigado.dataFim || '';
-                vigInput.value = `${fmt(ini)} ${ini && fim ? 'até' : ''} ${fmt(fim)}`.trim();
-                const dataEmissao = (t.dataEmissao || t.dataExefin || '').trim();
-                if (dataEmissao && ini && fim) {
-                    const base = new Date(dataEmissao);
-                    const dIni = new Date(ini);
-                    const dFim = new Date(fim);
-                    if (base < dIni || base > dFim) {
-                        avisoVig.style.display = 'block';
-                        avisoVig.textContent = 'Atenção: este TC está fora da vigência do contrato.';
-                    } else {
-                        avisoVig.style.display = 'none';
-                        avisoVig.textContent = '';
-                    }
-                } else {
-                    avisoVig.style.display = 'none';
-                    avisoVig.textContent = '';
+        if (t.fornecedor) {
+            selecionarFornecedor(t.fornecedor);
+            const contratoLigado = baseContratos.find(c => (c.numContrato || c.instrumento || '') === (t.instrumento || '') && (c.fornecedor || c.razaoSocial || c.empresa || '').trim() === t.fornecedor);
+            if (contratoLigado) {
+                document.getElementById('contratoIdSelecionado').value = contratoLigado.id;
+                const sel = document.getElementById('contratoSelecionado');
+                if (sel) {
+                    sel.value = contratoLigado.id;
+                    preencherDadosContrato(contratoLigado);
+                    const rcEl = document.getElementById('rcSelecionada');
+                    if (rcEl && t.rc) rcEl.value = t.rc;
                 }
-            } else {
-                vigInput.value = '';
-                avisoVig.style.display = 'none';
-                avisoVig.textContent = '';
             }
         }
         const obsEl = document.getElementById('observacoesTC');
@@ -835,7 +868,6 @@
         document.getElementById('np').value = t.np || '';
         document.getElementById('dataLiquidacao').value = t.dataLiquidacao || '';
         document.getElementById('op').value = t.op || '';
-        if (t.fornecedor) document.getElementById('dadosContratoSelecionado').style.display = 'block';
         empenhosDaNotaAtual = (t.empenhosVinculados || []).map(x => ({ ...x }));
         tributacoesAtual = (t.tributacoes || []).map(x => ({ ...x }));
         const status = t.status || 'Rascunho';
@@ -896,30 +928,54 @@
 
         const dataExefin = (document.getElementById('dataExefin').value || '').trim();
         const numTC = (document.getElementById('numTC').value || '').trim();
-        const fornecedor = (document.getElementById('readFornecedor').value || '').trim();
-        const instrumento = (document.getElementById('readInstrumento').value || '').trim();
+        const fornecedor = (document.getElementById('fornecedorValor').value || document.getElementById('readFornecedor')?.textContent || '').trim();
+        const contratoId = document.getElementById('contratoIdSelecionado').value || '';
+        const contratoSel = baseContratos.find(c => c.id === contratoId);
+        const instrumento = contratoSel ? (contratoSel.numContrato || contratoSel.instrumento || '') : '';
         const oiEntregou = (document.getElementById('oiEntregou').value || '').trim();
         const valorVal = typeof valorMoedaParaNumero === 'function'
             ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value)
             : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0);
+        const dataEmissao = (document.getElementById('dataEmissao').value || '').trim();
+        const dataAteste = (document.getElementById('dataAteste').value || '').trim();
 
-        if (!dataExefin) return alert("Preencha a Data da EXEFIN.");
+        if (!dataExefin) return alert("Preencha a Entrada na EXEFIN.");
         if (!numTC) return alert("Preencha o Número do TC.");
-        if (!fornecedor || !instrumento) return alert("Selecione um Contrato/Empresa.");
+        if (!fornecedor || !instrumento) return alert("Selecione Fornecedor e Contrato.");
         if (!oiEntregou) return alert("Selecione a OI de Origem.");
         if (!valorVal || valorVal <= 0) return alert("Preencha o Valor do TC (maior que zero).");
+        if (!dataEmissao) return alert("Preencha a Data de Emissão do TC.");
+        if (!dataAteste) return alert("Preencha a Data do Ateste.");
+        if (dataEmissao && dataAteste) {
+            const dEm = new Date(dataEmissao);
+            const dAt = new Date(dataAteste);
+            const hoje = new Date();
+            hoje.setHours(23, 59, 59, 999);
+            if (dAt < dEm) return alert("A Data do Ateste deve ser entre a Data de Emissão e hoje.");
+            if (dAt > hoje) return alert("A Data do Ateste não pode ser futura.");
+        }
+
+        const valorContratoNum = contratoSel && contratoSel.valorContrato ? (parseFloat(contratoSel.valorContrato) || 0) : 0;
 
         const dados = {
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
+            ano: '2026',
+            ug: '741000',
+            tipoTC: document.getElementById('tipoTC')?.value || 'NF',
             dataExefin: escapeHTML(dataExefin),
             numTC: escapeHTML(numTC),
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
             fornecedor: escapeHTML(fornecedor),
             instrumento: escapeHTML(instrumento),
-            rc: escapeHTML((document.getElementById('rcSelecionada')?.value || document.getElementById('rcSelecionadaTexto')?.value || '')),
+            rc: escapeHTML((document.getElementById('rcSelecionada')?.value || '')),
+            valorContrato: valorContratoNum,
+            inicioVigencia: escapeHTML(document.getElementById('inicioVigencia')?.value || ''),
+            fimVigencia: escapeHTML(document.getElementById('fimVigencia')?.value || ''),
+            fiscalContrato: escapeHTML(document.getElementById('fiscalContrato')?.value || ''),
+            contatoFiscal: escapeHTML(document.getElementById('contatoFiscal')?.value || ''),
             valorNotaFiscal: valorVal,
-            dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
-            dataAteste: escapeHTML(document.getElementById('dataAteste').value),
+            dataEmissao: escapeHTML(dataEmissao),
+            dataAteste: escapeHTML(dataAteste),
             observacoes: escapeHTML(document.getElementById('observacoesTC')?.value || ''),
             oiEntregou: oiEntregou || null,
             empenhosVinculados: empenhosDaNotaAtual,
@@ -932,6 +988,10 @@
 
         let novoStatus = statusAtual;
         const npPreenchida = !!dados.np?.trim();
+        const eraNovo = (fbID === '-1' || !fbID);
+        if (eraNovo) {
+            dados.entradaSaida = [{ tipo: 'entrada', data: dataExefin, oiOrigem: oiEntregou }];
+        }
 
         // Descobre qual aba está ativa (0 = Dados básicos / Rascunho)
         const abaAtivaEl = document.querySelector('.tab-tc.ativo');
@@ -1001,38 +1061,29 @@
                 return;
             }
 
+            if (typeof enviandoParaProcessamento !== 'undefined' && enviandoParaProcessamento) {
+                enviandoParaProcessamento = false;
+                try {
+                    const doc = await db.collection('titulos').doc(docId).get();
+                    const hist = (doc.data()?.historicoStatus || []);
+                    hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
+                    await db.collection('titulos').doc(docId).update({
+                        status: 'Em Processamento',
+                        historicoStatus: hist,
+                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("TC enviado para Processamento.");
+                    voltarParaListaTitulos();
+                } catch (err) {
+                    alert("Erro ao enviar: " + (err.message || err));
+                }
+                return;
+            }
+
             if (eraNovo && novoStatus === 'Rascunho') {
                 document.getElementById('editIndexTitulo').value = docId;
-                const idProcMostrar = dados.idProc || docId;
-                const enviar = confirm(
-                    "TC salvo como rascunho. Número: " + idProcMostrar + "\n\n" +
-                    "Deseja ENVIAR para Processamento? (Cancelar = continuar editando)"
-                );
-                if (enviar) {
-                    if (empenhosDaNotaAtual.length === 0) {
-                        alert("Para enviar ao processamento, vincule ao menos um empenho na aba Processamento e salve novamente.");
-                        bloquearTabsPorStatus('Rascunho');
-                        return;
-                    }
-                    mostrarLoading();
-                    try {
-                        const doc = await db.collection('titulos').doc(docId).get();
-                        const hist = (doc.data()?.historicoStatus || []);
-                        hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
-                        await db.collection('titulos').doc(docId).update({
-                            status: 'Em Processamento',
-                            empenhosVinculados: empenhosDaNotaAtual,
-                            historicoStatus: hist,
-                            editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        alert("TC enviado para Processamento.");
-                        voltarParaListaTitulos();
-                    } catch (err) {
-                        alert("Erro ao enviar: " + (err.message || err));
-                    } finally {
-                        esconderLoading();
-                    }
-                }
+                window._modalPrimeiroSalvoDocId = docId;
+                document.getElementById('modalPrimeiroSalvo').style.display = 'flex';
                 return;
             }
             alert("TC salvo com sucesso." + (dados.idProc ? ' Número: ' + dados.idProc : ''));
@@ -1044,39 +1095,155 @@
         }
     });
 
-    document.getElementById('btnDevolver')?.addEventListener('click', async function() {
-        const fbID = document.getElementById('editIndexTitulo').value;
-        if (fbID === '-1') return alert("Salve o TC primeiro.");
-        const motivo = prompt("Motivo da devolução:");
-        if (motivo === null) return;
-        const dataDev = new Date().toISOString().slice(0, 10);
-        const manterDados = confirm("Manter os dados do status atual? (Cancelar = apagar em cascata)");
+    document.getElementById('modalPrimeiroSalvoContinuar')?.addEventListener('click', function() {
+        document.getElementById('modalPrimeiroSalvo').style.display = 'none';
+        atualizarBotoesFormulario('Rascunho', true);
+        window._modalPrimeiroSalvoDocId = null;
+    });
+    document.getElementById('modalPrimeiroSalvoEnviar')?.addEventListener('click', async function() {
+        const docId = window._modalPrimeiroSalvoDocId;
+        document.getElementById('modalPrimeiroSalvo').style.display = 'none';
+        window._modalPrimeiroSalvoDocId = null;
+        if (!docId) return;
         mostrarLoading();
         try {
-            const hist = (baseTitulos.find(x => x.id === fbID)?.historicoStatus || []);
+            const doc = await db.collection('titulos').doc(docId).get();
+            const hist = (doc.data()?.historicoStatus || []);
+            hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
+            await db.collection('titulos').doc(docId).update({
+                status: 'Em Processamento',
+                empenhosVinculados: empenhosDaNotaAtual,
+                historicoStatus: hist,
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            baseTitulos = baseTitulos.map(t => t.id === docId ? { ...t, status: 'Em Processamento' } : t);
+            alert("TC enviado para Processamento.");
+            voltarParaListaTitulos();
+        } catch (err) {
+            alert("Erro ao enviar: " + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
+    });
+
+    document.getElementById('btnEnviarProcessamento')?.addEventListener('click', function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1' || !fbID) return alert("Salve o TC primeiro.");
+        if (!confirm("Salvar alterações da aba Dados Básicos e enviar para Processamento?")) return;
+        enviandoParaProcessamento = true;
+        document.getElementById('formTitulo').requestSubmit();
+    });
+
+    document.getElementById('btnCancelarTitulo')?.addEventListener('click', function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1' || !fbID) {
+            if (document.getElementById('numTC').value || document.getElementById('valorNotaFiscal').value) {
+                if (!confirm("Há dados não salvos. Deseja realmente fechar? As alterações serão perdidas.")) return;
+            }
+        }
+        voltarParaListaTitulos();
+    });
+
+    document.getElementById('btnDevolver')?.addEventListener('click', function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1') return alert("Salve o TC primeiro.");
+        document.getElementById('devolverNome').value = '';
+        document.getElementById('buscaOIDestino').value = '';
+        document.getElementById('oiDestinoId').value = '';
+        document.getElementById('oiDestinoSelecionado').style.display = 'none';
+        document.getElementById('readOIDestino').textContent = '';
+        window._devolverTcId = fbID;
+        document.getElementById('modalDevolver').style.display = 'flex';
+    });
+
+    window.limparOIDestino = function() {
+        document.getElementById('oiDestinoId').value = '';
+        document.getElementById('readOIDestino').textContent = '';
+        document.getElementById('oiDestinoSelecionado').style.display = 'none';
+    };
+
+    document.getElementById('modalDevolverCancelar')?.addEventListener('click', () => {
+        document.getElementById('modalDevolver').style.display = 'none';
+        window._devolverTcId = null;
+    });
+
+    document.getElementById('modalDevolverConfirmar')?.addEventListener('click', async function() {
+        const fbID = window._devolverTcId;
+        const nome = (document.getElementById('devolverNome').value || '').trim();
+        const oiDestinoId = (document.getElementById('oiDestinoId').value || '').trim();
+        if (!oiDestinoId) return alert("Selecione a OI de Destino.");
+        document.getElementById('modalDevolver').style.display = 'none';
+        window._devolverTcId = null;
+        const dataDev = new Date().toISOString().slice(0, 10);
+        mostrarLoading();
+        try {
+            const t = baseTitulos.find(x => x.id === fbID);
+            const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
+            entradaSaida.push({ tipo: 'saida', nome: nome || null, oiDestino: oiDestinoId, dataDevolucao: dataDev });
+            const hist = (t?.historicoStatus || []);
             hist.push({
                 status: 'Devolvido',
-                statusAnterior: baseTitulos.find(x => x.id === fbID)?.status,
+                statusAnterior: t?.status,
                 data: firebase.firestore.Timestamp.now(),
                 usuario: usuarioLogadoEmail || '',
-                motivoDevolucao: motivo,
+                motivoDevolucao: 'Devolvido via formulário',
                 dataDevolucao: dataDev
             });
-            const update = {
+            await db.collection('titulos').doc(fbID).update({
                 status: 'Devolvido',
-                motivoDevolucao: motivo,
-                dataDevolucao: dataDev,
-                historicoStatus: hist
-            };
-            if (!manterDados) {
-                update.np = null;
-                update.dataLiquidacao = null;
-                update.empenhosVinculados = (empenhosDaNotaAtual || []).map(v => ({ ...v, lf: '', pf: '' }));
-            }
-            update.editado_em = firebase.firestore.FieldValue.serverTimestamp();
-            await db.collection('titulos').doc(fbID).update(update);
+                entradaSaida,
+                historicoStatus: hist,
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            });
             alert("TC devolvido.");
             voltarParaListaTitulos();
+        } catch (err) {
+            alert("Erro: " + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
+    });
+
+    document.getElementById('btnDarNovaEntrada')?.addEventListener('click', function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1') return;
+        document.getElementById('novaEntradaData').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('novaEntradaOI').value = '';
+        document.getElementById('novaEntradaOIId').value = '';
+        window._novaEntradaTcId = fbID;
+        document.getElementById('modalNovaEntrada').style.display = 'flex';
+    });
+
+    document.getElementById('modalNovaEntradaCancelar')?.addEventListener('click', () => {
+        document.getElementById('modalNovaEntrada').style.display = 'none';
+        window._novaEntradaTcId = null;
+    });
+
+    document.getElementById('modalNovaEntradaConfirmar')?.addEventListener('click', async function() {
+        const fbID = window._novaEntradaTcId;
+        const dataEntrada = (document.getElementById('novaEntradaData').value || '').trim();
+        const oiOrigemId = (document.getElementById('novaEntradaOIId').value || '').trim();
+        if (!dataEntrada) return alert("Informe a data de entrada.");
+        if (!oiOrigemId) return alert("Selecione a OI de Origem.");
+        document.getElementById('modalNovaEntrada').style.display = 'none';
+        window._novaEntradaTcId = null;
+        mostrarLoading();
+        try {
+            const t = baseTitulos.find(x => x.id === fbID);
+            const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
+            entradaSaida.push({ tipo: 'entrada', data: dataEntrada, oiOrigem: oiOrigemId });
+            const hist = (t?.historicoStatus || []);
+            hist.push({ status: 'Rascunho', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
+            await db.collection('titulos').doc(fbID).update({
+                status: 'Rascunho',
+                dataExefin: dataEntrada,
+                oiEntregou: oiOrigemId,
+                entradaSaida,
+                historicoStatus: hist,
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("Nova entrada registrada. TC em Rascunho.");
+            editarTitulo(fbID);
         } catch (err) {
             alert("Erro: " + (err.message || err));
         } finally {
@@ -1389,16 +1556,14 @@
         salvandoApenasAbaDadosBasicos = true;
         document.getElementById('formTitulo')?.requestSubmit();
     });
-    document.getElementById('btnCancelarTitulo')?.addEventListener('click', function() {
-        if (confirm('Deseja sair? As alterações não salvas serão perdidas.')) {
-            voltarParaListaTitulos();
-        }
-    });
 
     function ligarEventos() {
         configurarAutocompleteOI();
-        configurarAutocompleteContrato();
+        configurarAutocompleteFornecedor();
+        configurarSelectContrato();
         configurarAutocompleteEmpenho();
+        configurarAutocompleteOIGenerico('buscaOIDestino', 'listaResultadosOIDestino', 'oiDestinoId', 'oiDestinoSelecionado', 'readOIDestino');
+        configurarAutocompleteOIGenerico('novaEntradaOI', 'listaResultadosNovaEntradaOI', 'novaEntradaOIId', null, null);
     }
 
     window.atualizarTabelaTitulos = atualizarTabelaTitulos;
@@ -1407,7 +1572,8 @@
 
     if (document.getElementById('buscaOIT') && typeof debounce === 'function') {
         configurarAutocompleteOI();
-        configurarAutocompleteContrato();
+        configurarAutocompleteFornecedor();
+        configurarSelectContrato();
         configurarAutocompleteEmpenho();
     }
 })();

@@ -83,7 +83,7 @@ button { font-size: 14px; border-radius: 3px; cursor: pointer; transition: 0.2s;
 
 /* Formulários */
 .form-group { margin-bottom: 15px; }
-.form-row { display: flex; gap: 15px; }
+.form-row { display: flex; gap: 15px; flex-wrap: wrap; }
 .flex-1 { flex: 1; }
 .flex-2 { flex: 2; }
 label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; font-size: 13px;}
