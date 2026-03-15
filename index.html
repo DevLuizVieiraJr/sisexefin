@@ -193,7 +193,7 @@
 
         function iniciarWatcherInatividadeIndex() {
             if (!auth.currentUser) return;
-            const INATIVIDADE_MS = 15 * 60 * 1000;
+            const INATIVIDADE_MS = 30 * 60 * 1000; // 30 minutos
             const AVISO_MS = 2 * 60 * 1000;
             let timerPrincipal = null, timerAviso = null, modalEl = null;
 

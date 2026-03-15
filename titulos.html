@@ -42,6 +42,10 @@
         .tabela-ne-inputs input { width: 100%; padding: 6px; font-size: 12px; }
         .check-tc { width: 20px; height: 20px; }
         .btn-modelo-csv { font-size: 11px; padding: 4px 8px; color: #337ab7; }
+        .input-com-clear { display: flex; align-items: center; gap: 4px; }
+        .input-com-clear input { flex: 1; }
+        .btn-clear-input { flex-shrink: 0; width: 28px; height: 34px; padding: 0; font-size: 18px; line-height: 1; color: #777; background: #eee; border: 1px solid #d2d6de; border-radius: 0; cursor: pointer; }
+        .btn-clear-input:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
     </style>
 </head>
 <body style="display: none;" id="corpo-titulos">
@@ -155,10 +159,12 @@
                         <div class="form-row">
                             <div class="form-group flex-1" style="position: relative;">
                                 <label>OI de Origem:</label>
-                                <input type="text" id="buscaOIT" placeholder="Digite 2+ caracteres para buscar..." autocomplete="off">
+                                <div class="input-com-clear">
+                                    <input type="text" id="buscaOIT" placeholder="Digite 2+ caracteres para buscar..." autocomplete="off">
+                                    <button type="button" id="limparOIBtn" class="btn-clear-input" onclick="limparOISelecionada()" style="display:none;">×</button>
+                                </div>
                                 <input type="hidden" id="oiEntregou">
                                 <ul id="listaResultadosOIT" class="autocomplete-list"></ul>
-                                <div id="dadosOISelecionado" style="display: none; background: #f9f9f9; padding: 8px; margin-top: 6px;"><span id="readOISelecionada"></span> <button type="button" class="btn-outline btn-small" onclick="limparOISelecionada()">Limpar</button></div>
                             </div>
                             <div class="form-group flex-1"><label>Nº do TC:</label><input type="text" id="numTC" maxlength="50" required></div>
                             <div class="form-group flex-1"><label>Valor (R$):</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda required></div>
@@ -171,9 +177,11 @@
                             <div class="form-row">
                                 <div class="form-group flex-1" style="position: relative;">
                                     <label>Fornecedor:</label>
-                                    <input type="text" id="buscaFornecedorT" placeholder="Digite 2+ caracteres para buscar fornecedor..." autocomplete="off">
+                                    <div class="input-com-clear">
+                                        <input type="text" id="buscaFornecedorT" placeholder="Digite 2+ caracteres para buscar fornecedor..." autocomplete="off">
+                                        <button type="button" id="limparFornecedorBtn" class="btn-clear-input" onclick="limparFornecedorSelecionado()" style="display:none;">×</button>
+                                    </div>
                                     <ul id="listaResultadosFornecedorT" class="autocomplete-list"></ul>
-                                    <div id="fornecedorSelecionado" style="display: none; background: #f9f9f9; padding: 8px; margin-top: 6px;"><span id="readFornecedor"></span> <button type="button" class="btn-outline btn-small" onclick="limparFornecedorSelecionado()">Limpar</button></div>
                                 </div>
                                 <div class="form-group flex-1">
                                     <label>Contrato (Instrumento):</label>
@@ -296,10 +304,12 @@
             <div class="form-group"><label>Nome do Recebedor (opcional):</label><input type="text" id="devolverNome" placeholder="Nome de quem recebeu"></div>
             <div class="form-group" style="position:relative;">
                 <label>OI de Destino:</label>
-                <input type="text" id="buscaOIDestino" placeholder="Digite para buscar OI..." autocomplete="off">
+                <div class="input-com-clear">
+                    <input type="text" id="buscaOIDestino" placeholder="Digite para buscar OI..." autocomplete="off">
+                    <button type="button" id="limparOIDestinoBtn" class="btn-clear-input" onclick="limparOIDestino()" style="display:none;">×</button>
+                </div>
                 <ul id="listaResultadosOIDestino" class="autocomplete-list"></ul>
                 <input type="hidden" id="oiDestinoId">
-                <div id="oiDestinoSelecionado" style="display:none; margin-top:6px; padding:6px; background:#f9f9f9; font-size:13px;"><span id="readOIDestino"></span> <button type="button" class="btn-outline btn-small" onclick="limparOIDestino()">Limpar</button></div>
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalDevolverCancelar" class="btn-default">Cancelar</button>
@@ -316,7 +326,10 @@
             <div class="form-group"><label>Data de entrada:</label><input type="date" id="novaEntradaData" required></div>
             <div class="form-group" style="position:relative;">
                 <label>OI de Origem:</label>
-                <input type="text" id="novaEntradaOI" placeholder="Digite para buscar OI..." autocomplete="off">
+                <div class="input-com-clear">
+                    <input type="text" id="novaEntradaOI" placeholder="Digite para buscar OI..." autocomplete="off">
+                    <button type="button" id="limparNovaEntradaOIBtn" class="btn-clear-input" onclick="limparNovaEntradaOI()" style="display:none;">×</button>
+                </div>
                 <ul id="listaResultadosNovaEntradaOI" class="autocomplete-list"></ul>
                 <input type="hidden" id="novaEntradaOIId">
             </div>

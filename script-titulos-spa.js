@@ -165,15 +165,15 @@
     window.limparOISelecionada = function() {
         document.getElementById('oiEntregou').value = '';
         const el = document.getElementById('buscaOIT');
-        if (el) el.value = '';
-        const d = document.getElementById('dadosOISelecionado');
-        if (d) d.style.display = 'none';
+        if (el) { el.value = ''; el.readOnly = false; }
+        const btn = document.getElementById('limparOIBtn');
+        if (btn) btn.style.display = 'none';
     };
 
     function mostrarSugestoesOI() {
         const inputBuscaOIT = document.getElementById('buscaOIT');
         const listaOIT = document.getElementById('listaResultadosOIT');
-        if (!inputBuscaOIT || !listaOIT) return;
+        if (!inputBuscaOIT || !listaOIT || inputBuscaOIT.readOnly) return;
         const texto = (inputBuscaOIT.value || '').trim().toLowerCase();
         const textoSemAcento = removerAcentos(texto);
         listaOIT.innerHTML = '';
@@ -193,14 +193,12 @@
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     document.getElementById('oiEntregou').value = o.id;
-                    inputBuscaOIT.value = '';
+                    const texto = (o.numeroOI || '-') + ' - ' + (o.nomeOI || '-');
+                    inputBuscaOIT.value = texto;
+                    inputBuscaOIT.readOnly = true;
                     listaOIT.innerHTML = '';
-                    const divDados = document.getElementById('dadosOISelecionado');
-                    const spanRead = document.getElementById('readOISelecionada');
-                    if (divDados && spanRead) {
-                        spanRead.textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
-                        divDados.style.display = 'block';
-                    }
+                    const btn = document.getElementById('limparOIBtn');
+                    if (btn) btn.style.display = 'block';
                 });
                 listaOIT.appendChild(li);
             });
@@ -212,16 +210,18 @@
         if (!inputBuscaOIT || !listaOIT || inputBuscaOIT.dataset.autocompleteBound === '1') return;
         inputBuscaOIT.dataset.autocompleteBound = '1';
         inputBuscaOIT.addEventListener('input', debounce(mostrarSugestoesOI, 300));
-        inputBuscaOIT.addEventListener('focus', function() { if ((this.value || '').trim().length >= 2) mostrarSugestoesOI(); });
+        inputBuscaOIT.addEventListener('focus', function() { if (!this.readOnly && (this.value || '').trim().length >= 2) mostrarSugestoesOI(); });
         inputBuscaOIT.addEventListener('blur', () => { setTimeout(() => { if (listaOIT) listaOIT.innerHTML = ''; }, 200); });
     }
 
-    function configurarAutocompleteOIGenerico(inputId, listaId, hiddenId, displayDivId, displaySpanId) {
+    function configurarAutocompleteOIGenerico(inputId, listaId, hiddenId, clearBtnId) {
         const input = document.getElementById(inputId);
         const lista = document.getElementById(listaId);
+        const clearBtn = clearBtnId ? document.getElementById(clearBtnId) : null;
         if (!input || !lista || input.dataset.autocompleteBound === '1') return;
         input.dataset.autocompleteBound = '1';
         const mostrar = () => {
+            if (input.readOnly) return;
             const texto = (input.value || '').trim().toLowerCase();
             const textoSemAcento = removerAcentos(texto);
             lista.innerHTML = '';
@@ -237,17 +237,16 @@
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     document.getElementById(hiddenId).value = o.id;
-                    input.value = '';
+                    input.value = (o.numeroOI || '-') + ' - ' + (o.nomeOI || '-');
+                    input.readOnly = true;
                     lista.innerHTML = '';
-                    const div = displayDivId ? document.getElementById(displayDivId) : null;
-                    const span = displaySpanId ? document.getElementById(displaySpanId) : null;
-                    if (div && span) { span.textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || ''); div.style.display = 'block'; }
+                    if (clearBtn) clearBtn.style.display = 'block';
                 });
                 lista.appendChild(li);
             });
         };
         input.addEventListener('input', debounce(mostrar, 300));
-        input.addEventListener('focus', function() { if ((this.value || '').trim().length >= 2) mostrar(); });
+        input.addEventListener('focus', function() { if (!this.readOnly && (this.value || '').trim().length >= 2) mostrar(); });
         input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
     }
 
@@ -449,8 +448,7 @@
         document.getElementById('anoTC').value = '2026';
         document.getElementById('ugTC').value = '741000';
         document.getElementById('tipoTC').value = 'NF';
-        document.getElementById('fornecedorSelecionado').style.display = 'none';
-        document.getElementById('dadosOISelecionado').style.display = 'none';
+        limparOISelecionada();
         document.getElementById('oiEntregou').value = '';
         document.getElementById('fornecedorValor').value = '';
         document.getElementById('contratoIdSelecionado').value = '';
@@ -485,10 +483,10 @@
             const el = document.getElementById(id);
             if (el) el.disabled = !habilitado;
         });
-        const limparOI = document.querySelector('#dadosOISelecionado button');
-        if (limparOI) limparOI.disabled = !habilitado;
-        const limparForn = document.querySelector('#fornecedorSelecionado button');
-        if (limparForn) limparForn.disabled = !habilitado;
+        const limparOIBtn = document.getElementById('limparOIBtn');
+        if (limparOIBtn) limparOIBtn.disabled = !habilitado;
+        const limparFornecedorBtn = document.getElementById('limparFornecedorBtn');
+        if (limparFornecedorBtn) limparFornecedorBtn.disabled = !habilitado;
     }
 
     /** Exibe/oculta botões Editar Aba e Salvar Aba na aba Dados Básicos (apenas quando TC já salvo). */
@@ -629,7 +627,7 @@
     function mostrarSugestoesFornecedor() {
         const input = document.getElementById('buscaFornecedorT');
         const lista = document.getElementById('listaResultadosFornecedorT');
-        if (!input || !lista) return;
+        if (!input || !lista || input.readOnly) return;
         const texto = (input.value || '').trim().toLowerCase();
         const textoSemAcento = removerAcentos(texto);
         lista.innerHTML = '';
@@ -654,10 +652,10 @@
 
     function selecionarFornecedor(fornecedor) {
         document.getElementById('fornecedorValor').value = fornecedor || '';
-        const span = document.getElementById('readFornecedor');
-        if (span) span.textContent = fornecedor || '';
-        const div = document.getElementById('fornecedorSelecionado');
-        if (div) div.style.display = fornecedor ? 'block' : 'none';
+        const input = document.getElementById('buscaFornecedorT');
+        if (input) { input.value = fornecedor || ''; input.readOnly = true; }
+        const btn = document.getElementById('limparFornecedorBtn');
+        if (btn) btn.style.display = fornecedor ? 'block' : 'none';
         document.getElementById('contratoIdSelecionado').value = '';
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
@@ -678,9 +676,10 @@
 
     window.limparFornecedorSelecionado = function() {
         document.getElementById('fornecedorValor').value = '';
-        const span = document.getElementById('readFornecedor');
-        if (span) span.textContent = '';
-        document.getElementById('fornecedorSelecionado').style.display = 'none';
+        const input = document.getElementById('buscaFornecedorT');
+        if (input) { input.value = ''; input.readOnly = false; }
+        const btn = document.getElementById('limparFornecedorBtn');
+        if (btn) btn.style.display = 'none';
         document.getElementById('contratoIdSelecionado').value = '';
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
@@ -752,7 +751,7 @@
         if (!input || !lista || input.dataset.autocompleteBound === '1') return;
         input.dataset.autocompleteBound = '1';
         input.addEventListener('input', debounce(mostrarSugestoesFornecedor, 300));
-        input.addEventListener('focus', function() { if ((this.value || '').trim().length >= 2) mostrarSugestoesFornecedor(); });
+        input.addEventListener('focus', function() { if (!this.readOnly && (this.value || '').trim().length >= 2) mostrarSugestoesFornecedor(); });
         input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
     }
 
@@ -861,8 +860,11 @@
         if (t.oiEntregou) {
             const o = listaOI.find(x => x.id === t.oiEntregou);
             if (o) {
-                document.getElementById('readOISelecionada').textContent = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
-                document.getElementById('dadosOISelecionado').style.display = 'block';
+                const txt = (o.numeroOI || '') + ' - ' + (o.nomeOI || '');
+                const elOI = document.getElementById('buscaOIT');
+                if (elOI) { elOI.value = txt; elOI.readOnly = true; }
+                const btnOI = document.getElementById('limparOIBtn');
+                if (btnOI) btnOI.style.display = 'block';
             }
         }
         document.getElementById('np').value = t.np || '';
@@ -928,7 +930,7 @@
 
         const dataExefin = (document.getElementById('dataExefin').value || '').trim();
         const numTC = (document.getElementById('numTC').value || '').trim();
-        const fornecedor = (document.getElementById('fornecedorValor').value || document.getElementById('readFornecedor')?.textContent || '').trim();
+        const fornecedor = (document.getElementById('fornecedorValor').value || document.getElementById('buscaFornecedorT')?.value || '').trim();
         const contratoId = document.getElementById('contratoIdSelecionado').value || '';
         const contratoSel = baseContratos.find(c => c.id === contratoId);
         const instrumento = contratoSel ? (contratoSel.numContrato || contratoSel.instrumento || '') : '';
@@ -1148,18 +1150,25 @@
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1') return alert("Salve o TC primeiro.");
         document.getElementById('devolverNome').value = '';
-        document.getElementById('buscaOIDestino').value = '';
-        document.getElementById('oiDestinoId').value = '';
-        document.getElementById('oiDestinoSelecionado').style.display = 'none';
-        document.getElementById('readOIDestino').textContent = '';
+        limparOIDestino();
         window._devolverTcId = fbID;
         document.getElementById('modalDevolver').style.display = 'flex';
     });
 
     window.limparOIDestino = function() {
         document.getElementById('oiDestinoId').value = '';
-        document.getElementById('readOIDestino').textContent = '';
-        document.getElementById('oiDestinoSelecionado').style.display = 'none';
+        const input = document.getElementById('buscaOIDestino');
+        if (input) { input.value = ''; input.readOnly = false; }
+        const btn = document.getElementById('limparOIDestinoBtn');
+        if (btn) btn.style.display = 'none';
+    };
+
+    window.limparNovaEntradaOI = function() {
+        document.getElementById('novaEntradaOIId').value = '';
+        const input = document.getElementById('novaEntradaOI');
+        if (input) { input.value = ''; input.readOnly = false; }
+        const btn = document.getElementById('limparNovaEntradaOIBtn');
+        if (btn) btn.style.display = 'none';
     };
 
     document.getElementById('modalDevolverCancelar')?.addEventListener('click', () => {
@@ -1208,8 +1217,7 @@
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1') return;
         document.getElementById('novaEntradaData').value = new Date().toISOString().slice(0, 10);
-        document.getElementById('novaEntradaOI').value = '';
-        document.getElementById('novaEntradaOIId').value = '';
+        limparNovaEntradaOI();
         window._novaEntradaTcId = fbID;
         document.getElementById('modalNovaEntrada').style.display = 'flex';
     });
@@ -1562,8 +1570,8 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarAutocompleteEmpenho();
-        configurarAutocompleteOIGenerico('buscaOIDestino', 'listaResultadosOIDestino', 'oiDestinoId', 'oiDestinoSelecionado', 'readOIDestino');
-        configurarAutocompleteOIGenerico('novaEntradaOI', 'listaResultadosNovaEntradaOI', 'novaEntradaOIId', null, null);
+        configurarAutocompleteOIGenerico('buscaOIDestino', 'listaResultadosOIDestino', 'oiDestinoId', 'limparOIDestinoBtn');
+        configurarAutocompleteOIGenerico('novaEntradaOI', 'listaResultadosNovaEntradaOI', 'novaEntradaOIId', 'limparNovaEntradaOIBtn');
     }
 
     window.atualizarTabelaTitulos = atualizarTabelaTitulos;

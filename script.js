@@ -318,9 +318,9 @@ auth.onAuthStateChanged(async (user) => {
 function fazerLogout() { auth.signOut(); }
 
 // ==========================================
-// TIMEOUT POR INATIVIDADE (15 min + aviso 2 min)
+// TIMEOUT POR INATIVIDADE (30 min + aviso 2 min)
 // ==========================================
-const INATIVIDADE_MS = 15 * 60 * 1000;
+const INATIVIDADE_MS = 30 * 60 * 1000; // 30 minutos
 const AVISO_MS = 2 * 60 * 1000;
 
 function iniciarWatcherInatividade() {
