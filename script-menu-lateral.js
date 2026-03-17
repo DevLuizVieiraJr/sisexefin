@@ -24,11 +24,12 @@
         <li>
             <button type="button" class="menu-section-toggle" data-toggle="tabelas" title="Clique para expandir/recolher">Tabelas de Apoio <span class="menu-section-chevron">▼</span></button>
             <ul class="menu-subgroup" id="sub-tabelas">
-                <li data-permission="empenhos_ler"><a href="sistema.html?secao=empenhos" class="menu-btn menu-link-externo" style="width:100%;" title="Nota de Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></a></li>
-                <li data-permission="lf_ler"><a href="sistema.html?secao=lf" class="menu-btn menu-link-externo" style="width:100%;" title="Controle de LF x PF"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Controle de LF x PF</span></a></li>
-                <li data-permission="op_ler"><a href="sistema.html?secao=op" class="menu-btn menu-link-externo" style="width:100%;" title="Controle de OP x OB"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Controle de OP x OB</span></a></li>
-                <li data-permission="darf_ler"><a href="sistema.html?secao=darf" class="menu-btn menu-link-externo" style="width:100%;" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></a></li>
-                <li data-permission="contratos_ler"><a href="sistema.html?secao=contratos" class="menu-btn menu-link-externo" style="width:100%;" title="Gestão de Contratos"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos</span></a></li>
+                <li data-permission="empenhos_ler"><a href="sistema.html?secao=empenhos" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="empenhos" style="width:100%;" title="Nota de Empenho"><span class="menu-btn-icon">📄</span><span class="menu-btn-text">Nota de Empenho (NE)</span></a></li>
+                <li data-permission="lf_ler"><a href="sistema.html?secao=lf" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="lf" style="width:100%;" title="Controle de LF x PF"><span class="menu-btn-icon">💰</span><span class="menu-btn-text">Controle de LF x PF</span></a></li>
+                <li data-permission="op_ler"><a href="sistema.html?secao=op" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="op" style="width:100%;" title="Controle de OP x OB"><span class="menu-btn-icon">💳</span><span class="menu-btn-text">Controle de OP x OB</span></a></li>
+                <li data-permission="darf_ler"><a href="sistema.html?secao=darf" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="darf" style="width:100%;" title="DARF"><span class="menu-btn-icon">📊</span><span class="menu-btn-text">DARF</span></a></li>
+                <li data-permission="contratos_ler"><a href="sistema.html?secao=contratos" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="contratos" style="width:100%;" title="Gestão de Contratos"><span class="menu-btn-icon">🤝</span><span class="menu-btn-text">Contratos</span></a></li>
+                <li data-permission="backup_ler"><a href="sistema.html?secao=backup" class="menu-btn menu-link-externo menu-secao-sistema" data-secao="backup" style="width:100%;" title="Backup dos dados"><span class="menu-btn-icon">💾</span><span class="menu-btn-text">Backup</span></a></li>
             </ul>
         </li>
         <li>
@@ -71,6 +72,22 @@
             const secao = ativo === 'sistema' ? (new URLSearchParams(window.location.search).get('secao') || 'empenhos') : ativo;
             const linkSecao = ul.querySelector('a[href*="secao=' + secao + '"]');
             if (linkSecao) linkSecao.classList.add('ativo');
+        }
+        // Navegação in-page: em sistema.html, evitar reload ao trocar seção (otimização Firebase)
+        const corpoSistema = document.getElementById('corpo-sistema');
+        if (corpoSistema) {
+            ul.addEventListener('click', function(e) {
+                const link = e.target.closest('a.menu-secao-sistema');
+                if (!link) return;
+                const secao = link.getAttribute('data-secao');
+                if (!secao) return;
+                e.preventDefault();
+                const idSecao = 'secao-' + secao;
+                const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', darf: 'darf_ler', contratos: 'contratos_ler', backup: 'backup_ler' };
+                if (typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
+                if (typeof mostrarSecao === 'function') mostrarSecao(idSecao, link);
+                if (typeof history.pushState === 'function') history.pushState({}, '', 'sistema.html?secao=' + secao);
+            });
         }
     }
 

@@ -24,8 +24,9 @@
         .stepper-tc .ativo { background: #337ab7; color: white; border-color: #2c6ba0; }
         .stepper-tc .concluido { background: #27ae60; color: white; }
         .stepper-tc .bloqueado { background: #ddd; color: #777; }
-        .tabs-tc { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
-        .tab-tc { padding: 12px 20px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; }
+        .titulo-form-tc { margin: 0; font-size: 1.05rem; font-weight: 600; color: #333; }
+        .tabs-tc { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 16px; }
+        .tab-tc { padding: 8px 14px; font-size: 13px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; }
         .tab-tc:hover:not(.bloqueado) { background: #eee; color: #333; }
         .tab-tc.ativo { background: #337ab7; color: white; margin-bottom: -2px; border-bottom: 2px solid #337ab7; border-color: #337ab7; font-weight: bold; box-shadow: 0 -2px 4px rgba(0,0,0,0.1); }
         .tab-tc.bloqueado { cursor: not-allowed; opacity: 0.6; color: #999; }
@@ -130,9 +131,8 @@
             </div>
 
             <div id="tela-formulario-titulos" style="display: none;" class="card">
-                <div style="margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
-                    <div class="stepper-tc" id="stepperTC"></div>
-                    <h2 style="margin: 10px 0 0 0;"><span id="tituloFormTC">Entrada de Título de Crédito</span></h2>
+                <div style="margin-bottom: 18px; border-bottom: 2px solid #eee; padding-bottom: 12px;">
+                    <h2 class="titulo-form-tc"><span id="tituloFormTC">Entrada de Título de Crédito</span></h2>
                 </div>
 
                 <div class="tabs-tc" id="tabsTC">
