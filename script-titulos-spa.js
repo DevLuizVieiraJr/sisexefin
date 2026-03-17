@@ -19,6 +19,8 @@
     let baseContratos = [];
     let baseEmpenhos = [];
     let listaOI = [];
+    let listaCentroCustos = [];
+    let listaUG = [];
     let statusFiltroAtual = null;
     let titulosSelecionados = new Set();
     let empenhosDaNotaAtual = [];
@@ -46,7 +48,7 @@
         mostrarLoading();
         let carregamentoFinalizado = false;
         let carregados = 0;
-        const TOTAL_COLECOES = 4;
+        const TOTAL_COLECOES = 6;
         const TIMEOUT_MS = 10000;
 
         const finalizarCarregamento = () => {
@@ -99,6 +101,16 @@
             popularSelectOI();
             aoReceberSnapshot();
         }, onErr);
+        db.collection('centroCustos').onSnapshot(snap => {
+            listaCentroCustos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            popularSelectCentroCustos();
+            aoReceberSnapshot();
+        }, onErr);
+        db.collection('unidadesGestoras').onSnapshot(snap => {
+            listaUG = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            popularSelectUG();
+            aoReceberSnapshot();
+        }, onErr);
 
         const urlParams = new URLSearchParams(window.location.search);
         const st = urlParams.get('status');
@@ -109,6 +121,34 @@
     window.inicializarTitulosSPA = inicializarTitulosSPA;
 
     function popularSelectOI() { /* OI agora é autocomplete; mantido para compatibilidade */ }
+
+    function popularSelectCentroCustos() {
+        const sel = document.getElementById('vinculoCentroCustos');
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        (listaCentroCustos || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = (c.codigo || '-') + ' - ' + (c.descricao || c.aplicacao || '-');
+            sel.appendChild(opt);
+        });
+        if (val) sel.value = val;
+    }
+
+    function popularSelectUG() {
+        const sel = document.getElementById('vinculoUG');
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        (listaUG || []).forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = (u.codigo || '-') + ' - ' + (u.nome || '-');
+            sel.appendChild(opt);
+        });
+        if (val) sel.value = val;
+    }
 
     function removerAcentos(str) {
         if (!str) return '';
@@ -560,14 +600,29 @@
         });
     });
 
+    function labelCentroCustos(id) {
+        if (!id) return '-';
+        const c = (listaCentroCustos || []).find(x => x.id === id);
+        return c ? (c.codigo || '-') + ' - ' + (c.descricao || c.aplicacao || '') : id;
+    }
+    function labelUG(id) {
+        if (!id) return '-';
+        const u = (listaUG || []).find(x => x.id === id);
+        return u ? (u.codigo || '-') + ' - ' + (u.nome || '') : id;
+    }
+
     function desenharEmpenhosNota() {
         const tbody = document.getElementById('tbodyEmpenhosNota');
         if (!tbody) return;
         tbody.innerHTML = '';
         empenhosDaNotaAtual.forEach((v, i) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td title="NE: ${escapeHTML(v.numEmpenho || '')} | PTRES: ${escapeHTML(v.ptres || '-')} | FR: ${escapeHTML(v.fr || '-')} | ND: ${escapeHTML(v.nd || '-')}">${escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-'))}</td>
+            tr.innerHTML = `<td title="NE: ${escapeHTML(v.numEmpenho || '')} | PTRES: ${escapeHTML(v.ptres || '-')} | FR: ${escapeHTML(v.fr || '-')}">${escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-'))}</td>
+                <td>${escapeHTML(v.nd || '-')}</td>
+                <td>${escapeHTML(v.subelemento || '-')}</td>
                 <td>R$ ${escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0'))}</td>
+                <td title="${escapeHTML(labelCentroCustos(v.centroCustosId))}">${escapeHTML((labelCentroCustos(v.centroCustosId) || '-').substring(0, 25))}${(labelCentroCustos(v.centroCustosId) || '').length > 25 ? '...' : ''}</td>
+                <td title="${escapeHTML(labelUG(v.ugId))}">${escapeHTML((labelUG(v.ugId) || '-').substring(0, 25))}${(labelUG(v.ugId) || '').length > 25 ? '...' : ''}</td>
                 <td><input type="text" data-index="${i}" data-field="lf" value="${escapeHTML(v.lf || '')}" placeholder="LF"></td>
                 <td><input type="text" data-index="${i}" data-field="pf" value="${escapeHTML(v.pf || '')}" placeholder="PF"></td>
                 <td><button type="button" class="btn-icon btn-rm-ne" data-index="${i}">🗑️</button></td>`;
@@ -788,6 +843,16 @@
                     empenhoTemporarioSelecionado = e;
                     document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
                     document.getElementById('empenhoSelecionadoTexto').textContent = 'NE: ' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : numNE);
+                    const ndEl = document.getElementById('vinculoND');
+                    if (ndEl) ndEl.value = e.nd || '';
+                    document.getElementById('vinculoSubelemento').value = '';
+                    document.getElementById('vinculoValor').value = '';
+                    const cc = document.getElementById('vinculoCentroCustos');
+                    if (cc) cc.value = '';
+                    const ug = document.getElementById('vinculoUG');
+                    if (ug) ug.value = '';
+                    document.getElementById('vinculoLF').value = '';
+                    document.getElementById('vinculoPF').value = '';
                     listaEmpenhosT.innerHTML = '';
                     inputBuscaEmpenhoT.value = '';
                 });
@@ -806,16 +871,29 @@
     }
 
     window.adicionarEmpenhoNaNota = function() {
+        if (!empenhoTemporarioSelecionado) return alert("Selecione uma NE na busca.");
+        const nd = (document.getElementById('vinculoND')?.value || '').trim();
+        const subelemento = (document.getElementById('vinculoSubelemento')?.value || '').trim();
         const valorInput = document.getElementById('vinculoValor')?.value;
-        if (!valorInput || !empenhoTemporarioSelecionado) return alert("Defina o valor a vincular!");
-        const valorNum = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorInput) : (parseFloat(valorInput) || 0);
-        if (valorNum <= 0) return alert("Informe um valor válido!");
+        const centroCustosId = (document.getElementById('vinculoCentroCustos')?.value || '').trim();
+        const ugId = (document.getElementById('vinculoUG')?.value || '').trim();
+        if (!/^\d{2}$/.test(subelemento)) return alert("Subelemento deve ter exatamente 2 dígitos numéricos.");
+        if (!valorInput) return alert("Informe o valor utilizado.");
+        const valorNum = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorInput) : (parseFloat(String(valorInput).replace(/\./g,'').replace(',','.')) || 0);
+        if (valorNum < 0.01) return alert("Valor utilizado deve ser no mínimo R$ 0,01.");
+        const valorTC = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal')?.value) : (parseFloat(document.getElementById('valorNotaFiscal')?.value) || 0);
+        if (valorTC > 0 && valorNum > valorTC) return alert("Valor utilizado não pode ser maior que o valor do TC (R$ " + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorTC) : valorTC.toFixed(2)) + ").");
+        if (!centroCustosId) return alert("Selecione o Centro de Custos.");
+        if (!ugId) return alert("Selecione a UG Beneficiária.");
         empenhosDaNotaAtual.push({
             numEmpenho: empenhoTemporarioSelecionado.numEmpenho || empenhoTemporarioSelecionado.numNE,
             ptres: empenhoTemporarioSelecionado.ptres || '',
             fr: empenhoTemporarioSelecionado.fr || '',
-            nd: empenhoTemporarioSelecionado.nd || '',
+            nd: nd || empenhoTemporarioSelecionado.nd || '',
+            subelemento: subelemento,
             valorVinculado: valorNum,
+            centroCustosId: centroCustosId,
+            ugId: ugId,
             lf: document.getElementById('vinculoLF')?.value || '',
             pf: document.getElementById('vinculoPF')?.value || ''
         });
@@ -1149,6 +1227,7 @@
     document.getElementById('btnDevolver')?.addEventListener('click', function() {
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1') return alert("Salve o TC primeiro.");
+        document.getElementById('devolverMotivo').value = '';
         document.getElementById('devolverNome').value = '';
         limparOIDestino();
         window._devolverTcId = fbID;
@@ -1178,8 +1257,10 @@
 
     document.getElementById('modalDevolverConfirmar')?.addEventListener('click', async function() {
         const fbID = window._devolverTcId;
+        const motivo = (document.getElementById('devolverMotivo').value || '').trim();
         const nome = (document.getElementById('devolverNome').value || '').trim();
         const oiDestinoId = (document.getElementById('oiDestinoId').value || '').trim();
+        if (!motivo) return alert("Informe o motivo da devolução (obrigatório).");
         if (!oiDestinoId) return alert("Selecione a OI de Destino.");
         document.getElementById('modalDevolver').style.display = 'none';
         window._devolverTcId = null;
@@ -1195,7 +1276,7 @@
                 statusAnterior: t?.status,
                 data: firebase.firestore.Timestamp.now(),
                 usuario: usuarioLogadoEmail || '',
-                motivoDevolucao: 'Devolvido via formulário',
+                motivoDevolucao: motivo,
                 dataDevolucao: dataDev
             });
             await db.collection('titulos').doc(fbID).update({
@@ -1376,8 +1457,8 @@
         linha(`OP: ${t.op || '-'}`, 10, y); y += 5;
         y += 3;
 
-        // Bloco Auditoria
-        addTituloSecao('Trilha de Auditoria');
+        // Bloco Histórico
+        addTituloSecao('Histórico');
         (t.historicoStatus || []).forEach(h => {
             const dataHist = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : (h.data || '-');
             linha(`Data: ${dataHist} | Status: ${h.status || h.statusNovo || '-'} | Usuário: ${h.usuario || '-'}`, 10, y);

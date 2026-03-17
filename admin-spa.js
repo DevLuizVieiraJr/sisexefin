@@ -16,6 +16,8 @@
         { modulo: 'usuarios', label: 'Admin - Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'perfis', label: 'Admin - Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'oi', label: 'Admin - OI', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
+        { modulo: 'centrocustos', label: 'Centro de Custos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'ug', label: 'Unidade Gestora (UG)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'backup', label: 'Backup Global', acoes: ['ler'] }
     ];
 

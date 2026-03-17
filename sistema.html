@@ -533,6 +533,110 @@
                 </div>
             </section>
 
+            <section id="secao-centrocustos" class="secao" data-permission="centrocustos_ler" style="display: none;">
+                <div id="tela-lista-centrocustos" class="card">
+                    <div class="header-lista">
+                        <h2>Centro de Custos</h2>
+                        <button onclick="abrirFormularioCentroCustos(false)" class="btn-primary" data-permission="centrocustos_inserir">+ Adicionar Centro de Custos</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaCentroCustos" onchange="mudarTamanhoPaginaCentroCustos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaCentroCustos" placeholder="Pesquisar código, aplicação ou descrição..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaCentroCustos" class="tabela-gov tabela-empenhos-compact">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'codigo')">Código <span class="sort-icon" id="sort-centrocustos-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'aplicacao')">Aplicação <span class="sort-icon" id="sort-centrocustos-aplicacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'descricao')">Descrição <span class="sort-icon" id="sort-centrocustos-descricao"></span></th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-centrocustos"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoCentroCustos" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaCentroCustos('primeiro')" id="btnPrimeiroCentroCustos">Primeiro</button>
+                        <button onclick="mudarPaginaCentroCustos(-1)" id="btnAnteriorCentroCustos">Anterior</button>
+                        <span id="infoPaginaCentroCustos">Página 1 de 1</span>
+                        <button onclick="mudarPaginaCentroCustos(1)" id="btnProximoCentroCustos">Próximo</button>
+                        <button type="button" onclick="mudarPaginaCentroCustos('ultimo')" id="btnUltimoCentroCustos">Último</button>
+                    </div>
+                </div>
+                <div id="tela-formulario-centrocustos" style="display: none;" class="card">
+                    <h2 id="tituloFormCentroCustos">Centro de Custos</h2>
+                    <form id="formCentroCustos">
+                        <input type="hidden" id="editIndexCentroCustos" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Código Centro de Custos:</label><input type="text" id="centrocustosCodigo" required maxlength="30"></div>
+                            <div class="form-group flex-1"><label>Aplicação:</label><input type="text" id="centrocustosAplicacao" maxlength="100"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>Descrição:</label><input type="text" id="centrocustosDescricao" maxlength="200"></div>
+                        </div>
+                        <div class="form-row" style="margin-top:15px;">
+                            <button type="submit" class="btn-primary">Salvar</button>
+                            <button type="button" id="btnCancelarCentroCustos" onclick="voltarParaListaCentroCustos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-ug" class="secao" data-permission="ug_ler" style="display: none;">
+                <div id="tela-lista-ug" class="card">
+                    <div class="header-lista">
+                        <h2>Unidade Gestora (UG)</h2>
+                        <button onclick="abrirFormularioUG(false)" class="btn-primary" data-permission="ug_inserir">+ Adicionar UG</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaUG" onchange="mudarTamanhoPaginaUG()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaUG" placeholder="Pesquisar código, nome ou contato..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaUG" class="tabela-gov tabela-empenhos-compact">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'codigo')">Código <span class="sort-icon" id="sort-ug-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'nome')">Nome da UG <span class="sort-icon" id="sort-ug-nome"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'comimsup')">Comimsup <span class="sort-icon" id="sort-ug-comimsup"></span></th>
+                                    <th>Contato</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-ug"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoUG" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaUG('primeiro')" id="btnPrimeiroUG">Primeiro</button>
+                        <button onclick="mudarPaginaUG(-1)" id="btnAnteriorUG">Anterior</button>
+                        <span id="infoPaginaUG">Página 1 de 1</span>
+                        <button onclick="mudarPaginaUG(1)" id="btnProximoUG">Próximo</button>
+                        <button type="button" onclick="mudarPaginaUG('ultimo')" id="btnUltimoUG">Último</button>
+                    </div>
+                </div>
+                <div id="tela-formulario-ug" style="display: none;" class="card">
+                    <h2 id="tituloFormUG">Unidade Gestora (UG)</h2>
+                    <form id="formUG">
+                        <input type="hidden" id="editIndexUG" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Código da UG:</label><input type="text" id="ugCodigo" required maxlength="30"></div>
+                            <div class="form-group flex-2"><label>Nome da UG:</label><input type="text" id="ugNome" maxlength="150"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Comimsup da UG:</label><input type="text" id="ugComimsup" maxlength="50"></div>
+                            <div class="form-group flex-1"><label>Contato da UG:</label><input type="text" id="ugContato" maxlength="100"></div>
+                        </div>
+                        <div class="form-row" style="margin-top:15px;">
+                            <button type="submit" class="btn-primary">Salvar</button>
+                            <button type="button" id="btnCancelarUG" onclick="voltarParaListaUG()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
             <section id="secao-backup" class="secao" data-permission="backup_ler" style="display: none;">
                 <div class="card">
                     <h2>Sistema / Backup Global</h2>
@@ -571,6 +675,8 @@
     <script src="script-contratos.js"></script>
     <script src="script-lfpf.js"></script>
     <script src="script-darf.js"></script>
+    <script src="script-centrocustos.js"></script>
+    <script src="script-ug.js"></script>
     <script src="script-import.js"></script>
 </body>
 </html>

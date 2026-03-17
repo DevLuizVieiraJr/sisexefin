@@ -140,7 +140,7 @@
                     <div class="tab-tc" data-tab="1">Processamento</div>
                     <div class="tab-tc" data-tab="2">Liquidação</div>
                     <div class="tab-tc" data-tab="3">Financeiro</div>
-                    <div class="tab-tc" data-tab="4">Auditoria</div>
+                    <div class="tab-tc" data-tab="4">Histórico</div>
                 </div>
 
                 <form id="formTitulo">
@@ -228,14 +228,20 @@
                             <div id="detalhesVinculoEmpenho" style="display: none; background: #e8f4f8; padding: 15px; margin-bottom: 10px;">
                                 <h4 id="empenhoSelecionadoTexto"></h4>
                                 <div class="form-row">
-                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                                    <div class="form-group flex-1"><label>ND (Natureza de Despesa):</label><input type="text" id="vinculoND" readonly class="input-readonly" placeholder="Preenchido pela NE"></div>
+                                    <div class="form-group flex-1"><label>Subelemento (2 dígitos):</label><input type="text" id="vinculoSubelemento" maxlength="2" pattern="[0-9]*" placeholder="Ex: 01" title="Apenas números, 2 dígitos"></div>
+                                    <div class="form-group flex-1"><label>Valor utilizado (R$):</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,01" data-moeda title="Mín. R$ 0,01 e máx. o valor do TC"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Centro de Custos:</label><select id="vinculoCentroCustos"><option value="">Selecione...</option></select></div>
+                                    <div class="form-group flex-1"><label>UG Beneficiária:</label><select id="vinculoUG"><option value="">Selecione...</option></select></div>
                                     <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
                                     <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
                                 </div>
                                 <button type="button" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar à Lista</button>
                             </div>
                             <table class="tabela-gov tabela-ne-inputs">
-                                <thead><tr><th>NE</th><th>Valor</th><th>LF</th><th>PF</th><th></th></tr></thead>
+                                <thead><tr><th>NE</th><th>ND</th><th>Subel.</th><th>Valor</th><th>Centro Custos</th><th>UG Benef.</th><th>LF</th><th>PF</th><th></th></tr></thead>
                                 <tbody id="tbodyEmpenhosNota"></tbody>
                             </table>
                         </fieldset>
@@ -265,8 +271,8 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel4">
-                        <h3>Trilha de Auditoria</h3>
-                        <table class="tabela-gov">
+<h3>Histórico</h3>
+                            <table class="tabela-gov">
                             <thead><tr><th>Data</th><th>Status</th><th>Usuário</th><th>Motivo (Devolvido)</th></tr></thead>
                             <tbody id="tbodyAuditoria"></tbody>
                         </table>
@@ -301,6 +307,7 @@
         <div class="modal-content" style="text-align:left; max-width:400px;">
             <h3 style="margin-bottom:15px; color:#e74c3c;">Devolver TC</h3>
             <p style="margin-bottom:15px; font-size:13px;">Confirma a devolução? Informe os dados abaixo:</p>
+            <div class="form-group"><label>Motivo da devolução (obrigatório):</label><textarea id="devolverMotivo" rows="3" placeholder="Informe o motivo da rejeição/devolução..." required></textarea></div>
             <div class="form-group"><label>Nome do Recebedor (opcional):</label><input type="text" id="devolverNome" placeholder="Nome de quem recebeu"></div>
             <div class="form-group" style="position:relative;">
                 <label>OI de Destino:</label>
