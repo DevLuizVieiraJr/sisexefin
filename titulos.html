@@ -50,7 +50,7 @@
     </style>
 </head>
 <body style="display: none;" id="corpo-titulos">
-    <div id="loadingApp" class="loading-overlay">
+    <div id="loadingApp" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
         <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
     </div>
@@ -152,7 +152,16 @@
                         <div class="form-row">
                             <div class="form-group flex-1"><label>Ano:</label><input type="text" id="anoTC" value="2026" readonly class="input-readonly" maxlength="4"></div>
                             <div class="form-group flex-1"><label>UG:</label><input type="text" id="ugTC" value="741000" readonly class="input-readonly" maxlength="6"></div>
-                            <div class="form-group flex-1"><label>Tipo de TC:</label><select id="tipoTC"><option value="NF" selected>Nota Fiscal (NF)</option><option value="FT">Fatura (FT)</option><option value="BO">Boleto (BO)</option><option value="OT">Outros (OT)</option></select></div>
+                            <div class="form-group flex-1"><label>Tipo de TC:</label>
+                                <select id="tipoTC">
+                                    <option value="" selected>Selecione...</option>
+                                    <option value="NFE">NF-e (DANF-e)</option>
+                                    <option value="NFSE">NFS-e (DANFS-e)</option>
+                                    <option value="FAT">Fatura (FAT)</option>
+                                    <option value="BO">Boleto</option>
+                                    <option value="OUT">Outro</option>
+                                </select>
+                            </div>
                             <div class="form-group flex-1"><label>Entrada na EXEFIN:</label><input type="date" id="dataExefin" required></div>
                         </div>
                         <!-- Bloco B -->
@@ -229,21 +238,28 @@
                                 <h4 id="empenhoSelecionadoTexto"></h4>
                                 <div class="form-row">
                                     <div class="form-group flex-1"><label>ND (Natureza de Despesa):</label><input type="text" id="vinculoND" readonly class="input-readonly" placeholder="Preenchido pela NE"></div>
-                                    <div class="form-group flex-1"><label>Subelemento (2 dígitos):</label><input type="text" id="vinculoSubelemento" maxlength="2" pattern="[0-9]*" placeholder="Ex: 01" title="Apenas números, 2 dígitos"></div>
+                                    <div class="form-group flex-1"><label>Subelemento (2 dígitos):</label><input type="text" id="vinculoSubelemento" maxlength="2" pattern="[0-9]*" placeholder="Ex: 01" title="Apenas números, 2 dígitos" readonly></div>
                                     <div class="form-group flex-1"><label>Valor utilizado (R$):</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,01" data-moeda title="Mín. R$ 0,01 e máx. o valor do TC"></div>
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group flex-1"><label>Centro de Custos:</label><select id="vinculoCentroCustos"><option value="">Selecione...</option></select></div>
                                     <div class="form-group flex-1"><label>UG Beneficiária:</label><select id="vinculoUG"><option value="">Selecione...</option></select></div>
-                                    <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
-                                    <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
                                 </div>
                                 <button type="button" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar à Lista</button>
                             </div>
                             <table class="tabela-gov tabela-ne-inputs">
-                                <thead><tr><th>NE</th><th>ND</th><th>Subel.</th><th>Valor</th><th>Centro Custos</th><th>UG Benef.</th><th>LF</th><th>PF</th><th></th></tr></thead>
+                                <thead><tr><th>NE</th><th>ND</th><th>Subel.</th><th>Valor</th><th>Centro Custos</th><th>UG Benef.</th><th></th></tr></thead>
                                 <tbody id="tbodyEmpenhosNota"></tbody>
                             </table>
+                            <div class="form-row" style="margin-top: 12px; justify-content: space-between; gap: 15px; align-items: center;">
+                                <div style="display:flex; flex-wrap:wrap; gap: 16px; align-items:center;">
+                                    <span style="font-size:12px; color:#666;">Total vinculado:</span>
+                                    <strong id="totalVinculadoEmpenhos" style="font-size:12px;">R$ 0,00</strong>
+                                    <span style="font-size:12px; color:#666;">Total a vincular:</span>
+                                    <strong id="totalATvincularEmpenhos" style="font-size:12px;">R$ 0,00</strong>
+                                </div>
+                                <button type="button" id="btnCancelarUltimaInclusaoEmpenhoNota" class="btn-default" style="display:none; font-size:12px;" onclick="desfazerUltimaInclusaoEmpenhoNota()">Cancelar inclusão</button>
+                            </div>
                         </fieldset>
                         <fieldset class="gov-fieldset">
                             <legend>Tributações (DARF/INSS/ISS)</legend>

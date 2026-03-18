@@ -35,7 +35,7 @@
 </head>
 <body style="display: none;" id="corpo-sistema"> 
     
-    <div id="loadingApp" class="loading-overlay">
+    <div id="loadingApp" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
         <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
     </div>
@@ -269,9 +269,128 @@
                 </div>
             </section>
             <section id="secao-op" class="secao" data-permission="op_ler" style="display: none;">
-                <div class="card">
-                    <h2>Controle de OP x OB</h2>
-                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
+                <div id="tela-lista-np" class="card">
+                    <div class="header-lista">
+                        <h2>Nota de Pagamento (NP) x OP/OB</h2>
+                        <button id="btnNovaNp" onclick="abrirFormularioNp(false)" class="btn-primary" data-permission="op_ler">+ Nova NP</button>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <span id="ultimoImportNp" class="ultimo-import" style="font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
+                        </div>
+                    </div>
+
+                    <div class="toolbar">
+                        <div class="import-group" data-permission="op_ler" style="flex:1;">
+                            <label>Importar CSV/XLS (NP→OP/OB):</label>
+                            <input type="file" id="fileImportNp" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="max-width:420px;">
+                            <a href="#" onclick="downloadModeloNP(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a>
+                        </div>
+                    </div>
+
+                    <div class="controles-tabela">
+                        <label>A exibir
+                            <select id="itensPorPaginaNp" onchange="mudarTamanhoPaginaNp()">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </label>
+                        <div class="search-box"><input type="text" id="buscaTabelaNp" placeholder="Pesquisar por NP, OP, OB..." autocomplete="off"></div>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaNp" class="tabela-gov">
+                            <thead>
+                                <tr>
+                                    <th>NP</th>
+                                    <th>Data Liquidação</th>
+                                    <th>Qtd. Itens (OP/OB)</th>
+                                    <th>OP/OB</th>
+                                    <th>Qtd. TC vinculados</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-np"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="paginacao">
+                        <span id="mostrandoNp" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaNp(-1)" id="btnAnteriorNp">Anterior</button>
+                        <span id="infoPaginaNp">Página 1 de 1</span>
+                        <button type="button" onclick="mudarPaginaNp(1)" id="btnProximoNp">Próximo</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-np" style="display: none;" class="card">
+                    <h2 id="tituloFormNp">Cadastro de NP (Nota de Pagamento)</h2>
+                    <form id="formNp">
+                        <input type="hidden" id="editIndexNp" value="-1">
+                        <input type="hidden" id="npNumFull" value="">
+
+                        <div class="tabs-ne" id="tabsNp" style="margin-bottom: 15px;">
+                            <div class="tab-ne ativo" data-tab="0">Dados Básicos</div>
+                            <div class="tab-ne tab-auditoria" data-tab="1" data-permission="acesso_admin">Auditoria</div>
+                        </div>
+
+                        <div class="tab-panel-ne visivel" id="panelNp0">
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>NP (Nº Documento):</label><input type="text" id="npNum" placeholder="Ex: 2026NP000001" required></div>
+                                <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="text" id="npDataLiquidacao" placeholder="dd/mm/aaaa" maxlength="10"></div>
+                            </div>
+
+                            <fieldset class="gov-fieldset">
+                                <legend>Documentos Hábis (OP/OB)</legend>
+                                <div class="form-row" style="align-items:flex-end;">
+                                    <div class="form-group flex-1"><label>OP:</label><input type="text" id="npItemOp" placeholder="Ex: 2026OP000049"></div></div>
+                                </div>
+                                <div class="form-row" style="align-items:flex-end;">
+                                    <div class="form-group flex-1"><label>OB:</label><input type="text" id="npItemOb" placeholder="Ex: 2026OB000050"></div>
+                                    <div class="form-group flex-1"><label>Valor_NP:</label><input type="text" id="npItemValorNp" data-moeda placeholder="0,00"></div>
+                                    <div class="form-group flex-1"><label>Valor_OB:</label><input type="text" id="npItemValorOb" data-moeda placeholder="0,00"></div>
+                                    <div class="form-group flex-2"><label>Observação:</label><input type="text" id="npItemObs" placeholder=""></div>
+                                    <div class="form-group" style="flex:0;">
+                                        <button type="button" id="btnAdicionarItemNp" onclick="adicionarItemNp()" class="btn-primary btn-small">+ Adicionar</button>
+                                    </div>
+                                </div>
+
+                                <div style="overflow-x:auto; margin-top: 10px;">
+                                    <table id="tabelaNpItens" class="tabela-gov">
+                                        <thead>
+                                            <tr>
+                                                <th>OP</th>
+                                                <th>OB</th>
+                                                <th>Valor_NP</th>
+                                                <th>Valor_OB</th>
+                                                <th>Observação</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyNpItens"></tbody>
+                                    </table>
+                                </div>
+                            </fieldset>
+                        </div>
+
+                        <div class="tab-panel-ne" id="panelNp1">
+                            <fieldset class="gov-fieldset">
+                                <legend>Auditoria (somente leitura)</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data de criação:</label><input type="text" id="audNpDataCriacao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário criador:</label><input type="text" id="audNpUsuarioCriador" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data de última alteração:</label><input type="text" id="audNpDataAlteracao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário da última alteração:</label><input type="text" id="audNpUsuarioAlteracao" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-group"><label>Histórico de alterações:</label><textarea id="audNpHistorico" rows="6" readonly class="input-readonly" style="width:100%;"></textarea></div>
+                            </fieldset>
+                        </div>
+
+                        <div class="form-acoes" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                            <button id="btnSalvarNp" type="submit" class="btn-primary" data-permission="op_ler">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaNp()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             </section>
 
@@ -398,8 +517,13 @@
                         <input type="hidden" id="editIndexEmpenho" value="-1">
                         <div class="tab-panel-ne visivel" id="panelNE0">
                             <div class="form-row">
-                                <div class="form-group flex-2"><label>NE Completa:</label>
-                                    <input type="text" id="numEmpenho" placeholder="Ex: 741000000012024NE000001" pattern="[0-9]{11}[0-9]{4}NE[0-9]{6}" title="15 números, letras NE e 6 números finais" required>
+                                    <div class="form-group flex-2"><label>NE (DH):</label>
+                                    <input type="text"
+                                           id="numEmpenho"
+                                           placeholder="Ex: 2026NE000001"
+                                           pattern="^(?:[0-9]{4}[Nn][Ee][0-9]{6}|[0-9]{11}[0-9]{4}[Nn][Ee][0-9]{6})$"
+                                           title="4 dígitos + NE + 6 dígitos (ou NE completo)"
+                                           required>
                                 </div>
                                 <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
                                 <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
@@ -678,5 +802,6 @@
     <script src="script-centrocustos.js"></script>
     <script src="script-ug.js"></script>
     <script src="script-import.js"></script>
+    <script src="script-np.js"></script>
 </body>
 </html>

@@ -35,14 +35,27 @@
 
     window.baseTitulos = function() { return baseTitulos; };
 
-    function mostrarLoading() {
-        const el = document.getElementById('loadingApp');
-        if (el) { el.classList.remove('hide'); el.style.display = 'flex'; }
+    // Vincula o TC à NP (Nota de Pagamento) quando `np` é preenchida.
+    // Modelo da coleção `np` (Firestore):
+    // - docId = NP
+    // - titulosVinculados: arrayUnion(tituloId)
+    async function vincularTituloNaNP(tituloId, npValor, dataLiquidacao) {
+        const npNorm = String(npValor || '').trim();
+        if (!npNorm) return;
+        const payload = {
+            np: npNorm,
+            titulosVinculados: firebase.firestore.FieldValue.arrayUnion(String(tituloId || '').trim()),
+            editado_em: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        const dl = String(dataLiquidacao || '').trim();
+        if (dl) payload.dataLiquidacao = dl;
+        if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+        await db.collection('np').doc(npNorm).set(payload, { merge: true });
     }
-    function esconderLoading() {
-        const el = document.getElementById('loadingApp');
-        if (el) { el.classList.add('hide'); el.style.display = 'none'; }
-    }
+
+    // Usa o loading global (script.js) para aplicar delay (3s) e prompt (60s)
+    function mostrarLoading() { if (typeof window.mostrarLoading === 'function') window.mostrarLoading('Carregando...'); }
+    function esconderLoading() { if (typeof window.esconderLoading === 'function') window.esconderLoading(); }
 
     function inicializarTitulosSPA() {
         mostrarLoading();
@@ -50,6 +63,18 @@
         let carregados = 0;
         const TOTAL_COLECOES = 6;
         const TIMEOUT_MS = 10000;
+        const unsubscribers = [];
+
+        // Se o usuário interromper após muitos segundos, desligar listeners onSnapshot.
+        if (typeof window.__setLoadingAbortFn === 'function') {
+            window.__setLoadingAbortFn(function abortarCarregamentoTitulos() {
+                try {
+                    unsubscribers.forEach(u => { try { u && u(); } catch (e) {} });
+                } catch (e) {}
+                // Mantém regra: pedir recarregar/verificar conexão (não confiar em dados parciais).
+                alert('Carregamento interrompido. Verifique sua conexão ou recarregue a página.');
+            });
+        }
 
         const finalizarCarregamento = () => {
             if (carregamentoFinalizado) return;
@@ -75,7 +100,7 @@
 
         const timeoutId = setTimeout(finalizarCarregamento, TIMEOUT_MS);
 
-        db.collection('titulos').onSnapshot(
+        unsubscribers.push(db.collection('titulos').onSnapshot(
             snap => {
                 try {
                     baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -87,30 +112,30 @@
                 }
             },
             onErr
-        );
-        db.collection('contratos').onSnapshot(snap => {
+        ));
+        unsubscribers.push(db.collection('contratos').onSnapshot(snap => {
             baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             aoReceberSnapshot();
-        }, onErr);
-        db.collection('empenhos').onSnapshot(snap => {
+        }, onErr));
+        unsubscribers.push(db.collection('empenhos').onSnapshot(snap => {
             baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             aoReceberSnapshot();
-        }, onErr);
-        db.collection('oi').onSnapshot(snap => {
+        }, onErr));
+        unsubscribers.push(db.collection('oi').onSnapshot(snap => {
             listaOI = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             popularSelectOI();
             aoReceberSnapshot();
-        }, onErr);
-        db.collection('centroCustos').onSnapshot(snap => {
+        }, onErr));
+        unsubscribers.push(db.collection('centroCustos').onSnapshot(snap => {
             listaCentroCustos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             popularSelectCentroCustos();
             aoReceberSnapshot();
-        }, onErr);
-        db.collection('unidadesGestoras').onSnapshot(snap => {
+        }, onErr));
+        unsubscribers.push(db.collection('unidadesGestoras').onSnapshot(snap => {
             listaUG = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             popularSelectUG();
             aoReceberSnapshot();
-        }, onErr);
+        }, onErr));
 
         const urlParams = new URLSearchParams(window.location.search);
         const st = urlParams.get('status');
@@ -487,7 +512,7 @@
         document.getElementById('idProc').value = '';
         document.getElementById('anoTC').value = '2026';
         document.getElementById('ugTC').value = '741000';
-        document.getElementById('tipoTC').value = 'NF';
+        document.getElementById('tipoTC').value = '';
         limparOISelecionada();
         document.getElementById('oiEntregou').value = '';
         document.getElementById('fornecedorValor').value = '';
@@ -623,20 +648,26 @@
                 <td>R$ ${escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0'))}</td>
                 <td title="${escapeHTML(labelCentroCustos(v.centroCustosId))}">${escapeHTML((labelCentroCustos(v.centroCustosId) || '-').substring(0, 25))}${(labelCentroCustos(v.centroCustosId) || '').length > 25 ? '...' : ''}</td>
                 <td title="${escapeHTML(labelUG(v.ugId))}">${escapeHTML((labelUG(v.ugId) || '-').substring(0, 25))}${(labelUG(v.ugId) || '').length > 25 ? '...' : ''}</td>
-                <td><input type="text" data-index="${i}" data-field="lf" value="${escapeHTML(v.lf || '')}" placeholder="LF"></td>
-                <td><input type="text" data-index="${i}" data-field="pf" value="${escapeHTML(v.pf || '')}" placeholder="PF"></td>
-                <td><button type="button" class="btn-icon btn-rm-ne" data-index="${i}">🗑️</button></td>`;
+                <td>
+                    <button type="button" class="btn-icon btn-editar-ne" data-index="${i}" title="Editar">✏️</button>
+                    <button type="button" class="btn-icon btn-rm-ne" data-index="${i}" title="Remover">🗑️</button>
+                </td>`;
             tbody.appendChild(tr);
         });
-        tbody.querySelectorAll('input[data-field]').forEach(inp => inp.addEventListener('change', function() {
-            const i = parseInt(this.getAttribute('data-index'));
-            const f = this.getAttribute('data-field');
-            if (empenhosDaNotaAtual[i]) empenhosDaNotaAtual[i][f] = this.value;
+
+        tbody.querySelectorAll('.btn-editar-ne').forEach(btn => btn.addEventListener('click', function() {
+            editarItemEmpenhoNaNota(parseInt(this.getAttribute('data-index'), 10));
         }));
         tbody.querySelectorAll('.btn-rm-ne').forEach(btn => btn.addEventListener('click', function() {
-            empenhosDaNotaAtual.splice(parseInt(this.getAttribute('data-index')), 1);
+            empenhosDaNotaAtual.splice(parseInt(this.getAttribute('data-index'), 10), 1);
+            podeCancelarUltimaInclusaoEmpenhoNota = false;
+            const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+            if (btnUndo) btnUndo.style.display = 'none';
             desenharEmpenhosNota();
+            atualizarTotaisEmpenhosNota();
         }));
+
+        atualizarTotaisEmpenhosNota();
     }
 
     function desenharTributacoes() {
@@ -668,6 +699,92 @@
     };
 
     let empenhoTemporarioSelecionado = null;
+    let indiceEmpenhoEditando = null; // quando != null, o botão "Adicionar" vira "Atualizar"
+    let podeCancelarUltimaInclusaoEmpenhoNota = false;
+
+    function obterTotalTC() {
+        const el = document.getElementById('valorNotaFiscal');
+        if (!el) return 0;
+        const raw = el.value || '';
+        if (typeof valorMoedaParaNumero === 'function') return valorMoedaParaNumero(raw);
+        // fallback: 1.234,56 -> 1234.56
+        const cleaned = String(raw).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+    }
+
+    function atualizarTotaisEmpenhosNota() {
+        const elTotalVinculado = document.getElementById('totalVinculadoEmpenhos');
+        const elTotalATvincular = document.getElementById('totalATvincularEmpenhos');
+        if (!elTotalVinculado || !elTotalATvincular) return;
+
+        const totalVinculado = (empenhosDaNotaAtual || []).reduce((acc, x) => acc + (Number(x.valorVinculado || 0) || 0), 0);
+        const totalTC = obterTotalTC();
+        const totalATvincular = totalTC - totalVinculado;
+
+        if (typeof formatarMoedaBR === 'function') {
+            elTotalVinculado.textContent = 'R$ ' + formatarMoedaBR(totalVinculado);
+            elTotalATvincular.textContent = 'R$ ' + formatarMoedaBR(totalATvincular);
+        } else {
+            elTotalVinculado.textContent = 'R$ ' + totalVinculado.toFixed(2);
+            elTotalATvincular.textContent = 'R$ ' + totalATvincular.toFixed(2);
+        }
+    }
+
+    function atualizarBotaoAdicionarEmpenhoNaNota() {
+        const btn = document.querySelector('#detalhesVinculoEmpenho button[onclick="adicionarEmpenhoNaNota()"]');
+        if (!btn) return;
+        btn.textContent = (indiceEmpenhoEditando !== null) ? 'Atualizar item' : 'Adicionar à Lista';
+    }
+
+    window.desfazerUltimaInclusaoEmpenhoNota = function() {
+        if (!podeCancelarUltimaInclusaoEmpenhoNota) return;
+        if (!Array.isArray(empenhosDaNotaAtual) || empenhosDaNotaAtual.length === 0) return;
+        empenhosDaNotaAtual.pop();
+        podeCancelarUltimaInclusaoEmpenhoNota = false;
+        const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+        if (btnUndo) btnUndo.style.display = 'none';
+        desenharEmpenhosNota();
+        atualizarTotaisEmpenhosNota();
+    };
+
+    function editarItemEmpenhoNaNota(indice) {
+        const i = Number(indice);
+        if (isNaN(i) || i < 0 || i >= (empenhosDaNotaAtual || []).length) return;
+        const v = empenhosDaNotaAtual[i];
+        if (!v) return;
+
+        indiceEmpenhoEditando = i;
+        empenhoTemporarioSelecionado = null; // em modo edição não depende da seleção temporária
+
+        const detalhes = document.getElementById('detalhesVinculoEmpenho');
+        if (detalhes) detalhes.style.display = 'block';
+        const txt = document.getElementById('empenhoSelecionadoTexto');
+        if (txt) txt.textContent =
+            'NE: ' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : v.numEmpenho);
+
+        const ndEl = document.getElementById('vinculoND');
+        if (ndEl) ndEl.value = v.nd || '';
+
+        const subEl = document.getElementById('vinculoSubelemento');
+        if (subEl) subEl.value = v.subelemento || '';
+
+        const valorEl = document.getElementById('vinculoValor');
+        if (valorEl) {
+            valorEl.value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(Number(v.valorVinculado || 0))) : String(v.valorVinculado || 0);
+        }
+
+        const cc = document.getElementById('vinculoCentroCustos');
+        if (cc) cc.value = v.centroCustosId || '';
+
+        const ug = document.getElementById('vinculoUG');
+        if (ug) ug.value = v.ugId || '';
+
+        podeCancelarUltimaInclusaoEmpenhoNota = false;
+        const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+        if (btnUndo) btnUndo.style.display = 'none';
+        atualizarBotaoAdicionarEmpenhoNaNota();
+    }
 
     /** Fornecedores únicos da coleção contratos */
     function fornecedoresUnicos() {
@@ -815,50 +932,114 @@
         const listaEmpenhosT = document.getElementById('listaResultadosEmpenhoT');
         if (!inputBuscaEmpenhoT || !listaEmpenhosT) return;
         const texto = (inputBuscaEmpenhoT.value || '').trim();
-        const textoSemAcento = removerAcentos(texto).toLowerCase();
+        const textoNorm = removerAcentos(texto).toLowerCase();
+
         listaEmpenhosT.innerHTML = '';
         listaEmpenhosT.style.display = '';
-        let resultados;
-        if (texto.length < 2) {
-            resultados = baseEmpenhos.slice(0, 15);
-            if (resultados.length === 0) {
-                listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Nenhuma NE cadastrada. Cadastre em Sistema > Empenhos.</li>';
-                return;
-            }
-        } else {
-            resultados = baseEmpenhos.filter(e => {
-                const campos = camposEmpenhoParaBusca(e);
-                return campos.some(campo => removerAcentos(campo).toLowerCase().includes(textoSemAcento));
-            }).slice(0, 15);
+
+        // Filtro 1: mínimo de 4 caracteres (alfanuméricos) para aparecer resultados.
+        if (textoNorm.length < 4) {
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite 4+ dígitos</li>';
+            return;
         }
+
+        const contratoId = (document.getElementById('contratoIdSelecionado')?.value || '').trim();
+        const contratoSel = contratoId ? baseContratos.find(c => c.id === contratoId) : null;
+        if (!contratoSel) {
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Selecione um Contrato para filtrar as NE.</li>';
+            return;
+        }
+
+        const tipoTC = (document.getElementById('tipoTC')?.value || '').trim();
+        if (!tipoTC) {
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Selecione o Tipo de TC para filtrar as NE.</li>';
+            return;
+        }
+
+        // Filtro 2: CNPJ do contrato vem do campo "fornecedor" (CNPJ + Nome).
+        const normalizarCNPJ = (v) => String(v || '').replace(/\D/g, '').trim();
+        const cnpjContrato = normalizarCNPJ(contratoSel.fornecedor || contratoSel.razaoSocial || '');
+        if (!cnpjContrato) {
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">CNPJ do contrato inválido.</li>';
+            return;
+        }
+
+        // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "Outro").
+        const ndValido = (nd) => {
+            const s = String(nd || '').trim();
+            return s.length > 0 && /^\d+$/.test(s);
+        };
+
+        const devePassarND = (nd) => {
+            if (!ndValido(nd)) return false;
+            const s = String(nd).trim();
+            const ult2 = s.slice(-2);
+            if (tipoTC === 'NFE') return (ult2 === '30' || ult2 === '52');
+            // NFS-e / FAT / BO
+            if (tipoTC === 'NFSE' || tipoTC === 'FAT' || tipoTC === 'BO') return ult2 === '39';
+            // OUT: ignora filtro do ND, mas ainda exige ND válido (já checado).
+            if (tipoTC === 'OUT') return true;
+            return false;
+        };
+
+        const visivelNE = (e) => {
+            const num = String(e.numEmpenho || e.numNE || '').trim();
+            if (typeof formatarNumEmpenhoVisivel === 'function') return String(formatarNumEmpenhoVisivel(num) || '').toLowerCase();
+            return num.slice(-12).toLowerCase();
+        };
+
+        const resultados = (baseEmpenhos || [])
+            .filter(e => {
+                const cnpjNE = normalizarCNPJ(e.cnpj || '');
+                if (!cnpjNE) return false;
+                if (cnpjNE !== cnpjContrato) return false;
+                if (!devePassarND(e.nd)) return false;
+                // Filtro 1 baseado no sufixo visível da NE
+                return visivelNE(e).includes(textoNorm);
+            })
+            .slice(0, 15);
+
         if (resultados.length === 0) {
-            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Nenhuma NE encontrada. Digite num NE, PTRES, FR ou ND.</li>';
-        } else {
-            resultados.forEach(e => {
-                const li = document.createElement('li');
-                const numNE = e.numEmpenho || e.numNE || '-';
-                li.innerHTML = '<strong>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : escapeHTML(numNE)) + '</strong> | ' + escapeHTML(e.tipoNE || '-') + ' | ' + escapeHTML((e.favorecido || '').substring(0, 30)) + ((e.favorecido || '').length > 30 ? '...' : '') + ' | PTRES: ' + escapeHTML(e.ptres || '-') + ' | FR: ' + escapeHTML(e.fr || '-');
-                li.addEventListener('mousedown', (ev) => {
-                    ev.preventDefault();
-                    empenhoTemporarioSelecionado = e;
-                    document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
-                    document.getElementById('empenhoSelecionadoTexto').textContent = 'NE: ' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : numNE);
-                    const ndEl = document.getElementById('vinculoND');
-                    if (ndEl) ndEl.value = e.nd || '';
-                    document.getElementById('vinculoSubelemento').value = '';
-                    document.getElementById('vinculoValor').value = '';
-                    const cc = document.getElementById('vinculoCentroCustos');
-                    if (cc) cc.value = '';
-                    const ug = document.getElementById('vinculoUG');
-                    if (ug) ug.value = '';
-                    document.getElementById('vinculoLF').value = '';
-                    document.getElementById('vinculoPF').value = '';
-                    listaEmpenhosT.innerHTML = '';
-                    inputBuscaEmpenhoT.value = '';
-                });
-                listaEmpenhosT.appendChild(li);
-            });
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Nenhuma NE encontrada para os filtros atuais.</li>';
+            return;
         }
+
+        resultados.forEach(e => {
+            const li = document.createElement('li');
+            const numNE = e.numEmpenho || e.numNE || '-';
+            li.innerHTML =
+                '<strong>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : escapeHTML(numNE)) + '</strong> | ' +
+                escapeHTML(e.tipoNE || '-') + ' | ' +
+                escapeHTML((e.favorecido || '').substring(0, 30)) + ((e.favorecido || '').length > 30 ? '...' : '') + ' | ' +
+                'PTRES: ' + escapeHTML(e.ptres || '-') + ' | ' +
+                'FR: ' + escapeHTML(e.fr || '-');
+
+            li.addEventListener('mousedown', (ev) => {
+                ev.preventDefault();
+                empenhoTemporarioSelecionado = e;
+                document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
+                document.getElementById('empenhoSelecionadoTexto').textContent =
+                    'NE: ' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : numNE);
+                const ndEl = document.getElementById('vinculoND');
+                if (ndEl) ndEl.value = e.nd || '';
+                const subEl = document.getElementById('vinculoSubelemento');
+                if (subEl) subEl.value = (e.subitem || e.subelemento || '').trim();
+                document.getElementById('vinculoValor').value = '';
+                const cc = document.getElementById('vinculoCentroCustos');
+                if (cc) cc.value = '';
+                const ug = document.getElementById('vinculoUG');
+                if (ug) ug.value = '';
+                // Em modo de seleção/novo item: desfaz qualquer edição anterior e esconde "cancelar inclusão".
+                indiceEmpenhoEditando = null;
+                podeCancelarUltimaInclusaoEmpenhoNota = false;
+                const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+                if (btnUndo) btnUndo.style.display = 'none';
+                atualizarBotaoAdicionarEmpenhoNaNota();
+                listaEmpenhosT.innerHTML = '';
+                inputBuscaEmpenhoT.value = '';
+            });
+            listaEmpenhosT.appendChild(li);
+        });
     }
     function configurarAutocompleteEmpenho() {
         const inputBuscaEmpenhoT = document.getElementById('buscaEmpenhoT');
@@ -871,7 +1052,7 @@
     }
 
     window.adicionarEmpenhoNaNota = function() {
-        if (!empenhoTemporarioSelecionado) return alert("Selecione uma NE na busca.");
+        const editando = (indiceEmpenhoEditando !== null && indiceEmpenhoEditando !== undefined);
         const nd = (document.getElementById('vinculoND')?.value || '').trim();
         const subelemento = (document.getElementById('vinculoSubelemento')?.value || '').trim();
         const valorInput = document.getElementById('vinculoValor')?.value;
@@ -885,6 +1066,26 @@
         if (valorTC > 0 && valorNum > valorTC) return alert("Valor utilizado não pode ser maior que o valor do TC (R$ " + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorTC) : valorTC.toFixed(2)) + ").");
         if (!centroCustosId) return alert("Selecione o Centro de Custos.");
         if (!ugId) return alert("Selecione a UG Beneficiária.");
+
+        // Modo edição: atualiza o item existente (valor, centro de custos, UG).
+        if (editando) {
+            const idx = indiceEmpenhoEditando;
+            if (!empenhosDaNotaAtual[idx]) return;
+            empenhosDaNotaAtual[idx].valorVinculado = valorNum;
+            empenhosDaNotaAtual[idx].centroCustosId = centroCustosId;
+            empenhosDaNotaAtual[idx].ugId = ugId;
+            // nd e subelemento são derivados da NE (não mudam aqui).
+            indiceEmpenhoEditando = null;
+            podeCancelarUltimaInclusaoEmpenhoNota = false;
+            const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+            if (btnUndo) btnUndo.style.display = 'none';
+            desenharEmpenhosNota();
+            document.getElementById('detalhesVinculoEmpenho').style.display = 'none';
+            atualizarBotaoAdicionarEmpenhoNaNota();
+            return;
+        }
+
+        if (!empenhoTemporarioSelecionado) return alert("Selecione uma NE na busca.");
         empenhosDaNotaAtual.push({
             numEmpenho: empenhoTemporarioSelecionado.numEmpenho || empenhoTemporarioSelecionado.numNE,
             ptres: empenhoTemporarioSelecionado.ptres || '',
@@ -894,11 +1095,18 @@
             valorVinculado: valorNum,
             centroCustosId: centroCustosId,
             ugId: ugId,
-            lf: document.getElementById('vinculoLF')?.value || '',
-            pf: document.getElementById('vinculoPF')?.value || ''
+            // LF/PF são preenchidos em outro painel (após NP vinculada).
+            lf: '',
+            pf: ''
         });
+
+        podeCancelarUltimaInclusaoEmpenhoNota = true;
+        const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
+        if (btnUndo) btnUndo.style.display = 'inline-block';
+        indiceEmpenhoEditando = null;
         desenharEmpenhosNota();
         document.getElementById('detalhesVinculoEmpenho').style.display = 'none';
+        atualizarBotaoAdicionarEmpenhoNaNota();
     };
 
     function editarTitulo(id) {
@@ -911,7 +1119,11 @@
         if (tituloEl && t.idProc) tituloEl.textContent = t.idProc + ' - Entrada de Título de Crédito';
         document.getElementById('anoTC').value = t.ano || '2026';
         document.getElementById('ugTC').value = t.ug || '741000';
-        document.getElementById('tipoTC').value = t.tipoTC || 'NF';
+        const selTipoTC = document.getElementById('tipoTC');
+        if (selTipoTC) {
+            const tiposValidos = Array.from(selTipoTC.options || []).map(o => o.value);
+            selTipoTC.value = (t.tipoTC && tiposValidos.includes(t.tipoTC)) ? t.tipoTC : '';
+        }
         document.getElementById('dataExefin').value = t.dataExefin || '';
         document.getElementById('numTC').value = t.numTC || '';
         const valNF = parseFloat(t.valorNotaFiscal) || 0;
@@ -1023,6 +1235,8 @@
         if (!numTC) return alert("Preencha o Número do TC.");
         if (!fornecedor || !instrumento) return alert("Selecione Fornecedor e Contrato.");
         if (!oiEntregou) return alert("Selecione a OI de Origem.");
+        const tipoTCVal = (document.getElementById('tipoTC')?.value || '').trim();
+        if (!tipoTCVal) return alert("Selecione o Tipo de TC.");
         if (!valorVal || valorVal <= 0) return alert("Preencha o Valor do TC (maior que zero).");
         if (!dataEmissao) return alert("Preencha a Data de Emissão do TC.");
         if (!dataAteste) return alert("Preencha a Data do Ateste.");
@@ -1041,7 +1255,7 @@
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
             ano: '2026',
             ug: '741000',
-            tipoTC: document.getElementById('tipoTC')?.value || 'NF',
+            tipoTC: (document.getElementById('tipoTC')?.value || '').trim(),
             dataExefin: escapeHTML(dataExefin),
             numTC: escapeHTML(numTC),
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
@@ -1131,6 +1345,16 @@
                 dados.historicoStatus = hist;
                 dados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
                 await db.collection('titulos').doc(fbID).update(dados);
+            }
+
+            // Se o TC tem NP preenchida, atualiza a coleção "np" com o vínculo do TC.
+            if (dados.np && String(dados.np).trim()) {
+                try {
+                    await vincularTituloNaNP(docId, dados.np, dados.dataLiquidacao);
+                } catch (e) {
+                    // Falha ao vincular NP não impede salvar o TC.
+                    console.warn('Falha ao vincular TC na NP:', e);
+                }
             }
             esconderLoading();
 
@@ -1562,6 +1786,11 @@
                         historicoStatus: firebase.firestore.FieldValue.arrayUnion({ status: 'Liquidado', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' }),
                         editado_em: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                    try {
+                        await vincularTituloNaNP(id, np, dataLiq || '');
+                    } catch (err) {
+                        console.warn('Falha ao vincular NP em bloco:', err);
+                    }
                 }
             }
             titulosSelecionados.clear();

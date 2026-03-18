@@ -44,20 +44,25 @@
             const file = e.target.files[0];
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
             mostrarLoading();
-            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
                 const codigosExistentes = new Set((typeof baseDarf !== 'undefined' ? baseDarf : []).map(d => String((d.codigo || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0;
+                let inseridos = 0, duplicados = 0, erros = 0;
                 for (const row of rows) {
+                    if (importAbort.aborted) break;
                     const codigo = getVal(row, ['codigo', 'Codigo', 'Código', 'CODIGO', 'cod']);
-                    if (!codigo) continue;
+                    if (!codigo) { erros++; continue; }
                     const codigoNorm = codigo.toLowerCase();
-                    if (codigosExistentes.has(codigoNorm)) { duplicados++; continue; }
+                    if (codigosExistentes.has(codigoNorm)) { duplicados++; erros++; continue; }
                     const dados = {
                         codigo: escapeHTML(codigo),
                         natRendimento: escapeHTML(getVal(row, ['natRendimento', 'NatRendimento', 'Nat.Rend', 'nat_rend'])),
@@ -73,9 +78,10 @@
                     codigosExistentes.add(codigoNorm);
                     inseridos++;
                 }
-                alert('Importação DARF: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
-            } catch (err) { alert('Erro na importação DARF: ' + (err.message || err)); }
-            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
+                const atualizados = 0;
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            finally { esconderLoading(); e.target.value = ''; }
         });
     }
 
@@ -86,20 +92,25 @@
             const file = e.target.files[0];
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
             mostrarLoading();
-            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
                 const numerosExistentes = new Set((typeof baseContratos !== 'undefined' ? baseContratos : []).map(c => String((c.numContrato || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0;
+                let inseridos = 0, duplicados = 0, erros = 0;
                 for (const row of rows) {
+                    if (importAbort.aborted) break;
                     const numContrato = getVal(row, ['numContrato', 'NumContrato', 'Instrumento', 'instrumento', 'numero', 'Numero']);
-                    if (!numContrato) continue;
+                    if (!numContrato) { erros++; continue; }
                     const numNorm = numContrato.toLowerCase();
-                    if (numerosExistentes.has(numNorm)) { duplicados++; continue; }
+                    if (numerosExistentes.has(numNorm)) { duplicados++; erros++; continue; }
                     const valorRaw = getVal(row, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
                     const numVal = parseFloat((valorRaw || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
                     const dados = {
@@ -117,10 +128,11 @@
                     numerosExistentes.add(numNorm);
                     inseridos++;
                 }
-                alert('Importação Contratos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
+                const atualizados = 0;
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
                 await salvarUltimoImport('contratos');
-            } catch (err) { alert('Erro na importação Contratos: ' + (err.message || err)); }
-            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
+            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            finally { esconderLoading(); e.target.value = ''; }
         });
     }
 
@@ -131,25 +143,59 @@
             const file = e.target.files[0];
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
             mostrarLoading();
-            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando...');
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const nesExistentes = new Set((typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []).map(e => String((e.numEmpenho || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0;
+                const UG_PADRAO = '741000';
+                const GESTAO_PADRAO = '00001';
+                const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO;
+
+                function modoCompletoNEAtual() {
+                    const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
+                    if (!Array.isArray(baseAtual) || baseAtual.length === 0) return true;
+                    return baseAtual.some(e => String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12);
+                }
+
+                function completarNumEmpenho(numEmpenho) {
+                    const s = String(numEmpenho || '').trim();
+                    if (!s) return '';
+                    if (s.length > 12) return s;
+                    const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
+                    if (!m) return '';
+                    const ano = m[1];
+                    const tipoUpper = (m[2] || '').toUpperCase();
+                    const seq = m[3];
+                    if (tipoUpper !== 'NE') return '';
+                    return PREFIX11_PADRAO + ano + 'NE' + seq;
+                }
+
+                const modoCompleto = modoCompletoNEAtual();
+                const nesExistentes = new Set((typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : [])
+                    .map(e => String((e.numEmpenho || '')).toLowerCase().trim()));
+                let inseridos = 0, duplicados = 0, erros = 0;
                 for (const row of rows) {
+                    if (importAbort.aborted) break;
                     var rowNorm = {};
                     Object.keys(row).forEach(function(k) {
                         var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
                         rowNorm[kNorm] = row[k];
                     });
                     var numEmpenho = getVal(rowNorm, ['NE', 'numEmpenho', 'NumEmpenho', 'ne', 'numeroEmpenho', 'NumeroEmpenho']);
-                    if (!numEmpenho) continue;
-                    var neNorm = numEmpenho.toLowerCase().trim();
-                    if (nesExistentes.has(neNorm)) { duplicados++; continue; }
+                    if (!numEmpenho) { erros++; continue; }
+                    if (modoCompleto) {
+                        const completo = completarNumEmpenho(numEmpenho);
+                        if (completo) numEmpenho = completo;
+                    }
+                    var neNorm = String(numEmpenho).toLowerCase().trim();
+                    if (nesExistentes.has(neNorm)) { duplicados++; erros++; continue; }
                     var dados = {
                         numEmpenho: escapeHTML(numEmpenho),
                         dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'dataEmissao', 'DataEmissao', 'data', 'Data'])),
@@ -183,10 +229,11 @@
                     nesExistentes.add(neNorm);
                     inseridos++;
                 }
-                alert('Importação Empenhos: ' + inseridos + ' inseridos, ' + duplicados + ' duplicados ignorados.');
+                const atualizados = 0;
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
                 await salvarUltimoImport('empenhos');
-            } catch (err) { alert('Erro na importação Empenhos: ' + (err.message || err)); }
-            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
+            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            finally { esconderLoading(); e.target.value = ''; }
         });
     }
 
@@ -198,7 +245,11 @@
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
             mostrarLoading();
-            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Processando CSV LF/PF...');
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
             try {
                 const data = await readFileAsArrayBuffer(file);
                 const wb = XLSX.read(data, { type: 'array' });
@@ -213,6 +264,7 @@
                 var inseridos = 0, atualizados = 0, erros = [];
                 var userEmail = (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
                 for (var i = 0; i < rows.length; i++) {
+                    if (importAbort.aborted) break;
                     var row = rows[i];
                     var keys = Object.keys(row);
                     var rowNorm = {};
@@ -264,12 +316,15 @@
                         } catch (err) { erros.push('Linha ' + (i + 2) + ': ' + (err.message || err)); }
                     }
                 }
-                var msg = 'Importação LF/PF: ' + inseridos + ' inseridos, ' + atualizados + ' atualizados.';
-                if (erros.length > 0) msg += '\n\nErros (' + erros.length + '):\n' + erros.slice(0, 20).join('\n') + (erros.length > 20 ? '\n...' : '');
+
+                var msg = (importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros.length;
+                if (erros.length > 0) {
+                    msg += '\n\nErros (' + erros.length + '):\n' + erros.slice(0, 20).join('\n') + (erros.length > 20 ? '\n...' : '');
+                }
                 alert(msg);
                 await salvarUltimoImport('lfpf');
-            } catch (err) { alert('Erro na importação LF/PF: ' + (err.message || err)); }
-            finally { esconderLoading(); if (typeof esconderBarraLoading === 'function') esconderBarraLoading(); e.target.value = ''; }
+            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            finally { esconderLoading(); e.target.value = ''; }
         });
     }
 })();

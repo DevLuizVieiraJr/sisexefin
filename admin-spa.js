@@ -28,8 +28,14 @@
     const TAB_INDEX = { usuarios: 1, pendentes: 2, perfis: 3, oi: 4, cadastrar: 5 };
 
     function adminLoading(mostrar) {
-        const el = document.getElementById('adminLoading');
-        if (el) el.classList.toggle('visivel', !!mostrar);
+        // Direciona para o overlay global (script.js) para respeitar delay (3s) e prompt (60s)
+        if (typeof window.mostrarLoading !== 'function' || typeof window.esconderLoading !== 'function') {
+            const el = document.getElementById('adminLoading');
+            if (el) el.classList.toggle('visivel', !!mostrar);
+            return;
+        }
+        if (mostrar) window.mostrarLoading('Carregando...');
+        else window.esconderLoading();
     }
     function btnLoading(btn, mostrar, textoLoading) {
         if (!btn) return;

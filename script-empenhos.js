@@ -7,6 +7,35 @@
     const formEmpenho = document.getElementById('formEmpenho');
     const tabelaEmpenhosBody = document.querySelector('#tabelaEmpenhos tbody');
 
+    const UG_PADRAO = '741000';
+    const GESTAO_PADRAO = '00001';
+    const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO; // 11 dígitos
+
+    // UI pode trabalhar com apenas o sufixo 12 (AAAA + NE + NNNNNN).
+    // Se o banco já estiver em modo "completo" (>12 chars), reconstruímos o ID completo antes de salvar.
+    function completarNumEmpenho(numEmpenho) {
+        const s = String(numEmpenho || '').trim();
+        if (!s) return '';
+        if (s.length > 12) return s;
+
+        const tipo = (s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/) || [])[2];
+        if (!tipo) return '';
+        const tipoUpper = tipo.toUpperCase();
+        if (tipoUpper !== 'NE') return '';
+
+        const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
+        if (!m) return '';
+        const ano = m[1];
+        const seq = m[3];
+        return PREFIX11_PADRAO + ano + 'NE' + seq;
+    }
+
+    function modoCompletoNEAtual() {
+        const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
+        if (!Array.isArray(baseAtual) || baseAtual.length === 0) return true; // default: completar
+        return baseAtual.some(e => String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12);
+    }
+
     document.getElementById('buscaTabelaEmpenhos').addEventListener('input', debounce(() => {
         termoBuscaEmpenhos = document.getElementById('buscaTabelaEmpenhos').value.toLowerCase();
         paginaAtualEmpenhos = 1;
@@ -131,7 +160,12 @@
             abrirFormularioEmpenho(true);
             ativarTabNE(0);
             document.getElementById('editIndexEmpenho').value = e.id;
-            document.getElementById('numEmpenho').value = e.numEmpenho || '';
+            const elNum = document.getElementById('numEmpenho');
+            if (elNum) {
+                elNum.value = typeof formatarNumEmpenhoVisivel === 'function'
+                    ? (formatarNumEmpenhoVisivel(e.numEmpenho) || '')
+                    : (e.numEmpenho || '');
+            }
             document.getElementById('dataEmpenho').value = dataParaInputDate(e.dataEmissao) || '';
             var valEmp = parseFloat(e.valorGlobal) || 0;
             document.getElementById('valorEmpenho').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valEmp)) : (e.valorGlobal || '');
@@ -203,8 +237,14 @@
         e.preventDefault();
         mostrarLoading();
         const fbID = document.getElementById('editIndexEmpenho').value;
+
+        const numEmpenhoRaw = (document.getElementById('numEmpenho') || {}).value || '';
+        const numEmpenhoSalvavel = modoCompletoNEAtual()
+            ? completarNumEmpenho(numEmpenhoRaw) || String(numEmpenhoRaw).trim()
+            : String(numEmpenhoRaw).trim();
+
         const dados = {
-            numEmpenho: escapeHTML(document.getElementById('numEmpenho').value),
+            numEmpenho: escapeHTML(numEmpenhoSalvavel),
             dataEmissao: escapeHTML(document.getElementById('dataEmpenho').value),
             valorGlobal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorEmpenho').value) : (parseFloat(document.getElementById('valorEmpenho').value) || 0),
             ativo: true,

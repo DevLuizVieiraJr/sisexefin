@@ -11,8 +11,113 @@ function escapeHTML(str) {
     p.textContent = str;
     return p.innerHTML;
 }
-function mostrarLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'flex'; }
-function esconderLoading() { const l = document.getElementById('loadingApp'); if(l) l.style.display = 'none'; }
+// ============================================================
+// LOADING GLOBAL (atraso 3s + prompt 60s com Interromper)
+// ============================================================
+let __loadingState = {
+    active: false,
+    showTimerId: null,
+    promptTimerId: null,
+    startedAt: 0,
+    // Função chamada quando o usuário confirmar "Interromper"
+    abortFn: null,
+};
+
+function __getLoadingOverlayEl() {
+    return document.getElementById('loadingApp');
+}
+
+function __ensureOverlayProgressEl(overlay) {
+    if (!overlay) return;
+    if (overlay.querySelector('#loadingOverlayProgress')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'loadingOverlayProgress';
+    wrap.className = 'loading-overlay-progress';
+    wrap.innerHTML = '<div class="loading-overlay-progress-inner"></div>';
+    overlay.appendChild(wrap);
+}
+
+function __setOverlayTexto(texto) {
+    const overlay = __getLoadingOverlayEl();
+    if (!overlay) return;
+    const p = overlay.querySelector('p');
+    if (p) p.textContent = texto || 'Carregando...';
+}
+
+function __hideLoadingOverlay() {
+    const overlay = __getLoadingOverlayEl();
+    if (overlay) overlay.style.display = 'none';
+}
+
+function __clearTimers() {
+    if (__loadingState.showTimerId) clearTimeout(__loadingState.showTimerId);
+    if (__loadingState.promptTimerId) clearTimeout(__loadingState.promptTimerId);
+    __loadingState.showTimerId = null;
+    __loadingState.promptTimerId = null;
+}
+
+function __schedule60sPrompt() {
+    // Loop: se o usuário continuar aguardando, reprograma os próximos 60s.
+    __loadingState.promptTimerId = setTimeout(function promptAgain() {
+        if (!__loadingState.active) return;
+        const continuar = window.confirm('O carregamento está lento demais, deseja continuar aguardando ou interromper?');
+        if (continuar) {
+            __schedule60sPrompt();
+            return;
+        }
+
+        const confirmarInterromper = window.confirm(
+            'Esta ação pode ocasionar em perdas de update e um novo import deverá ser feito. Deseja interromper?'
+        );
+        if (!confirmarInterromper) {
+            __schedule60sPrompt();
+            return;
+        }
+
+        // Interrompe: cancela a operação via abortFn e fecha o overlay.
+        __loadingState.active = false;
+        __clearTimers();
+        __hideLoadingOverlay();
+        if (typeof __loadingState.abortFn === 'function') {
+            try { __loadingState.abortFn(); } catch (e) {}
+        }
+    }, 60000);
+}
+
+window.__setLoadingAbortFn = function(fn) {
+    __loadingState.abortFn = typeof fn === 'function' ? fn : null;
+};
+
+// Regras:
+// - o overlay só aparece se passar de 3s
+// - se passar de 60s, pergunta se continua ou interrompe
+function mostrarLoading(texto) {
+    const overlay = __getLoadingOverlayEl();
+    if (!overlay) return;
+
+    __loadingState.active = true;
+    __loadingState.startedAt = Date.now();
+    __setOverlayTexto(texto || 'Carregando...');
+
+    // Garante que o overlay comece escondido (só aparece após 3s)
+    overlay.style.display = 'none';
+
+    // Delay 3s: evita flicker e respeita a regra do usuário.
+    __loadingState.showTimerId = setTimeout(function showOverlayAfterDelay() {
+        if (!__loadingState.active) return;
+        __ensureOverlayProgressEl(overlay);
+        overlay.style.display = 'flex';
+        __schedule60sPrompt();
+    }, 3000);
+}
+
+function esconderLoading() {
+    __loadingState.active = false;
+    __clearTimers();
+    __hideLoadingOverlay();
+    // Mantém abortFn apontando só se outro fluxo decidir reutilizar; aqui limpamos.
+    __loadingState.abortFn = null;
+}
 
 /** Barra de loading (Carregando / Processando / Salvando) - feedback visual para operações */
 function criarBarraLoading() {
@@ -509,7 +614,7 @@ if (formUsuarioAdmin) {
 // ==========================================
 // VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================
-let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = [];
+let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
 let baseCentroCustos = []; let baseUnidadesGestoras = [];
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
@@ -595,6 +700,7 @@ function mostrarSecao(idSecao, botao) {
     if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf();
     if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
     if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
+    if (typeof atualizarTabelaNp === 'function') atualizarTabelaNp();
     if (typeof atualizarTabelaCentroCustos === 'function') atualizarTabelaCentroCustos();
     if (typeof atualizarTabelaUG === 'function') atualizarTabelaUG();
     inicializarSetasOrdenacao();
@@ -607,7 +713,7 @@ function escutarColecaoSecao(idSecao) {
     const mapa = {
         'secao-empenhos': ['empenhos'],
         'secao-lf': ['lfpf'],
-        'secao-op': [],
+        'secao-op': ['np'],
         'secao-darf': ['darf'],
         'secao-contratos': ['contratos'],
         'secao-titulos': ['titulos'],
@@ -624,7 +730,8 @@ function escutarColecaoSecao(idSecao) {
     escutaUnsubs.forEach(fn => { try { fn(); } catch (e) {} });
     escutaUnsubs = [];
 
-    mostrarBarraLoading('Carregando...');
+    // Overlay global (delay 3s + prompt 60s) para carregamentos Firestore lentos.
+    mostrarLoading('Carregando...');
     let carregados = 0;
     const aoCarregar = () => { carregados++; if (carregados >= total) { esconderLoading(); esconderBarraLoading(); } };
     const onError = () => { esconderLoading(); esconderBarraLoading(); };
@@ -635,6 +742,7 @@ function escutarColecaoSecao(idSecao) {
         darf: snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
         titulos: snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
         lfpf: snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); },
+        np: snap => { baseNp = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaNp === 'function') atualizarTabelaNp(); aoCarregar(); },
         centroCustos: snap => { baseCentroCustos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaCentroCustos === 'function') atualizarTabelaCentroCustos(); aoCarregar(); },
         unidadesGestoras: snap => { baseUnidadesGestoras = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaUG === 'function') atualizarTabelaUG(); aoCarregar(); }
     };
@@ -643,6 +751,15 @@ function escutarColecaoSecao(idSecao) {
         const unsub = db.collection(col).onSnapshot(handlers[col], onError);
         escutaUnsubs.push(unsub);
     });
+
+    // Se o usuário interromper, cancela os listeners onSnapshot.
+    if (typeof window.__setLoadingAbortFn === 'function') {
+        window.__setLoadingAbortFn(function abortarListenersSistema() {
+            try { escutaUnsubs.forEach(fn => { try { fn && fn(); } catch (e) {} }); } catch (e) {}
+            escutaUnsubs = [];
+            alert('Carregamento interrompido. Verifique sua conexão ou recarregue a página.');
+        });
+    }
 
     if (incluiConfig) {
         const unsub = db.collection('config').doc('imports').onSnapshot(
@@ -675,9 +792,11 @@ function atualizarUltimoImportUI(data) {
     const elLf = document.getElementById('ultimoImportLfPf');
     const elNe = document.getElementById('ultimoImportEmpenhos');
     const elContratos = document.getElementById('ultimoImportContratos');
+    const elNp = document.getElementById('ultimoImportNp');
     if (elLf && data.lfpf) elLf.textContent = 'Último upload: ' + formatarData(data.lfpf);
     if (elNe && data.empenhos) elNe.textContent = 'Último upload: ' + formatarData(data.empenhos);
     if (elContratos && data.contratos) elContratos.textContent = 'Último upload: ' + formatarData(data.contratos);
+    if (elNp && data.np) elNp.textContent = 'Último upload: ' + formatarData(data.np);
 }
 window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 

@@ -123,3 +123,25 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
 @keyframes loadingBarSpin { to { transform: rotate(360deg); } }
 @keyframes loadingBarAnim { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .modal-content { background: white; padding: 30px; border-radius: 5px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); text-align: center; max-width: 450px; width: 100%; border-top: 4px solid #27ae60;}
+
+/* Barra animada dentro do overlay de "Carregando..." */
+.loading-overlay-progress {
+    width: min(520px, calc(100vw - 60px));
+    height: 10px;
+    background: rgba(51, 122, 183, 0.12);
+    border: 1px solid rgba(51, 122, 183, 0.25);
+    border-radius: 6px;
+    margin-top: 18px;
+    overflow: hidden;
+}
+.loading-overlay-progress-inner {
+    height: 100%;
+    width: 45%;
+    background: linear-gradient(90deg, transparent, rgba(51, 122, 183, 0.95), rgba(93, 173, 226, 0.9), transparent);
+    background-size: 200% 100%;
+    animation: loadingOverlayAnim 1.2s linear infinite;
+}
+@keyframes loadingOverlayAnim {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(220%); }
+}

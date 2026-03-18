@@ -109,6 +109,14 @@ service cloud.firestore {
       allow delete: if logado() && temPermissao('acesso_admin');
     }
 
+    // Nota de Pagamento (NP) - coleção para vincular Títulos e documentos (OP/OB)
+    match /np/{docId} {
+      allow read: if logado() && (temPermissao('op_ler') || temPermissao('acesso_admin'));
+      allow create: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('acesso_admin'));
+      allow update: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('acesso_admin'));
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
     match /config/{docId} {
       allow read: if logado();
       allow write: if logado() && temPermissao('acesso_admin');
