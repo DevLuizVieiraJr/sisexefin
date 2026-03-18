@@ -86,7 +86,10 @@
                 e.preventDefault();
                 const idSecao = 'secao-' + secao;
                 const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', darf: 'darf_ler', contratos: 'contratos_ler', centrocustos: 'centrocustos_ler', ug: 'ug_ler', backup: 'backup_ler' };
-                if (typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
+                // Evita bloqueio indevido se as permissões ainda não carregaram (race condition).
+                // Se permissoesEmCache estiver vazio/indefinido, deixamos abrir a seção e o route guard vai tratar depois.
+                const permsCarregadas = (typeof permissoesEmCache !== 'undefined' && Array.isArray(permissoesEmCache) && permissoesEmCache.length > 0);
+                if (permsCarregadas && typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
                 if (typeof mostrarSecao === 'function') mostrarSecao(idSecao, link);
                 if (typeof history.pushState === 'function') history.pushState({}, '', 'sistema.html?secao=' + secao);
             });
