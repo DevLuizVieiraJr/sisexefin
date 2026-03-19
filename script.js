@@ -153,7 +153,14 @@ function toggleSidebar() {
     if (toggle) {
         const icon = toggle.querySelector('.menu-btn-icon');
         const text = toggle.querySelector('.sidebar-toggle-text');
-        if (icon) icon.textContent = colapsado ? '▶' : '◀';
+        if (icon) {
+            if (icon.classList) {
+                icon.classList.toggle('fa-chevron-left', !colapsado);
+                icon.classList.toggle('fa-chevron-right', colapsado);
+            } else {
+                icon.textContent = colapsado ? '\u25B6' : '\u25C0';
+            }
+        }
         if (text) text.textContent = colapsado ? ' Mostrar menu' : ' Ocultar menu';
     }
 }
@@ -169,7 +176,10 @@ function initSidebarState() {
             if (toggle) {
                 const icon = toggle.querySelector('.menu-btn-icon');
                 const text = toggle.querySelector('.sidebar-toggle-text');
-                if (icon) icon.textContent = '▶';
+                if (icon && icon.classList) {
+                    icon.classList.remove('fa-chevron-left');
+                    icon.classList.add('fa-chevron-right');
+                } else if (icon) icon.textContent = '\u25B6';
                 if (text) text.textContent = ' Mostrar menu';
             }
         }

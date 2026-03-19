@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>SisExeFin - Administração de Acessos</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         /* Loading overlay global (usado pelo script.js) */
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -63,8 +64,10 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
-            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            </nav>
         </nav>
 
     <div class="content">

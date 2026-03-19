@@ -63,11 +63,9 @@
         if (typeof mostrarSecao === 'function') {
             mostrarSecao(idSecao, elMenu || null);
         }
-        // Garante que o subgrupo "Tabelas de Apoio" esteja expandido para exibir as seções
-        const subTabelas = document.getElementById('sub-tabelas');
-        const btnTabelas = document.querySelector('.menu-section-toggle[data-toggle="tabelas"]');
-        if (subTabelas) subTabelas.classList.remove('oculto');
-        if (btnTabelas) btnTabelas.classList.remove('colapsado');
+        // Garante que o subgrupo "Tabelas de Apoio" esteja expandido (padrão AdminLTE 3)
+        const itemTabelas = document.querySelector('.nav-item.has-treeview[data-tree="tabelas"]');
+        if (itemTabelas) itemTabelas.classList.add('menu-open');
     }
 
     window.inicializarSecaoSistema = executarInicializacao;

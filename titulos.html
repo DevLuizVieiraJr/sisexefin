@@ -5,16 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SisExeFin - Títulos de Crédito</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .loading-overlay.hide { display: none; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .sidebar-submenu { padding-left: 20px; list-style: none; }
-        .sidebar-submenu li { margin: 2px 0; }
-        .sidebar-submenu .menu-btn { font-size: 13px; padding: 8px 15px; }
-        .sidebar-expandido .menu-btn-tc { border-left-color: #3498db; }
         .stepper-tc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding: 15px; background: #f9fafc; border: 1px solid #e1e5eb; border-radius: 4px; }
         .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
         .menu-link-externo:hover { color: #5dade2; }
@@ -70,8 +67,10 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
-            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            </nav>
         </nav>
 
         <main class="content">

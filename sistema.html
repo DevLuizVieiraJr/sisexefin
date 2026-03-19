@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SisExeFin - Tabelas de Apoio</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         /* CSS da Camada de Carregamento (Loading Overlay) */
@@ -55,8 +56,10 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
-            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+            </nav>
         </nav>
 
         <main class="content">
