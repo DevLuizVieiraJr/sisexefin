@@ -396,7 +396,7 @@ auth.onAuthStateChanged(async (user) => {
                 window.location.replace('dashboard.html');
                 return;
             }
-            corpoAdmin.style.display = 'block';
+            corpoAdmin.style.display = 'flex';
         }
         // Lógica de Rota: Estamos na SPA Títulos?
         else if (corpoTitulos) {
@@ -407,21 +407,21 @@ auth.onAuthStateChanged(async (user) => {
             }
             aplicarPermissoesUI();
             atualizarSeletorPerfil();
-            corpoTitulos.style.display = 'block';
+            corpoTitulos.style.display = 'flex';
             if (typeof inicializarTitulosSPA === 'function') inicializarTitulosSPA();
         }
         // Lógica de Rota: Estamos no Sistema (Tabelas de Apoio)?
         else if (corpoSistema) {
             aplicarPermissoesUI();
             atualizarSeletorPerfil();
-            corpoSistema.style.display = 'block';
+            corpoSistema.style.display = 'flex';
             if (typeof window.inicializarSecaoSistema === 'function') window.inicializarSecaoSistema();
         }
         // Lógica de Rota: Estamos no Dashboard?
         else if (corpoDashboard) {
             aplicarPermissoesUI();
             atualizarSeletorPerfil();
-            corpoDashboard.style.display = 'block';
+            corpoDashboard.style.display = 'flex';
             esconderLoading();
         }
         if (typeof iniciarWatcherInatividade === 'function') iniciarWatcherInatividade();

@@ -11,6 +11,8 @@
         darf: 'secao-darf',
         contratos: 'secao-contratos',
         titulos: 'secao-titulos',
+        centrocustos: 'secao-centrocustos',
+        ug: 'secao-ug',
         backup: 'secao-backup'
     };
     const mapSecaoPermissao = {
@@ -20,11 +22,13 @@
         'secao-darf': 'darf_ler',
         'secao-contratos': 'contratos_ler',
         'secao-titulos': 'titulos_ler',
+        'secao-centrocustos': 'centrocustos_ler',
+        'secao-ug': 'ug_ler',
         'secao-backup': 'backup_ler'
     };
     const params = new URLSearchParams(window.location.search);
     let secaoParam = params.get('secao');
-    const ordemSecoes = ['empenhos', 'lf', 'op', 'darf', 'contratos', 'titulos', 'backup'];
+    const ordemSecoes = ['empenhos', 'lf', 'op', 'darf', 'contratos', 'titulos', 'centrocustos', 'ug', 'backup'];
 
     function executarInicializacao() {
         let idSecao, permissaoRequerida;
@@ -59,6 +63,11 @@
         if (typeof mostrarSecao === 'function') {
             mostrarSecao(idSecao, elMenu || null);
         }
+        // Garante que o subgrupo "Tabelas de Apoio" esteja expandido para exibir as seções
+        const subTabelas = document.getElementById('sub-tabelas');
+        const btnTabelas = document.querySelector('.menu-section-toggle[data-toggle="tabelas"]');
+        if (subTabelas) subTabelas.classList.remove('oculto');
+        if (btnTabelas) btnTabelas.classList.remove('colapsado');
     }
 
     window.inicializarSecaoSistema = executarInicializacao;
