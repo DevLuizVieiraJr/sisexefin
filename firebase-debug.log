@@ -1,0 +1,75 @@
+[debug] [2026-03-19T23:16:55.839Z] ----------------------------------------------------------------------
+[debug] [2026-03-19T23:16:55.855Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\lucav\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2026-03-19T23:16:55.857Z] CLI Version:   15.11.0
+[debug] [2026-03-19T23:16:55.857Z] Platform:      win32
+[debug] [2026-03-19T23:16:55.857Z] Node Version:  v24.13.1
+[debug] [2026-03-19T23:16:55.857Z] Time:          Thu Mar 19 2026 20:16:55 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-03-19T23:16:55.858Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-19T23:16:55.862Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\lucav\OneDrive\Documentos\Projetos\sisexefin
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+
+[debug] [2026-03-19T23:17:01.498Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-03-19T23:17:01.499Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-03-19T23:20:30.711Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-19T23:20:30.712Z] > authorizing via signed-in user (lucavsjr@gmail.com)
+[debug] [2026-03-19T23:20:30.714Z] Checked if tokens are valid: false, expires at: 1773122497199
+[debug] [2026-03-19T23:20:30.715Z] Checked if tokens are valid: false, expires at: 1773122497199
+[debug] [2026-03-19T23:20:30.715Z] > refreshing access token with scopes: []
+[debug] [2026-03-19T23:20:30.717Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-03-19T23:20:30.717Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-19T23:20:31.531Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-03-19T23:20:31.532Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-19T23:20:31.553Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2026-03-19T23:20:32.924Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-03-19T23:20:32.924Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] 
+=== Dataconnect Setup
+[info] i  dataconnect: ensuring required API firebasedataconnect.googleapis.com is enabled... 
+[info] i  dataconnect: ensuring required API sqladmin.googleapis.com is enabled... 
+[debug] [2026-03-19T23:20:38.812Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:38.812Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:38.813Z] >>> [apiv2][query] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations/-/services [none]
+[debug] [2026-03-19T23:20:40.991Z] <<< [apiv2][status] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations/-/services 200
+[debug] [2026-03-19T23:20:40.991Z] <<< [apiv2][body] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations/-/services {}
+[info] i  Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[debug] [2026-03-19T23:20:45.495Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:45.495Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:45.495Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/sisexefin/billingInfo [none]
+[debug] [2026-03-19T23:20:47.121Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/sisexefin/billingInfo 200
+[debug] [2026-03-19T23:20:47.121Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/sisexefin/billingInfo {"name":"projects/sisexefin/billingInfo","projectId":"sisexefin","billingAccountName":"","billingEnabled":false}
+[debug] [2026-03-19T23:20:47.122Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:47.122Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:47.138Z] >>> [apiv2][query] GET https://monitoring.googleapis.com/v3/projects/sisexefin/timeSeries/ filter=metric.type%3D%22serviceruntime.googleapis.com%2Fquota%2Fallocation%2Fusage%22+AND+metric.label.quota_metric+%3D+%22sqladmin.googleapis.com%2Ffdc_lifetime_free_trial_per_project%22&interval.endTime=2026-03-19T23%3A20%3A47.122Z&interval.startTime=2026-03-12T23%3A20%3A47.121Z
+[debug] [2026-03-19T23:20:48.875Z] <<< [apiv2][status] GET https://monitoring.googleapis.com/v3/projects/sisexefin/timeSeries/ 200
+[debug] [2026-03-19T23:20:48.876Z] <<< [apiv2][body] GET https://monitoring.googleapis.com/v3/projects/sisexefin/timeSeries/ {"unit":"1"}
+[info] +  dataconnect: CloudSQL no cost trial available! 
+[debug] [2026-03-19T23:20:48.877Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:48.877Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:48.877Z] >>> [apiv2][query] GET https://sqladmin.googleapis.com/v1/projects/sisexefin/instances [none]
+[debug] [2026-03-19T23:20:50.285Z] <<< [apiv2][status] GET https://sqladmin.googleapis.com/v1/projects/sisexefin/instances 200
+[debug] [2026-03-19T23:20:50.285Z] <<< [apiv2][body] GET https://sqladmin.googleapis.com/v1/projects/sisexefin/instances {}
+[debug] [2026-03-19T23:20:50.286Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:50.286Z] Checked if tokens are valid: true, expires at: 1773966030532
+[debug] [2026-03-19T23:20:50.286Z] >>> [apiv2][query] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations [none]
+[debug] [2026-03-19T23:20:51.268Z] <<< [apiv2][status] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations 200
+[debug] [2026-03-19T23:20:51.269Z] <<< [apiv2][body] GET https://firebasedataconnect.googleapis.com/v1/projects/sisexefin/locations {"locations":[{"name":"projects/sisexefin/locations/asia-east1","locationId":"asia-east1","displayName":"Taiwan"},{"name":"projects/sisexefin/locations/asia-east2","locationId":"asia-east2","displayName":"Hong Kong"},{"name":"projects/sisexefin/locations/asia-northeast1","locationId":"asia-northeast1","displayName":"Tokyo"},{"name":"projects/sisexefin/locations/asia-northeast2","locationId":"asia-northeast2","displayName":"Osaka"},{"name":"projects/sisexefin/locations/asia-northeast3","locationId":"asia-northeast3","displayName":"Seoul"},{"name":"projects/sisexefin/locations/asia-south1","locationId":"asia-south1","displayName":"Mumbai"},{"name":"projects/sisexefin/locations/asia-southeast1","locationId":"asia-southeast1","displayName":"Singapore"},{"name":"projects/sisexefin/locations/asia-southeast2","locationId":"asia-southeast2","displayName":"Jakarta"},{"name":"projects/sisexefin/locations/australia-southeast1","locationId":"australia-southeast1","displayName":"Sydney"},{"name":"projects/sisexefin/locations/australia-southeast2","locationId":"australia-southeast2","displayName":"Melbourne"},{"name":"projects/sisexefin/locations/europe-central2","locationId":"europe-central2","displayName":"Warsaw"},{"name":"projects/sisexefin/locations/europe-north1","locationId":"europe-north1","displayName":"Finland"},{"name":"projects/sisexefin/locations/europe-southwest1","locationId":"europe-southwest1","displayName":"Madrid"},{"name":"projects/sisexefin/locations/europe-west1","locationId":"europe-west1","displayName":"Belgium"},{"name":"projects/sisexefin/locations/europe-west2","locationId":"europe-west2","displayName":"London"},{"name":"projects/sisexefin/locations/europe-west3","locationId":"europe-west3","displayName":"Frankfurt"},{"name":"projects/sisexefin/locations/europe-west4","locationId":"europe-west4","displayName":"Netherlands"},{"name":"projects/sisexefin/locations/europe-west6","locationId":"europe-west6","displayName":"Zurich"},{"name":"projects/sisexefin/locations/europe-west8","locationId":"europe-west8","displayName":"Milan"},{"name":"projects/sisexefin/locations/europe-west9","locationId":"europe-west9","displayName":"Paris"},{"name":"projects/sisexefin/locations/me-west1","locationId":"me-west1","displayName":"Tel Aviv"},{"name":"projects/sisexefin/locations/northamerica-northeast1","locationId":"northamerica-northeast1","displayName":"Montréal"},{"name":"projects/sisexefin/locations/northamerica-northeast2","locationId":"northamerica-northeast2","displayName":"Toronto"},{"name":"projects/sisexefin/locations/southamerica-east1","locationId":"southamerica-east1","displayName":"São Paulo"},{"name":"projects/sisexefin/locations/southamerica-west1","locationId":"southamerica-west1","displayName":"Santiago"},{"name":"projects/sisexefin/locations/us-central1","locationId":"us-central1","displayName":"Iowa"},{"name":"projects/sisexefin/locations/us-east1","locationId":"us-east1","displayName":"South Carolina"},{"name":"projects/sisexefin/locations/us-east4","locationId":"us-east4","displayName":"Northern Virginia"},{"name":"projects/sisexefin/locations/us-south1","locationId":"us-south1","displayName":"Dallas"},{"name":"projects/sisexefin/locations/us-west1","locationId":"us-west1","displayName":"Oregon"},{"name":"projects/sisexefin/locations/us-west2","locationId":"us-west2","displayName":"Los Angeles"},{"name":"projects/sisexefin/locations/us-west3","locationId":"us-west3","displayName":"Salt Lake City"},{"name":"projects/sisexefin/locations/us-west4","locationId":"us-west4","displayName":"Las Vegas"}]}
