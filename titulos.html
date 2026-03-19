@@ -269,14 +269,19 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel2">
+                        <p style="color:#666; margin-bottom:12px;">Informe a NP do SIAFI e vincule uma LF (da coleção LFxPF) a cada NE. NP é obrigatória para salvar.</p>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>NP (Nota de Pagamento):</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
+                            <div class="form-group flex-1"><label>NP (Nota de Pagamento) <span style="color:#e74c3c;">*</span>:</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
                             <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="date" id="dataLiquidacao"></div>
                         </div>
+                        <table class="tabela-gov tabela-ne-inputs" id="tabelaLiquidacao" style="margin-top:15px;">
+                            <thead><tr><th>NE</th><th>ND</th><th>Valor</th><th>Centro Custos</th><th>UG</th><th>LF (LFxPF)</th><th>PF</th></tr></thead>
+                            <tbody id="tbodyLiquidacao"></tbody>
+                        </table>
                     </div>
 
                     <div class="tab-panel-tc" id="panel3">
-                        <p style="color:#666; margin-bottom:15px;">Preencha LF e PF para cada NE vinculada.</p>
+                        <p style="color:#666; margin-bottom:15px;">LF é definida na aba Liquidação. Preencha PF quando a LF for atendida (informação da LFxPF).</p>
                         <table class="tabela-gov tabela-ne-inputs" id="tabelaLFPF">
                             <thead><tr><th>NE</th><th>Valor</th><th>LF</th><th>PF</th></tr></thead>
                             <tbody id="tbodyLFPF"></tbody>

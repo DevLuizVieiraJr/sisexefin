@@ -21,6 +21,7 @@
     let listaOI = [];
     let listaCentroCustos = [];
     let listaUG = [];
+    let baseLfPf = [];
     let statusFiltroAtual = null;
     let titulosSelecionados = new Set();
     let empenhosDaNotaAtual = [];
@@ -61,7 +62,7 @@
         mostrarLoading();
         let carregamentoFinalizado = false;
         let carregados = 0;
-        const TOTAL_COLECOES = 6;
+        const TOTAL_COLECOES = 7;
         const TIMEOUT_MS = 10000;
         const unsubscribers = [];
 
@@ -134,6 +135,10 @@
         unsubscribers.push(db.collection('unidadesGestoras').onSnapshot(snap => {
             listaUG = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             popularSelectUG();
+            aoReceberSnapshot();
+        }, onErr));
+        unsubscribers.push(db.collection('lfpf').onSnapshot(snap => {
+            baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(r => r.ativo !== false);
             aoReceberSnapshot();
         }, onErr));
 
@@ -1168,24 +1173,65 @@
         desenharEmpenhosNota();
         desenharTributacoes();
         desenharAuditoria(t.historicoStatus || []);
-        const tbodyLFPF = document.getElementById('tbodyLFPF');
-        if (tbodyLFPF) {
-            tbodyLFPF.innerHTML = '';
-            (empenhosDaNotaAtual || []).forEach((v, i) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : v.numEmpenho}</td>
-                    <td>R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')}</td>
-                    <td><input type="text" data-index="${i}" data-field="lf" value="${escapeHTML(v.lf || '')}"></td>
-                    <td><input type="text" data-index="${i}" data-field="pf" value="${escapeHTML(v.pf || '')}"></td>`;
-                tbodyLFPF.appendChild(tr);
-            });
-            tbodyLFPF.querySelectorAll('input[data-field]').forEach(inp => inp.addEventListener('change', function() {
-                const i = parseInt(this.getAttribute('data-index'));
-                const f = this.getAttribute('data-field');
-                if (empenhosDaNotaAtual[i]) empenhosDaNotaAtual[i][f] = this.value;
-            }));
-        }
+        desenharLiquidacao();
+        desenharFinanceiro();
         atualizarBotoesAbaDadosBasicos(false);
+    }
+
+    function desenharLiquidacao() {
+        const tbody = document.getElementById('tbodyLiquidacao');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const lfAtivas = (baseLfPf || []).filter(r => r.ativo !== false);
+        (empenhosDaNotaAtual || []).forEach((v, i) => {
+            const tr = document.createElement('tr');
+            const ccLabel = labelCentroCustos(v.centroCustosId);
+            const ugLabel = labelUG(v.ugId);
+            const opts = lfAtivas.map(r => {
+                const lfVal = r.lf || '';
+                const sel = (v.lf || '') === lfVal ? ' selected' : '';
+                return '<option value="' + escapeHTML(lfVal) + '"' + sel + '>' + escapeHTML(lfVal) + '</option>';
+            }).join('');
+            const selectLf = '<select data-index="' + i + '" data-field="lf" class="select-lf-liquidacao"><option value="">Selecione LF...</option>' + opts + '</select>';
+            const lfReg = lfAtivas.find(r => (r.lf || '') === (v.lf || ''));
+            const pfExib = lfReg && lfReg.pf ? escapeHTML(lfReg.pf) : (v.pf || '-');
+            tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
+                '<td>' + escapeHTML(v.nd || '-') + '</td>' +
+                '<td>R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')) + '</td>' +
+                '<td>' + escapeHTML(ccLabel) + '</td>' +
+                '<td>' + escapeHTML(ugLabel) + '</td>' +
+                '<td>' + selectLf + '</td>' +
+                '<td class="pf-readonly">' + pfExib + '</td>';
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('select[data-field="lf"]').forEach(sel => sel.addEventListener('change', function() {
+            const idx = parseInt(this.getAttribute('data-index'));
+            if (empenhosDaNotaAtual[idx]) {
+                empenhosDaNotaAtual[idx].lf = this.value;
+                const lfReg = lfAtivas.find(r => (r.lf || '') === this.value);
+                empenhosDaNotaAtual[idx].pf = (lfReg && lfReg.pf) ? lfReg.pf : '';
+                desenharLiquidacao();
+            }
+        }));
+    }
+
+    function desenharFinanceiro() {
+        const tbody = document.getElementById('tbodyLFPF');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        (empenhosDaNotaAtual || []).forEach((v, i) => {
+            const tr = document.createElement('tr');
+            const lfExib = v.lf ? escapeHTML(v.lf) : '-';
+            tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
+                '<td>R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')) + '</td>' +
+                '<td class="lf-readonly">' + lfExib + '</td>' +
+                '<td><input type="text" data-index="' + i + '" data-field="pf" value="' + escapeHTML(v.pf || '') + '" placeholder="PF"></td>';
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('input[data-field="pf"]').forEach(inp => inp.addEventListener('change', function() {
+            const idx = parseInt(this.getAttribute('data-index'));
+            if (empenhosDaNotaAtual[idx]) empenhosDaNotaAtual[idx].pf = this.value;
+        }));
     }
 
     function desenharAuditoria(historico) {
@@ -1250,6 +1296,14 @@
         }
 
         const valorContratoNum = contratoSel && contratoSel.valorContrato ? (parseFloat(contratoSel.valorContrato) || 0) : 0;
+
+        if (statusAtual === 'Em Liquidação') {
+            const npVal = (document.getElementById('np')?.value || '').trim();
+            if (!npVal) {
+                alert("NP (Nota de Pagamento) é obrigatória para salvar quando o TC está em Liquidação.");
+                return;
+            }
+        }
 
         const dados = {
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
