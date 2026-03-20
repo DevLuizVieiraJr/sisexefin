@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin - Títulos de Crédito</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .loading-overlay.hide { display: none; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .sidebar-submenu { padding-left: 20px; list-style: none; }
+        .sidebar-submenu li { margin: 2px 0; }
+        .sidebar-submenu .menu-btn { font-size: 13px; padding: 8px 15px; }
+        .sidebar-expandido .menu-btn-tc { border-left-color: #3498db; }
+        .stepper-tc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding: 15px; background: #f9fafc; border: 1px solid #e1e5eb; border-radius: 4px; }
+        .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
+        .menu-link-externo:hover { color: #5dade2; }
+        .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
+        .stepper-tc span, .stepper-tc button { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid #ddd; cursor: pointer; background: #fff; color: #333; }
+        .stepper-tc button:hover { background: #eee; }
+        .stepper-tc .ativo { background: #337ab7; color: white; border-color: #2c6ba0; }
+        .stepper-tc .concluido { background: #27ae60; color: white; }
+        .stepper-tc .bloqueado { background: #ddd; color: #777; }
+        .titulo-form-tc { margin: 0; font-size: 1.05rem; font-weight: 600; color: #333; }
+        .tabs-tc { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 16px; }
+        .tab-tc { padding: 8px 14px; font-size: 13px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; }
+        .tab-tc:hover:not(.bloqueado) { background: #eee; color: #333; }
+        .tab-tc.ativo { background: #337ab7; color: white; margin-bottom: -2px; border-bottom: 2px solid #337ab7; border-color: #337ab7; font-weight: bold; box-shadow: 0 -2px 4px rgba(0,0,0,0.1); }
+        .tab-tc.bloqueado { cursor: not-allowed; opacity: 0.6; color: #999; }
+        .tab-panel-tc { display: none; padding: 20px 0; }
+        .tab-panel-tc.visivel { display: block; }
+        .badge-status { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge-rascunho { background: #95a5a6; color: white; }
+        .badge-processamento { background: #3498db; color: white; }
+        .badge-liquidacao { background: #9b59b6; color: white; }
+        .badge-liquidado { background: #1abc9c; color: white; }
+        .badge-aguardando { background: #f39c12; color: white; }
+        .badge-para-pagamento { background: #27ae60; color: white; }
+        .badge-devolvido { background: #e74c3c; color: white; }
+        .tabela-ne-inputs input { width: 100%; padding: 6px; font-size: 12px; }
+        .check-tc { width: 20px; height: 20px; }
+        .btn-modelo-csv { font-size: 11px; padding: 4px 8px; color: #337ab7; }
+        .input-com-clear { display: flex; align-items: center; gap: 4px; }
+        .input-com-clear input { flex: 1; }
+        .btn-clear-input { flex-shrink: 0; width: 28px; height: 34px; padding: 0; font-size: 18px; line-height: 1; color: #777; background: #eee; border: 1px solid #d2d6de; border-radius: 0; cursor: pointer; }
+        .btn-clear-input:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
+    </style>
+</head>
+<body style="display: none;" id="corpo-titulos">
+    <div id="loadingApp" class="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Títulos de Crédito</div>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
+            </div>
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'">⬅ Voltar</span>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+        </nav>
+
+        <main class="content">
+            <div id="tela-lista-titulos" class="card">
+                <div class="header-lista">
+                    <h2>Títulos de Crédito</h2>
+                    <button onclick="abrirFormularioTitulo()" class="btn-primary" data-permission="titulos_inserir">+ Novo Título</button>
+                </div>
+                <div class="stepper-tc" id="filtrosStatusTC" style="margin-bottom: 15px;"></div>
+                <div class="toolbar">
+                    <div class="import-group" data-permission="acesso_admin">
+                        <label>Importar OP (NP→OP):</label>
+                        <input type="file" id="fileImportOP" accept=".csv,.xlsx,.xls">
+                        <a href="#" onclick="downloadModeloOP(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a>
+                    </div>
+                </div>
+                <div class="controles-tabela">
+                    <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
+                    <div class="search-box"><input type="text" id="buscaTabelaTitulos" placeholder="Pesquisar PROC, Empresa ou NE..."></div>
+                </div>
+                <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
+                    <strong>Selecionados: <span id="countSelecionados">0</span></strong>
+                    <button type="button" id="btnAvancarNP" class="btn-primary btn-small" style="margin-left: 15px;">Atribuir NP em bloco</button>
+                    <button type="button" id="btnAvancarLF" class="btn-primary btn-small">Atribuir LF em bloco</button>
+                    <button type="button" id="btnAvancarPF" class="btn-primary btn-small">Atribuir PF em bloco</button>
+                </div>
+                <table id="tabelaTitulos" class="tabela-gov">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="checkTodos" class="check-tc" title="Selecionar todos"></th>
+                            <th>ID-PROC</th>
+                            <th>TC</th>
+                            <th>Fornecedor</th>
+                            <th>Valor NF</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-titulos"></tbody>
+                </table>
+                <div class="paginacao" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 12px; color: #666;">Mostrando <strong id="mostrandoDe">0</strong> de <strong id="mostrandoTotal">0</strong> registros</span>
+                        <label data-permission="titulos_ver_inativos" style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" id="filtroInativosTitulos">
+                            Incluir inativos
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="irParaPrimeiraPagina()" id="btnPrimeira" class="btn-outline btn-small">Primeira</button>
+                        <button onclick="mudarPagina(-1)" id="btnAnterior" class="btn-outline btn-small">Anterior</button>
+                        <span id="infoPagina">1 de 1</span>
+                        <button onclick="mudarPagina(1)" id="btnProximo" class="btn-outline btn-small">Próximo</button>
+                        <button onclick="irParaUltimaPagina()" id="btnUltima" class="btn-outline btn-small">Última</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tela-formulario-titulos" style="display: none;" class="card">
+                <div style="margin-bottom: 18px; border-bottom: 2px solid #eee; padding-bottom: 12px;">
+                    <h2 class="titulo-form-tc"><span id="tituloFormTC">Entrada de Título de Crédito</span></h2>
+                </div>
+
+                <div class="tabs-tc" id="tabsTC">
+                    <div class="tab-tc ativo" data-tab="0">Dados Básicos</div>
+                    <div class="tab-tc" data-tab="1">Processamento</div>
+                    <div class="tab-tc" data-tab="2">Liquidação</div>
+                    <div class="tab-tc" data-tab="3">Financeiro</div>
+                    <div class="tab-tc" data-tab="4">Histórico</div>
+                </div>
+
+                <form id="formTitulo">
+                    <input type="hidden" id="editIndexTitulo" value="-1">
+                    <input type="hidden" id="idProc">
+
+                    <div class="tab-panel-tc visivel" id="panel0">
+                        <!-- Bloco A -->
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Ano:</label><input type="text" id="anoTC" value="2026" readonly class="input-readonly" maxlength="4"></div>
+                            <div class="form-group flex-1"><label>UG:</label><input type="text" id="ugTC" value="741000" readonly class="input-readonly" maxlength="6"></div>
+                            <div class="form-group flex-1"><label>Tipo de TC:</label><select id="tipoTC"><option value="NF" selected>Nota Fiscal (NF)</option><option value="FT">Fatura (FT)</option><option value="BO">Boleto (BO)</option><option value="OT">Outros (OT)</option></select></div>
+                            <div class="form-group flex-1"><label>Entrada na EXEFIN:</label><input type="date" id="dataExefin" required></div>
+                        </div>
+                        <!-- Bloco B -->
+                        <div class="form-row">
+                            <div class="form-group flex-1" style="position: relative;">
+                                <label>OI de Origem:</label>
+                                <div class="input-com-clear">
+                                    <input type="text" id="buscaOIT" placeholder="Digite 2+ caracteres para buscar..." autocomplete="off">
+                                    <button type="button" id="limparOIBtn" class="btn-clear-input" onclick="limparOISelecionada()" style="display:none;">×</button>
+                                </div>
+                                <input type="hidden" id="oiEntregou">
+                                <ul id="listaResultadosOIT" class="autocomplete-list"></ul>
+                            </div>
+                            <div class="form-group flex-1"><label>Nº do TC:</label><input type="text" id="numTC" maxlength="50" required></div>
+                            <div class="form-group flex-1"><label>Valor (R$):</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda required></div>
+                            <div class="form-group flex-1"><label>Data de Emissão do TC:</label><input type="date" id="dataEmissao" required></div>
+                            <div class="form-group flex-1"><label>Data do Ateste (Certificação):</label><input type="date" id="dataAteste" required></div>
+                        </div>
+                        <!-- Bloco C -->
+                        <fieldset class="gov-fieldset">
+                            <legend>Dados do Contrato e Fornecedor</legend>
+                            <div class="form-row">
+                                <div class="form-group flex-1" style="position: relative;">
+                                    <label>Fornecedor:</label>
+                                    <div class="input-com-clear">
+                                        <input type="text" id="buscaFornecedorT" placeholder="Digite 2+ caracteres para buscar fornecedor..." autocomplete="off">
+                                        <button type="button" id="limparFornecedorBtn" class="btn-clear-input" onclick="limparFornecedorSelecionado()" style="display:none;">×</button>
+                                    </div>
+                                    <ul id="listaResultadosFornecedorT" class="autocomplete-list"></ul>
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label>Contrato (Instrumento):</label>
+                                    <select id="contratoSelecionado" disabled><option value="">Selecione o fornecedor primeiro</option></select>
+                                </div>
+                                <div class="form-group flex-1"><label>Valor do Contrato (R$):</label><input type="text" id="valorContrato" readonly class="input-readonly" placeholder="Preenchido ao selecionar contrato"></div>
+                                <div class="form-group flex-1">
+                                    <label>RC do Contrato:</label>
+                                    <select id="rcSelecionada"><option value="">Selecione o contrato</option></select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Início da Vigência:</label><input type="date" id="inicioVigencia" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label>Fim da Vigência:</label><input type="date" id="fimVigencia" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label>Fiscal do Contrato:</label><input type="text" id="fiscalContrato" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label>Contato do Fiscal:</label><input type="text" id="contatoFiscal" readonly class="input-readonly"></div>
+                            </div>
+                            <p id="avisoVigenciaContrato" style="display:none;color:#e74c3c;font-size:12px;margin-top:4px;"></p>
+                        </fieldset>
+                        <!-- Bloco D -->
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>Observações:</label>
+                                <textarea id="observacoesTC" rows="3" placeholder="Registe informações adicionais relevantes para este TC..."></textarea>
+                            </div>
+                        </div>
+                        <div id="acoesAbaDadosBasicos" class="form-row" style="display: none; margin-top: 15px; gap: 10px;">
+                            <button type="button" id="btnEditarAbaDadosBasicos" class="btn-default">Editar Aba</button>
+                            <button type="button" id="btnSalvarAbaDadosBasicos" class="btn-primary" style="display: none;">Salvar Aba</button>
+                        </div>
+                        <input type="hidden" id="notaFiscal">
+                        <input type="hidden" id="contratoIdSelecionado">
+                        <input type="hidden" id="fornecedorValor">
+                    </div>
+
+                    <div class="tab-panel-tc" id="panel1">
+                        <fieldset class="gov-fieldset">
+                            <legend>Vincular Empenhos (NE)</legend>
+                            <div class="form-group" style="position: relative;">
+                                <label>Buscar NE:</label>
+                                <input type="text" id="buscaEmpenhoT" placeholder="Ex: 741000..." autocomplete="off">
+                                <ul id="listaResultadosEmpenhoT" class="autocomplete-list"></ul>
+                            </div>
+                            <div id="detalhesVinculoEmpenho" style="display: none; background: #e8f4f8; padding: 15px; margin-bottom: 10px;">
+                                <h4 id="empenhoSelecionadoTexto"></h4>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>ND (Natureza de Despesa):</label><input type="text" id="vinculoND" readonly class="input-readonly" placeholder="Preenchido pela NE"></div>
+                                    <div class="form-group flex-1"><label>Subelemento (2 dígitos):</label><input type="text" id="vinculoSubelemento" maxlength="2" pattern="[0-9]*" placeholder="Ex: 01" title="Apenas números, 2 dígitos"></div>
+                                    <div class="form-group flex-1"><label>Valor utilizado (R$):</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,01" data-moeda title="Mín. R$ 0,01 e máx. o valor do TC"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Centro de Custos:</label><select id="vinculoCentroCustos"><option value="">Selecione...</option></select></div>
+                                    <div class="form-group flex-1"><label>UG Beneficiária:</label><select id="vinculoUG"><option value="">Selecione...</option></select></div>
+                                    <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
+                                    <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
+                                </div>
+                                <button type="button" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar à Lista</button>
+                            </div>
+                            <table class="tabela-gov tabela-ne-inputs">
+                                <thead><tr><th>NE</th><th>ND</th><th>Subel.</th><th>Valor</th><th>Centro Custos</th><th>UG Benef.</th><th>LF</th><th>PF</th><th></th></tr></thead>
+                                <tbody id="tbodyEmpenhosNota"></tbody>
+                            </table>
+                        </fieldset>
+                        <fieldset class="gov-fieldset">
+                            <legend>Tributações (DARF/INSS/ISS)</legend>
+                            <div id="containerTributacoes"></div>
+                            <button type="button" onclick="adicionarTributacao()" class="btn-default btn-small">+ Adicionar Tributação</button>
+                        </fieldset>
+                    </div>
+
+                    <div class="tab-panel-tc" id="panel2">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>NP (Nota de Pagamento):</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
+                            <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="date" id="dataLiquidacao"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel-tc" id="panel3">
+                        <p style="color:#666; margin-bottom:15px;">Preencha LF e PF para cada NE vinculada.</p>
+                        <table class="tabela-gov tabela-ne-inputs" id="tabelaLFPF">
+                            <thead><tr><th>NE</th><th>Valor</th><th>LF</th><th>PF</th></tr></thead>
+                            <tbody id="tbodyLFPF"></tbody>
+                        </table>
+                        <div class="form-row" style="margin-top:15px;">
+                            <div class="form-group flex-1"><label>OP (Ordem de Pagamento):</label><input type="text" id="op" placeholder="Preenchido via import CSV"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel-tc" id="panel4">
+<h3>Histórico</h3>
+                            <table class="tabela-gov">
+                            <thead><tr><th>Data</th><th>Status</th><th>Usuário</th><th>Motivo (Devolvido)</th></tr></thead>
+                            <tbody id="tbodyAuditoria"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;">↩ Devolver TC</button>
+                        <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;">↪ Dar nova entrada</button>
+                        <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;">Enviar para Processamento</button>
+                        <button type="submit" class="btn-primary" data-permission="titulos_inserir">💾 Salvar</button>
+                        <button type="button" id="btnCancelarTitulo" class="btn-default">Fechar</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Primeiro salvamento - Continuar ou Enviar -->
+    <div id="modalPrimeiroSalvo" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h3 style="margin-bottom:15px;">TC salvo com sucesso!</h3>
+            <p style="margin-bottom:20px; color:#555;">Deseja continuar editando como Rascunho ou enviar para Processamento?</p>
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                <button type="button" id="modalPrimeiroSalvoContinuar" class="btn-default">Continuar editando</button>
+                <button type="button" id="modalPrimeiroSalvoEnviar" class="btn-primary">Enviar para Processamento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Devolver TC -->
+    <div id="modalDevolver" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:400px;">
+            <h3 style="margin-bottom:15px; color:#e74c3c;">Devolver TC</h3>
+            <p style="margin-bottom:15px; font-size:13px;">Confirma a devolução? Informe os dados abaixo:</p>
+            <div class="form-group"><label>Motivo da devolução (obrigatório):</label><textarea id="devolverMotivo" rows="3" placeholder="Informe o motivo da rejeição/devolução..." required></textarea></div>
+            <div class="form-group"><label>Nome do Recebedor (opcional):</label><input type="text" id="devolverNome" placeholder="Nome de quem recebeu"></div>
+            <div class="form-group" style="position:relative;">
+                <label>OI de Destino:</label>
+                <div class="input-com-clear">
+                    <input type="text" id="buscaOIDestino" placeholder="Digite para buscar OI..." autocomplete="off">
+                    <button type="button" id="limparOIDestinoBtn" class="btn-clear-input" onclick="limparOIDestino()" style="display:none;">×</button>
+                </div>
+                <ul id="listaResultadosOIDestino" class="autocomplete-list"></ul>
+                <input type="hidden" id="oiDestinoId">
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button type="button" id="modalDevolverCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalDevolverConfirmar" class="btn-default" style="color:#e74c3c;">Devolver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Dar nova entrada -->
+    <div id="modalNovaEntrada" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:350px;">
+            <h3 style="margin-bottom:15px;">Dar nova entrada</h3>
+            <p style="margin-bottom:15px; font-size:13px;">Informe a nova data de entrada:</p>
+            <div class="form-group"><label>Data de entrada:</label><input type="date" id="novaEntradaData" required></div>
+            <div class="form-group" style="position:relative;">
+                <label>OI de Origem:</label>
+                <div class="input-com-clear">
+                    <input type="text" id="novaEntradaOI" placeholder="Digite para buscar OI..." autocomplete="off">
+                    <button type="button" id="limparNovaEntradaOIBtn" class="btn-clear-input" onclick="limparNovaEntradaOI()" style="display:none;">×</button>
+                </div>
+                <ul id="listaResultadosNovaEntradaOI" class="autocomplete-list"></ul>
+                <input type="hidden" id="novaEntradaOIId">
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button type="button" id="modalNovaEntradaCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalNovaEntradaConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
+    <script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script-titulos-spa.js"></script>
+    <script src="script-menu-toggle.js"></script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =================================================================
+    // 1. FUNÇÕES DE VALIDAÇÃO GERAIS
+    // =================================================================
+    function logado() { 
+      return request.auth != null; 
+    }
+    
+    function temPermissao(permissao) {
+      let uid = request.auth.uid;
+      let userPath = /databases/$(database)/documents/usuarios/$(uid);
+      return exists(userPath)
+        && get(userPath).data.get('bloqueado', false) != true
+        && (!('status' in get(userPath).data) || get(userPath).data.status != 'pendente')
+        && _temPermissaoPerfil(permissao, userPath);
+    }
+    
+    function _temPermissaoPerfil(permissao, userPath) {
+      let userDoc = get(userPath).data;
+      let perfis = ('perfis' in userDoc) ? userDoc.perfis : (('perfil' in userDoc) ? [userDoc.perfil] : []);
+      let perfilAtivo = ('perfil_ativo' in userDoc) ? userDoc.perfil_ativo : userDoc.get('perfil', null);
+      return perfilAtivo != null
+        && perfis.hasAny([perfilAtivo])
+        && exists(/databases/$(database)/documents/perfis/$(perfilAtivo))
+        && _temPermissaoPermRef(permissao, get(/databases/$(database)/documents/perfis/$(perfilAtivo)).data.get('permissoes', []));
+    }
+    
+    function _temPermissaoPermRef(permissao, permRef) {
+      return permRef != null
+        && (permRef.hasAny([permissao])
+          || (permissao in ['empenhos_inserir','contratos_inserir','darf_inserir','titulos_inserir','lf_inserir','centrocustos_inserir','ug_inserir'] && permRef.hasAny(['inserir_dados']))
+          || (permissao in ['empenhos_editar','contratos_editar','darf_editar','titulos_editar','lf_editar','centrocustos_editar','ug_editar'] && permRef.hasAny(['editar_dados']))
+          || (permissao in ['empenhos_excluir','contratos_excluir','darf_excluir','titulos_excluir','lf_excluir','centrocustos_excluir','ug_excluir'] && permRef.hasAny(['excluir_dados'])));
+    }
+
+    // =================================================================
+    // 2. REGRAS DO PAINEL DE ADMINISTRAÇÃO (Segurança Máxima)
+    // =================================================================
+    
+    match /usuarios/{userId} {
+      allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
+      allow create: if logado() && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(['perfis', 'perfil_ativo', 'bloqueado', 'perfil'])
+        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'pendente');
+      allow update: if logado() && (
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['perfil_ativo']))
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    match /auditoria/{docId} {
+      allow read: if logado() && temPermissao('acesso_admin');
+      allow create: if logado() && temPermissao('acesso_admin');
+      allow update, delete: if false;
+    }
+
+    match /perfis/{perfilId} {
+      allow read: if logado();
+      allow write: if logado() && temPermissao('acesso_admin');
+    }
+
+    // =================================================================
+    // 3. REGRAS OPERACIONAIS (Permissões granulares: modulo_acao)
+    // =================================================================
+    
+    match /empenhos/{docId} {
+      allow read: if logado() && temPermissao('empenhos_ler');
+      allow create: if logado() && temPermissao('empenhos_inserir');
+      allow update: if logado() && temPermissao('empenhos_editar');
+      allow delete: if logado() && temPermissao('empenhos_excluir');
+    }
+
+    match /contratos/{docId} {
+      allow read: if logado() && temPermissao('contratos_ler');
+      allow create: if logado() && temPermissao('contratos_inserir');
+      allow update: if logado() && temPermissao('contratos_editar');
+      allow delete: if logado() && temPermissao('contratos_excluir');
+    }
+
+    match /darf/{docId} {
+      allow read: if logado() && temPermissao('darf_ler');
+      allow create: if logado() && temPermissao('darf_inserir');
+      allow update: if logado() && temPermissao('darf_editar');
+      allow delete: if logado() && temPermissao('darf_excluir');
+    }
+
+    match /titulos/{docId} {
+      allow read: if logado() && temPermissao('titulos_ler');
+      allow create: if logado() && temPermissao('titulos_inserir');
+      allow update: if logado() && temPermissao('titulos_editar');
+      allow delete: if logado() && temPermissao('titulos_excluir');
+    }
+
+    match /oi/{docId} {
+      allow read: if logado();
+      allow create: if logado() && (temPermissao('oi_inserir') || temPermissao('acesso_admin'));
+      allow update: if logado() && (temPermissao('oi_editar') || temPermissao('acesso_admin'));
+      allow delete: if logado() && (temPermissao('oi_excluir') || temPermissao('acesso_admin'));
+    }
+
+    match /lfpf/{docId} {
+      allow read: if logado() && temPermissao('lf_ler');
+      allow create: if logado() && temPermissao('lf_inserir');
+      allow update: if logado() && temPermissao('lf_editar');
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    match /config/{docId} {
+      allow read: if logado();
+      allow write: if logado() && temPermissao('acesso_admin');
+    }
+
+    // Centro de Custos: leitura só de ativos para não-admin; delete permanente só ADMIN
+    match /centroCustos/{docId} {
+      allow read: if logado() && temPermissao('centrocustos_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
+      allow create: if logado() && temPermissao('centrocustos_inserir');
+      allow update: if logado() && (temPermissao('centrocustos_editar') || temPermissao('acesso_admin'));
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    // Unidade Gestora (UG): leitura só de ativos para não-admin; delete permanente só ADMIN
+    match /unidadesGestoras/{docId} {
+      allow read: if logado() && temPermissao('ug_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
+      allow create: if logado() && temPermissao('ug_inserir');
+      allow update: if logado() && (temPermissao('ug_editar') || temPermissao('acesso_admin'));
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+  }
+}

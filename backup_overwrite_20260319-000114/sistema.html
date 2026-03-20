@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin - Tabelas de Apoio</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* CSS da Camada de Carregamento (Loading Overlay) */
+        .loading-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(255, 255, 255, 0.85); z-index: 9999; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        .spinner { 
+            border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; 
+            border-radius: 50%; width: 45px; height: 45px; 
+            animation: spin 1s linear infinite; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
+        .menu-link-externo:hover { color: #5dade2; }
+        .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
+        .tabs-ne { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+        .tab-ne { padding: 10px 18px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-weight: 500; color: #666; font-size: 14px; }
+        .tab-ne:hover { background: #eee; color: #333; }
+        .tab-ne.ativo { background: #337ab7; color: white; margin-bottom: -2px; border-bottom: 2px solid #337ab7; border-color: #337ab7; font-weight: bold; }
+        .tab-panel-ne { display: none; padding: 20px 0; }
+        .tab-panel-ne.visivel { display: block; }
+        .tabela-empenhos-compact { font-size: 11px; }
+        .tabela-empenhos-compact th, .tabela-empenhos-compact td { padding: 6px 8px; }
+        .tabela-empenhos-compact td:nth-child(4) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
+</head>
+<body style="display: none;" id="corpo-sistema"> 
+    
+    <div id="loadingApp" class="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
+        <div class="topbar-user">
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'" style="margin-right:15px;">⬅ Dashboard</span>
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
+            </div>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><span class="menu-btn-icon">◀</span><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
+        </nav>
+
+        <main class="content">
+            
+            <section id="secao-titulos" class="secao" data-permission="titulos_ler" style="display: none;">
+                <div id="tela-lista-titulos" class="card">
+                    <div class="header-lista">
+                        <h2>Entrada de Títulos <span style="font-size: 14px; color: #777;">(HUB / FORM-3)</span></h2>
+                        <button onclick="abrirFormularioTitulo()" class="btn-primary" data-permission="titulos_inserir">+ Novo Título</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="25">25</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaTitulos" placeholder="Pesquisar PROC, Empresa ou NE..."></div>
+                    </div>
+                    <table id="tabelaTitulos" class="tabela-gov">
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'idProc')">ID-PROC <span class="sort-icon" id="sort-titulos-idProc"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'numTC')">TC <span class="sort-icon" id="sort-titulos-numTC"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'fornecedor')">Fornecedor <span class="sort-icon" id="sort-titulos-fornecedor"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('titulos', 'valorNotaFiscal')">Valor NF <span class="sort-icon" id="sort-titulos-valorNotaFiscal"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-titulos"></tbody>
+                    </table>
+                </div>
+
+                <div id="tela-formulario-titulos" style="display: none;" class="card">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
+                        <span id="badgeStatusProc" class="badge-status rascunho">Rascunho</span>
+                        <h2 style="margin: 0;">FORM-3: Cadastro de Título</h2>
+                    </div>
+                    <form id="formTitulo">
+                        <input type="hidden" id="editIndexTitulo" value="-1"> 
+                        <input type="hidden" id="idProc"> 
+
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Entrada (EXEFIN):</label><input type="date" id="dataExefin"></div>
+                            <div class="form-group flex-1"><label>Número do TC:</label><input type="text" id="numTC"></div>
+                            <div class="form-group flex-1"><label>Número da NF:</label><input type="text" id="notaFiscal"></div>
+                        </div>
+
+                        <fieldset class="gov-fieldset">
+                            <legend>Seleção de Contrato</legend>
+                            <div class="form-group" style="position: relative;">
+                                <label>Buscar Fornecedor ou Instrumento:</label>
+                                <input type="text" id="buscaContratoT" placeholder="Digite para pesquisar..." autocomplete="off">
+                                <ul id="listaResultadosContratoT" class="autocomplete-list"></ul>
+                            </div>
+                            <div id="dadosContratoSelecionado" style="display: none; background: #f9f9f9; padding: 15px; border: 1px dashed #ccc;">
+                                <div class="form-row">
+                                    <div class="form-group flex-2"><label>Fornecedor:</label><input type="text" id="readFornecedor" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Instrumento:</label><input type="text" id="readInstrumento" readonly class="input-readonly"></div>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Valor da Nota Fiscal:</label><input type="text" id="valorNotaFiscal" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                            <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmissao"></div>
+                            <div class="form-group flex-1"><label>Data de Ateste:</label><input type="date" id="dataAteste"></div>
+                        </div>
+
+                        <fieldset class="gov-fieldset">
+                            <legend>Vincular Empenhos à Nota</legend>
+                            <div class="form-group" style="position: relative;">
+                                <label>Buscar NE Completa:</label>
+                                <input type="text" id="buscaEmpenhoT" placeholder="Ex: 741000..." autocomplete="off">
+                                <ul id="listaResultadosEmpenhoT" class="autocomplete-list"></ul>
+                            </div>
+                            <div id="detalhesVinculoEmpenho" style="display: none; background: #e8f4f8; padding: 15px; margin-bottom: 10px;">
+                                <h4 id="empenhoSelecionadoTexto"></h4>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Valor a Vincular:</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                                    <div class="form-group flex-1"><label>LF:</label><input type="text" id="vinculoLF"></div>
+                                    <div class="form-group flex-1"><label>PF:</label><input type="text" id="vinculoPF"></div>
+                                </div>
+                                <button type="button" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar à Lista</button>
+                            </div>
+                            <table id="tabelaEmpenhosDaNota" class="tabela-gov">
+                                <thead><tr><th>Empenho</th><th>Valor</th><th>LF</th><th>PF</th><th>Ações</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </fieldset>
+
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary" data-permission="titulos_inserir">💾 Salvar Processo</button>
+                            <button type="button" onclick="voltarParaListaTitulos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-lf" class="secao" data-permission="lf_ler" style="display: none;">
+                <div id="tela-lista-lfpf" class="card">
+                    <div class="header-lista">
+                        <h2>Liquidação Financeira (LF) x Pedido Financeiro (PF)</h2>
+                        <button onclick="abrirFormularioLfPf(false)" class="btn-primary" data-permission="lf_inserir">+ Nova LF</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group">
+                            <span data-permission="lf_inserir">
+                                <button type="button" class="btn-outline" onclick="document.getElementById('fileImportLfPf').click()" title="Selecionar arquivo CSV ou Excel para importar">📤 Importar CSV</button>
+                                <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;">
+                            </span>
+                            <span id="ultimoImportLfPf" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
+                        </div>
+                        <div class="export-group"><button onclick="exportarLfPf('csv')" class="btn-outline">CSV</button><button onclick="exportarLfPf('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaLfPf" onchange="mudarTamanhoPaginaLfPf()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> registros</label>
+                        <div class="search-box">
+                            <input type="text" id="buscaTabelaLfPf" placeholder="Pesquisar LF, PF, Situação, FR, Vinculação ou Origem..." autocomplete="off">
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaLfPf" class="tabela-gov">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'lf')">LF <span class="sort-icon" id="sort-lfpf-lf"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'dataCriacao')">Data Criação <span class="sort-icon" id="sort-lfpf-dataCriacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'valor')">Valor (R$) <span class="sort-icon" id="sort-lfpf-valor"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'tipoLiquidacao')">Tipo <span class="sort-icon" id="sort-lfpf-tipoLiquidacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'situacao')">Situação <span class="sort-icon" id="sort-lfpf-situacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'pf')">PF <span class="sort-icon" id="sort-lfpf-pf"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('lfpf', 'rp')">RP <span class="sort-icon" id="sort-lfpf-rp"></span></th>
+                                    <th>FR</th><th>Vinc.</th><th>Origem</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-lfpf"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoLfPf" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaLfPf('primeiro')" id="btnPrimeiroLfPf">Primeiro</button>
+                        <button type="button" onclick="mudarPaginaLfPf(-1)" id="btnAnteriorLfPf">Anterior</button>
+                        <span id="infoPaginaLfPf">Página 1 de 1</span>
+                        <button type="button" onclick="mudarPaginaLfPf(1)" id="btnProximoLfPf">Próximo</button>
+                        <button type="button" onclick="mudarPaginaLfPf('ultimo')" id="btnUltimoLfPf">Último</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-lfpf" style="display: none;" class="card">
+                    <h2 id="tituloFormLfPf">Liquidação Financeira (LF) x PF</h2>
+                    <div class="tabs-ne" id="tabsLfPf">
+                        <div class="tab-ne ativo" data-tab="0">Dados Básicos</div>
+                        <div class="tab-ne tab-auditoria" data-tab="1" data-permission="acesso_admin">Auditoria</div>
+                    </div>
+                    <form id="formLfPf">
+                        <input type="hidden" id="editIndexLfPf" value="-1">
+                        <div class="tab-panel-ne visivel" id="panelLfPf0">
+                            <fieldset class="gov-fieldset"><legend>Identificação</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>LF (Nº Liquidação):</label><input type="text" id="lfNum" placeholder="Ex: 2026LF033314" maxlength="20"></div>
+                                    <div class="form-group flex-1"><label>Data de Criação:</label><input type="text" id="lfDataCriacao" placeholder="dd/mm/aaaa"></div>
+                                    <div class="form-group flex-1"><label>Valor (R$):</label><input type="text" id="lfValor" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Tipo de Liquidação:</label><select id="lfTipoLiquidacao"><option value="RP">RP</option><option value="Exercício">Exercício</option></select></div>
+                                    <div class="form-group flex-1"><label>Situação:</label><select id="lfSituacao"><option value="Aguardando Priorização">Aguardando Priorização</option><option value="Aguardando Processamento">Aguardando Processamento</option><option value="Atendido">Atendido</option><option value="Cancelado">Cancelado</option><option value="Priorização Encerrada">Priorização Encerrada</option><option value="Processamento Agendado">Processamento Agendado</option></select></div>
+                                    <div class="form-group flex-1"><label>Última Atualização:</label><input type="text" id="lfUltimaAtualizacao" placeholder="dd/mm/aaaa"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>PF (Nº Processamento):</label><input type="text" id="lfPf" placeholder="Ex: 2026PF000001" maxlength="20"></div>
+                                    <div class="form-group flex-1"><label>RP:</label><select id="lfRp"><option value="Não Processado">Não Processado</option><option value="Processado">Processado</option></select></div>
+                                    <div class="form-group flex-1"><label>FR (Fonte Recurso):</label><input type="text" id="lfFr" maxlength="15"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Vinculação (3 dígitos):</label><input type="text" id="lfVinculacao" maxlength="3" pattern="[0-9]{3}" placeholder="Ex: 415"></div>
+                                    <div class="form-group flex-1"><label>Origem:</label><select id="lfOrigem"><option value="LOA">LOA</option><option value="Destaque">Destaque</option><option value="Emenda">Emenda</option></select></div>
+                                </div>
+                            </fieldset>
+                            <fieldset class="gov-fieldset"><legend>Empenhos vinculados (NE)</legend>
+                                <div class="form-group" style="position:relative;">
+                                    <label>Buscar NE:</label>
+                                    <input type="text" id="buscaNeLfPf" placeholder="Nº NE ou parte..." autocomplete="off">
+                                    <ul id="listaResultadosNeLfPf" class="autocomplete-list"></ul>
+                                </div>
+                                <div id="detalhesNeLfPf" style="display:none;background:#e8f4f8;padding:12px;margin-bottom:10px;">
+                                    <h4 id="empenhoSelecionadoLfPf"></h4>
+                                    <p style="margin:4px 0;">PTRES: <span id="nePtreLfPf"></span> | FR: <span id="neFrLfPf"></span> | ND: <span id="neNdLfPf"></span> | Valor: <span id="neValorLfPf"></span></p>
+                                    <button type="button" onclick="adicionarNeNaLfPf()" class="btn-primary">Adicionar à lista</button>
+                                </div>
+                                <table id="tabelaNeLfPf" class="tabela-gov">
+                                    <thead><tr><th>Nº NE</th><th>Valor</th><th>PTRES</th><th>FR</th><th>ND</th><th>Ações</th></tr></thead>
+                                    <tbody id="tbodyNeLfPf"></tbody>
+                                </table>
+                            </fieldset>
+                        </div>
+                        <div class="tab-panel-ne" id="panelLfPf1">
+                            <fieldset class="gov-fieldset"><legend>Auditoria (somente leitura)</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data de criação do registro:</label><input type="text" id="audDataCriacao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário criador:</label><input type="text" id="audUsuarioCriador" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Data da última alteração:</label><input type="text" id="audDataAlteracao" readonly class="input-readonly"></div>
+                                    <div class="form-group flex-1"><label>Usuário da última alteração:</label><input type="text" id="audUsuarioAlteracao" readonly class="input-readonly"></div>
+                                </div>
+                                <div class="form-group"><label>Histórico de alterações:</label><textarea id="audHistorico" rows="6" readonly class="input-readonly" style="width:100%;"></textarea></div>
+                            </fieldset>
+                        </div>
+                        <div class="form-acoes" style="margin-top:20px;">
+                            <button type="submit" class="btn-primary" data-permission="lf_editar">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaLfPf()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+            <section id="secao-op" class="secao" data-permission="op_ler" style="display: none;">
+                <div class="card">
+                    <h2>Controle de OP x OB</h2>
+                    <p style="color: #777; margin-top: 15px;">Em desenvolvimento.</p>
+                </div>
+            </section>
+
+            <section id="secao-contratos" class="secao" data-permission="contratos_ler" style="display: none;">
+                <div id="tela-lista-contratos" class="card">
+                    <div class="header-lista">
+                        <h2>Gestão de Contratos</h2>
+                        <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Contrato</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"><span id="ultimoImportContratos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
+                        <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaContratos" onchange="mudarTamanhoPaginaContratos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
+                        <div class="search-box"><input type="text" id="buscaTabelaContratos" placeholder="Pesquisar Fornecedor ou Instrumento..."></div>
+                    </div>
+                    <table id="tabelaContratos" class="tabela-gov">
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'idContrato')">ID <span class="sort-icon" id="sort-contratos-idContrato"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'numContrato')">Instrumento <span class="sort-icon" id="sort-contratos-numContrato"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'fornecedor')">Fornecedor <span class="sort-icon" id="sort-contratos-fornecedor"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'dataInicio')">Início <span class="sort-icon" id="sort-contratos-dataInicio"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'dataFim')">Fim <span class="sort-icon" id="sort-contratos-dataFim"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'valorContrato')">Valor Global <span class="sort-icon" id="sort-contratos-valorContrato"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'situacao')">Situação <span class="sort-icon" id="sort-contratos-situacao"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-contratos"></tbody>
+                    </table>
+                    <div class="paginacao">
+                        <button onclick="mudarPaginaContratos(-1)" id="btnAnteriorContratos">Anterior</button><span id="infoPaginaContratos">Página 1</span><button onclick="mudarPaginaContratos(1)" id="btnProximoContratos">Próximo</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-contratos" style="display: none;" class="card">
+                    <h2 id="tituloFormContratos">🤝 Cadastro de Contrato</h2>
+                    <form id="formContrato">
+                        <input type="hidden" id="editIndexContrato" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>ID Contrato:</label><input type="text" id="idContrato" placeholder="Ex: 479217"></div>
+                            <div class="form-group flex-1"><label>Nº Instrumento:</label><input type="text" id="numContrato" placeholder="Ex: 00006/2025"></div>
+                            <div class="form-group flex-1"><label>Situação:</label><select id="situacaoContrato"><option value="">Selecione</option><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>Fornecedor (CNPJ - Nome):</label><input type="text" id="fornecedorContrato" placeholder="00.000.000/0000-00 - EMPRESA LTDA" required></div>
+                            <div class="form-group flex-1"><label>NUP Processo:</label><input type="text" id="nupContrato"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Data Início:</label><input type="text" id="dataInicio" placeholder="dd/mm/aa"></div>
+                            <div class="form-group flex-1"><label>Data Fim:</label><input type="text" id="dataFim" placeholder="dd/mm/aa"></div>
+                            <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorContrato" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                        </div>
+                        <div class="form-group" style="position: relative;">
+                            <label>Vincular Cód. Receita (DARF):</label>
+                            <input type="text" id="buscaDarfContrato" placeholder="Buscar DARF..." autocomplete="off">
+                            <ul id="listaResultadosDarf" class="autocomplete-list"></ul>
+                            <div id="containerDarfsContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                        </div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
+                            <button type="button" onclick="voltarParaListaContratos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-empenhos" class="secao" data-permission="empenhos_ler" style="display: none;">
+                <div id="tela-lista-empenhos" class="card">
+                    <div class="header-lista">
+                        <h2>Controle de Empenhos</h2>
+                        <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="empenhos_inserir">+ Adicionar Empenho</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group"><span data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></span><span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span></div>
+                        <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaEmpenhos" onchange="mudarTamanhoPaginaEmpenhos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaEmpenhos" placeholder="Pesquisar NE, CNPJ, Contrato, Favorecido ou Processo..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaEmpenhos" class="tabela-gov tabela-empenhos-compact">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'numEmpenho')" title="Ano+tipo+sequencial">NE <span class="sort-icon" id="sort-empenhos-numEmpenho"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'tipoNE')">Tipo <span class="sort-icon" id="sort-empenhos-tipoNE"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'cnpj')">CNPJ <span class="sort-icon" id="sort-empenhos-cnpj"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'favorecido')">Favorecido <span class="sort-icon" id="sort-empenhos-favorecido"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'ptres')">PTRES <span class="sort-icon" id="sort-empenhos-ptres"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'fr')">FR <span class="sort-icon" id="sort-empenhos-fr"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'pi')">PI <span class="sort-icon" id="sort-empenhos-pi"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'nd')">ND <span class="sort-icon" id="sort-empenhos-nd"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'docOrig')">AES/SOLEMP <span class="sort-icon" id="sort-empenhos-docOrig"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'oi')">OI <span class="sort-icon" id="sort-empenhos-oi"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'contrato')">Contrato <span class="sort-icon" id="sort-empenhos-contrato"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('empenhos', 'processo')">Processo <span class="sort-icon" id="sort-empenhos-processo"></span></th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-empenhos"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoEmpenhos" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaEmpenhos('primeiro')" id="btnPrimeiroEmpenhos">Primeiro</button>
+                        <button onclick="mudarPaginaEmpenhos(-1)" id="btnAnteriorEmpenhos">Anterior</button>
+                        <span id="infoPaginaEmpenhos">Página 1 de 1</span>
+                        <button onclick="mudarPaginaEmpenhos(1)" id="btnProximoEmpenhos">Próximo</button>
+                        <button type="button" onclick="mudarPaginaEmpenhos('ultimo')" id="btnUltimoEmpenhos">Último</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-empenhos" style="display: none;" class="card">
+                    <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
+                    <div class="tabs-ne" id="tabsNE">
+                        <div class="tab-ne ativo" data-tab="0">Identificação e Dados Básicos</div>
+                        <div class="tab-ne" data-tab="1">Favorecido e Vínculos</div>
+                        <div class="tab-ne" data-tab="2">Contrato e Descrição</div>
+                    </div>
+                    <form id="formEmpenho">
+                        <input type="hidden" id="editIndexEmpenho" value="-1">
+                        <div class="tab-panel-ne visivel" id="panelNE0">
+                            <div class="form-row">
+                                <div class="form-group flex-2"><label>NE Completa:</label>
+                                    <input type="text" id="numEmpenho" placeholder="Ex: 741000000012024NE000001" pattern="[0-9]{11}[0-9]{4}NE[0-9]{6}" title="15 números, letras NE e 6 números finais" required>
+                                </div>
+                                <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
+                                <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Tipo NE:</label>
+                                    <select id="tipoNEEmpenho">
+                                        <option value="GLOBAL" selected>Global</option>
+                                        <option value="ORDINARIO">Ordinário</option>
+                                        <option value="ESTIMATIVO">Estimativo</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1"><label>PI:</label><input type="text" id="piEmpenho" placeholder="Ex: K4D101001L0" maxlength="20"></div>
+                                <div class="form-group flex-1"><label>ND (Natureza Desp.):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
+                                <div class="form-group flex-1"><label>Subelemento:</label><input type="text" id="subitemEmpenho" maxlength="4"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
+                                <div class="form-group flex-1"><label>Fonte Recurso (FR):</label><input type="text" id="frEmpenho" maxlength="11"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
+                                <div class="form-group flex-1"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
+                                <div class="form-group flex-1"><label>Meio OM:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                            </div>
+                        </div>
+                        <div class="tab-panel-ne" id="panelNE1">
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpenho" placeholder="Ex: 00.000.000/0000-00" maxlength="20"></div>
+                                <div class="form-group flex-2"><label>Favorecido:</label><input type="text" id="favorecidoEmpenho" placeholder="Nome do favorecido" maxlength="200"></div>
+                                <div class="form-group flex-1"><label>PJ/PF:</label>
+                                    <select id="pjPfEmpenho">
+                                        <option value="">Selecione</option>
+                                        <option value="PESSOA FISICA">Pessoa Física</option>
+                                        <option value="PESSOA JURIDICA">Pessoa Jurídica</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Gerência:</label><input type="text" id="gerenciaEmpenho" maxlength="50"></div>
+                                <div class="form-group flex-1"><label>OI:</label><input type="text" id="oiEmpenho" placeholder="Org. Interna" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-2"><label>AES / SOLEMP:</label><input type="text" id="docOrigEmpenho" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="30"></div>
+                                <div class="form-group flex-1"><label>Projeto:</label><input type="text" id="projetoEmpenho" maxlength="50"></div>
+                            </div>
+                        </div>
+                        <div class="tab-panel-ne" id="panelNE2">
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Nº Modal:</label><input type="text" id="numModalEmpenho" maxlength="4"></div>
+                                <div class="form-group flex-1"><label>Desc. Modal:</label><input type="text" id="descModalEmpenho" placeholder="Ex: PREGAO" maxlength="30"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1"><label>Cod. Amp:</label><input type="text" id="codAmpEmpenho" maxlength="10"></div>
+                                <div class="form-group flex-1"><label>Inciso:</label><input type="text" id="incisoEmpenho" maxlength="10"></div>
+                                <div class="form-group flex-1"><label>Lei:</label><input type="text" id="leiEmpenho" placeholder="Ex: LEI 14.133/2021" maxlength="30"></div>
+                                <div class="form-group flex-1"><label>Processo (NUP):</label><input type="text" id="processoEmpenho" placeholder="Ex: 63014.000584/2026-21" maxlength="30"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Descrição / Finalidade do Empenho:</label>
+                                <textarea id="descricaoEmpenho" rows="4" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px;">
+                            <button type="submit" class="btn-primary">💾 Salvar</button>
+                            <button type="button" id="btnCancelarEmpenho" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-darf" class="secao" data-permission="darf_ler" style="display: none;">
+                <div id="tela-lista-darf" class="card">
+                    <div class="header-lista">
+                        <h2>Códigos DARF</h2>
+                        <button onclick="abrirFormularioDarf()" class="btn-primary" data-permission="darf_inserir">+ Novo DARF</button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportDarf" accept=".xlsx, .xls, .csv"></div>
+                        <div class="export-group"><button onclick="exportarDarf('csv')" class="btn-outline">CSV</button><button onclick="exportarDarf('xlsx')" class="btn-outline">Excel</button></div>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaDarf" onchange="mudarTamanhoPaginaDarf()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
+                        <div class="search-box"><input type="text" id="buscaTabelaDarf" placeholder="Pesquisar Código ou Nat. Rendimento..."></div>
+                    </div>
+                    <table id="tabelaDarf" class="tabela-gov">
+                        <thead>
+                            <tr>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'codigo')">Cód Receita <span class="sort-icon" id="sort-darf-codigo"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'natRendimento')">Nat. Rend. <span class="sort-icon" id="sort-darf-natRendimento"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'aplicacao')">Aplicação <span class="sort-icon" id="sort-darf-aplicacao"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'sitSiafi')">SIAFI <span class="sort-icon" id="sort-darf-sitSiafi"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('darf', 'total')">Total <span class="sort-icon" id="sort-darf-total"></span></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-darf"></tbody>
+                    </table>
+                    <div class="paginacao">
+                        <button onclick="mudarPaginaDarf(-1)" id="btnAnteriorDarf">Anterior</button><span id="infoPaginaDarf">Página 1</span><button onclick="mudarPaginaDarf(1)" id="btnProximoDarf">Próximo</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-darf" style="display: none;" class="card">
+                    <h2>Cadastro de DARF</h2>
+                    <form id="formDarf">
+                        <input type="hidden" id="editIndexDarf" value="-1"> 
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Cód. Receita:</label><input type="text" id="codigoDarf" required></div>
+                            <div class="form-group flex-1"><label>Nat. Rendimento:</label><input type="text" id="natRendimentoDarf" required></div>
+                            <div class="form-group flex-1"><label>Situação SIAFI:</label><input type="text" id="sitSiafiDarf"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Aplicação / Descrição:</label><textarea id="aplicacaoDarf" rows="2" style="width: 100%; border: 1px solid #ccc;" required></textarea></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>IR (%):</label><input type="text" id="irDarf" placeholder="Ex: 1,20%"></div>
+                            <div class="form-group flex-1"><label>CSLL (%):</label><input type="text" id="csllDarf" placeholder="Ex: 1,00%"></div>
+                            <div class="form-group flex-1"><label>COFINS (%):</label><input type="text" id="cofinsDarf" placeholder="Ex: 3,00%"></div>
+                            <div class="form-group flex-1"><label>PIS (%):</label><input type="text" id="pisDarf" placeholder="Ex: 0,65%"></div>
+                            <div class="form-group flex-1"><label>Alíquota Total (%):</label><input type="text" id="totalDarf" placeholder="Ex: 5,85%"></div>
+                        </div>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary">💾 Salvar DARF</button>
+                            <button type="button" onclick="voltarParaListaDarf()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-centrocustos" class="secao" data-permission="centrocustos_ler" style="display: none;">
+                <div id="tela-lista-centrocustos" class="card">
+                    <div class="header-lista">
+                        <h2>Centro de Custos</h2>
+                        <button onclick="abrirFormularioCentroCustos(false)" class="btn-primary" data-permission="centrocustos_inserir">+ Adicionar Centro de Custos</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaCentroCustos" onchange="mudarTamanhoPaginaCentroCustos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaCentroCustos" placeholder="Pesquisar código, aplicação ou descrição..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaCentroCustos" class="tabela-gov tabela-empenhos-compact">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'codigo')">Código <span class="sort-icon" id="sort-centrocustos-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'aplicacao')">Aplicação <span class="sort-icon" id="sort-centrocustos-aplicacao"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('centrocustos', 'descricao')">Descrição <span class="sort-icon" id="sort-centrocustos-descricao"></span></th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-centrocustos"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoCentroCustos" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaCentroCustos('primeiro')" id="btnPrimeiroCentroCustos">Primeiro</button>
+                        <button onclick="mudarPaginaCentroCustos(-1)" id="btnAnteriorCentroCustos">Anterior</button>
+                        <span id="infoPaginaCentroCustos">Página 1 de 1</span>
+                        <button onclick="mudarPaginaCentroCustos(1)" id="btnProximoCentroCustos">Próximo</button>
+                        <button type="button" onclick="mudarPaginaCentroCustos('ultimo')" id="btnUltimoCentroCustos">Último</button>
+                    </div>
+                </div>
+                <div id="tela-formulario-centrocustos" style="display: none;" class="card">
+                    <h2 id="tituloFormCentroCustos">Centro de Custos</h2>
+                    <form id="formCentroCustos">
+                        <input type="hidden" id="editIndexCentroCustos" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Código Centro de Custos:</label><input type="text" id="centrocustosCodigo" required maxlength="30"></div>
+                            <div class="form-group flex-1"><label>Aplicação:</label><input type="text" id="centrocustosAplicacao" maxlength="100"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-2"><label>Descrição:</label><input type="text" id="centrocustosDescricao" maxlength="200"></div>
+                        </div>
+                        <div class="form-row" style="margin-top:15px;">
+                            <button type="submit" class="btn-primary">Salvar</button>
+                            <button type="button" id="btnCancelarCentroCustos" onclick="voltarParaListaCentroCustos()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-ug" class="secao" data-permission="ug_ler" style="display: none;">
+                <div id="tela-lista-ug" class="card">
+                    <div class="header-lista">
+                        <h2>Unidade Gestora (UG)</h2>
+                        <button onclick="abrirFormularioUG(false)" class="btn-primary" data-permission="ug_inserir">+ Adicionar UG</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaUG" onchange="mudarTamanhoPaginaUG()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+                        <div class="search-box"><input type="text" id="buscaTabelaUG" placeholder="Pesquisar código, nome ou contato..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaUG" class="tabela-gov tabela-empenhos-compact">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'codigo')">Código <span class="sort-icon" id="sort-ug-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'nome')">Nome da UG <span class="sort-icon" id="sort-ug-nome"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'comimsup')">Comimsup <span class="sort-icon" id="sort-ug-comimsup"></span></th>
+                                    <th>Contato</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-ug"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoUG" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaUG('primeiro')" id="btnPrimeiroUG">Primeiro</button>
+                        <button onclick="mudarPaginaUG(-1)" id="btnAnteriorUG">Anterior</button>
+                        <span id="infoPaginaUG">Página 1 de 1</span>
+                        <button onclick="mudarPaginaUG(1)" id="btnProximoUG">Próximo</button>
+                        <button type="button" onclick="mudarPaginaUG('ultimo')" id="btnUltimoUG">Último</button>
+                    </div>
+                </div>
+                <div id="tela-formulario-ug" style="display: none;" class="card">
+                    <h2 id="tituloFormUG">Unidade Gestora (UG)</h2>
+                    <form id="formUG">
+                        <input type="hidden" id="editIndexUG" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Código da UG:</label><input type="text" id="ugCodigo" required maxlength="30"></div>
+                            <div class="form-group flex-2"><label>Nome da UG:</label><input type="text" id="ugNome" maxlength="150"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1"><label>Comimsup da UG:</label><input type="text" id="ugComimsup" maxlength="50"></div>
+                            <div class="form-group flex-1"><label>Contato da UG:</label><input type="text" id="ugContato" maxlength="100"></div>
+                        </div>
+                        <div class="form-row" style="margin-top:15px;">
+                            <button type="submit" class="btn-primary">Salvar</button>
+                            <button type="button" id="btnCancelarUG" onclick="voltarParaListaUG()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="secao-backup" class="secao" data-permission="backup_ler" style="display: none;">
+                <div class="card">
+                    <h2>Sistema / Backup Global</h2>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">Gere um arquivo de segurança com todos os registos atuais da nuvem.</p>
+                    <hr>
+                    <div style="margin: 20px 0;">
+                        <button onclick="exportarBancoDeDados()" class="btn-primary" data-permission="backup_ler">📥 Fazer Backup Completo (.JSON)</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <div id="modalSucessoGeral" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 style="color: #27ae60; margin-bottom: 15px;">✅ Sucesso!</h2>
+            <p id="msgSucessoTexto" style="margin-bottom: 25px; font-size: 16px; color: #444; font-weight: bold;"></p>
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <button onclick="document.getElementById('modalSucessoGeral').style.display='none'" class="btn-default">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
+    <script src="script.js"></script>
+    <script src="script-titulos.js"></script>
+    <script src="script-sistema-init.js"></script>
+    <script src="script-menu-toggle.js"></script>
+    <script src="script-empenhos.js"></script>
+    <script src="script-contratos.js"></script>
+    <script src="script-lfpf.js"></script>
+    <script src="script-darf.js"></script>
+    <script src="script-centrocustos.js"></script>
+    <script src="script-ug.js"></script>
+    <script src="script-import.js"></script>
+</body>
+</html>
