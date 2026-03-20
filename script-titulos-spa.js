@@ -764,6 +764,17 @@
     let indiceEmpenhoEditando = null; // quando != null, o botão "Adicionar" vira "Atualizar"
     let podeCancelarUltimaInclusaoEmpenhoNota = false;
 
+    // Normaliza o modelo interno para persistir sempre `subelemento` (2 dígitos),
+    // evitando misturar `subitem` (campo legado).
+    function normalizarEmpenhosDaNotaAtualSubelemento() {
+        empenhosDaNotaAtual = (empenhosDaNotaAtual || []).map(x => {
+            const item = x || {};
+            const subelemento = String(item.subelemento || item.subitem || '').trim();
+            const { subitem, ...rest } = item; // remove legado se existir
+            return { ...rest, subelemento };
+        });
+    }
+
     function obterTotalTC() {
         const el = document.getElementById('valorNotaFiscal');
         if (!el) return 0;
@@ -829,7 +840,12 @@
         if (ndEl) ndEl.value = v.nd || '';
 
         const subEl = document.getElementById('vinculoSubelemento');
-        if (subEl) subEl.value = v.subelemento || '';
+        if (subEl) {
+            const subelemento = String(v.subelemento || v.subitem || '').trim();
+            v.subelemento = subelemento;
+            if (typeof v.subitem !== 'undefined') delete v.subitem; // evita persistir legado
+            subEl.value = subelemento;
+        }
 
         const valorEl = document.getElementById('vinculoValor');
         if (valorEl) {
@@ -1223,6 +1239,7 @@
         document.getElementById('dataLiquidacao').value = t.dataLiquidacao || '';
         document.getElementById('op').value = t.op || '';
         empenhosDaNotaAtual = (t.empenhosVinculados || []).map(x => ({ ...x }));
+        normalizarEmpenhosDaNotaAtualSubelemento();
         tributacoesAtual = (t.tributacoes || []).map(x => ({ ...x }));
         const status = t.status || 'Rascunho';
         mostrarStepper(status);
@@ -1361,6 +1378,9 @@
                 return;
             }
         }
+
+        // Garanto que o modelo interno persista sempre `subelemento` (legado: subitem).
+        normalizarEmpenhosDaNotaAtualSubelemento();
 
         const dados = {
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
@@ -1525,6 +1545,8 @@
             const doc = await db.collection('titulos').doc(docId).get();
             const hist = (doc.data()?.historicoStatus || []);
             hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
+            // Garanta consistência do modelo interno antes de persistir.
+            normalizarEmpenhosDaNotaAtualSubelemento();
             await db.collection('titulos').doc(docId).update({
                 status: 'Em Processamento',
                 empenhosVinculados: empenhosDaNotaAtual,
