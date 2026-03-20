@@ -1,0 +1,107 @@
+CONTINUIDADE - SisExeFin
+Data: 2026-03-18
+Objetivo: Permitir retomar a evolução do sistema em outro computador, evitando bugs já corrigidos nesta sessão.
+
+1) Contexto / Estrutura dos “Documentos Hábis (DH)”
+- UG (6 dígitos) + Gestão (5 dígitos) + Ano (4) + Tipo DH (2 letras, ex.: NE/NP/OB/OP) + Número sequencial (6)
+- Exemplo de entrada/visualização “só sufixo compatível” (12 caracteres):
+  - 2026NE123456
+  - 2026OB123456
+- Observação: o sistema deve SALVAR mantendo a estrutura completa compatível com o docId/estrutura do DH (quando aplicável), mas pode EXIBIR/COLETAR apenas o sufixo de 12.
+
+2) Iterações principais desta sessão (resumo por tema)
+
+2.1) NP (Nota de Pagamento) módulo: CRUD completo + importação
+- Foi implementado CRUD completo na seção `secao-op` (sistema.html), com:
+  - Listagem (tabela) com coluna “Ações” (Editar / Inativar / Excluir permanente)
+  - Formulário com:
+    - NP (doc)
+    - Data de Liquidação
+    - Grade/itens de documentos hábeis (OP/OB + valores + observação)
+    - Aba de Auditoria (somente leitura)
+- Importação CSV/XLS para NP:
+  - CSV modelado em `NP-OP-OB_import.csv` (usado o modelo disponibilizado no próprio código)
+  - Regra “repetido”:
+    - Se o item OP+OB já existir dentro do mesmo NP, atualizar SOMENTE:
+      - OP, OB, Valor_NP, Valor_OB
+    - Ignorar os demais campos do item repetido.
+  - LISTA_TC_VINCULADOS continua ignorado na importação.
+  - NP é o único campo obrigatório para criar/atualizar o documento NP.
+
+2.2) Exibição/edição com “sufixo 12” (NP/OP/OB e NE)
+- Exibição (UI):
+  - NP na listagem mostra só os últimos 12 caracteres.
+  - OP/OB exibidos no resumo e na grade de itens mostram só os últimos 12.
+- Edição:
+  - No formulário de NP, o input `NP` exibe só o sufixo 12, mas um hidden `npNumFull` mantém o ID completo para salvar.
+- Para compatibilidade:
+  - Reconstrução automática do ID completo (quando o banco já estiver “em modo completo”, isto é, quando existirem IDs > 12).
+
+2.3) NE (módulo Empenhos) aceitar “sufixo 12”
+- Ajustado em:
+  - `sistema.html` (campo NE no cadastro)
+  - `script-empenhos.js` (ao salvar, reconstruir ID completo quando o banco estiver em modo completo)
+  - `script-import.js` (ao importar NE)
+- A busca/vínculo de NE com TC continuou funcionando com “últimos 12”.
+
+2.4) Remover LF/PF da tela de vínculo de NE e preencher automaticamente de outro local
+- Na edição/vínculo de NE (titulos):
+  - Campo `vinculoSubelemento` passa a vir da NE selecionada (e não edição livre).
+  - LF e PF removidos dessa tela de vínculo (detalhes e tabela da grade).
+  - LF/PF permanecem no fluxo do painel onde serão preenchidos após a NP ficar vinculada.
+
+2.5) Grade de NE já vinculados: totais, cancelar inclusão e permitir edição de itens
+- Adicionado em `titulos.html`:
+  - Bloco com:
+    - `Total vinculado`
+    - `Total a vincular` (= `Total da TC` - `Total vinculado`)
+  - Botão `Cancelar inclusão` (desfaz a última inclusão quando disponível)
+- Em `script-titulos-spa.js`:
+  - Totais recalculam após add/remove/edit/undo.
+  - Ao clicar “Adicionar à Lista”:
+    - passa a habilitar “Cancelar inclusão” para desfazer a última inclusão.
+  - Editar itens já vinculados:
+    - Ícone ✏️ na grade
+    - Abre o painel de detalhes e muda o botão para “Atualizar item”
+    - Permite ajustar valorVinculado, Centro de Custos e UG Beneficiária.
+
+3) Correção de BUGs de “seção não abre”
+BUG reportado:
+- “seção do módulo NE não abre”
+- “import NPxOPxOB não funciona e layout diferente do LFxPF”
+- “seção DARF não abre”
+- “Contratos não abre”
+- “Centro de Custos não abre”
+- “Unidade Gestora não abre”
+- “link backup não abre”
+
+Correção aplicada (causa mais provável):
+- `script-menu-lateral.js` estava bloqueando o clique do menu por `temPermissaoUI(...)`
+  enquanto `permissoesEmCache` ainda não tinha carregado (race condition).
+- Ajustado para só bloquear clique quando as permissões já estiverem carregadas (permissoesEmCache com conteúdo).
+
+Arquivo alterado para esse bug:
+- `script-menu-lateral.js`
+
+4) Arquivos que foram alterados nesta sessão (para conferir no outro PC)
+- `sistema.html`
+- `script-np.js`
+- `script-empenhos.js`
+- `script-import.js`
+- `script-titulos-spa.js`
+- `titulos.html`
+- `script-menu-lateral.js`
+- `firestore.rules` (provavelmente já ajustado antes: regras da coleção `np`)
+
+5) Como continuar no outro computador
+1. Garanta que o projeto está no MESMO estado/base do outro computador (ideal: aplicar também os commits/patches correspondentes).
+2. Depois valide:
+   - abertura das seções via menu (`sistema.html?secao=empenhos/lf/op/darf/contratos/centrocustos/ug/backup`)
+   - import de NP/OPxOB
+   - vínculo NE→TC
+   - tela de vínculo NE (sem LF/PF e subelemento vindo da NE)
+   - grade: totais / cancelar inclusão / editar itens
+3. Se surgir algum bug novo, mande print + mensagem do console (F12) para eu apontar o ponto exato.
+
+Fim do documento.
+

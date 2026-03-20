@@ -31,8 +31,10 @@
     }
 
     function modoCompletoNEAtual() {
-        const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
-        if (!Array.isArray(baseAtual) || baseAtual.length === 0) return true; // default: completar
+        const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : undefined);
+        // Se o banco ainda não foi carregado (ou veio vazio), não inferimos o "modo"
+        // para evitar reconstruções indevidas (sufixo 12 -> ID completo).
+        if (!Array.isArray(baseAtual) || baseAtual.length === 0) return false;
         return baseAtual.some(e => String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12);
     }
 

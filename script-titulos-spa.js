@@ -41,17 +41,74 @@
     // - docId = NP
     // - titulosVinculados: arrayUnion(tituloId)
     async function vincularTituloNaNP(tituloId, npValor, dataLiquidacao) {
-        const npNorm = String(npValor || '').trim();
-        if (!npNorm) return;
-        const payload = {
-            np: npNorm,
-            titulosVinculados: firebase.firestore.FieldValue.arrayUnion(String(tituloId || '').trim()),
-            editado_em: firebase.firestore.FieldValue.serverTimestamp()
-        };
+        const npInput = String(npValor || '').trim();
+        if (!npInput) return;
+
+        // Tenta resolver o docId completo do NP.
+        // Se o usuário informar apenas o sufixo de 12, reconstruímos pelo padrão do app.
+        const UG_PADRAO = '741000';
+        const GESTAO_PADRAO = '00001';
+        const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO; // 11 dígitos
+
+        function completarNpDocIdParaTentativa(valor) {
+            const s = String(valor || '').trim();
+            if (!s) return '';
+            if (s.length > 12) return s;
+            // Sufixo esperado: AAAAxxNNNNNN (ex.: 2026NP000001)
+            const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
+            if (!m) return '';
+            const ano = m[1];
+            const tipo = (m[2] || '').toUpperCase();
+            const num = m[3];
+            if (tipo !== 'NP') return '';
+            return PREFIX11_PADRAO + ano + 'NP' + num;
+        }
+
+        const candidatos = [];
+        if (npInput) candidatos.push(npInput);
+        const completoTentativa = completarNpDocIdParaTentativa(npInput);
+        if (completoTentativa && completoTentativa !== npInput) candidatos.push(completoTentativa);
+
+        // Payload básico: preserva documentosHabeis (se já existir) via merge.
+        const tituloIdStr = String(tituloId || '').trim();
         const dl = String(dataLiquidacao || '').trim();
-        if (dl) payload.dataLiquidacao = dl;
-        if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
-        await db.collection('np').doc(npNorm).set(payload, { merge: true });
+
+        let didVincular = false;
+        for (const npDocId of candidatos) {
+            if (!npDocId) continue;
+
+            const ref = db.collection('np').doc(npDocId);
+            const snap = await ref.get();
+            const payload = {
+                np: npDocId,
+                titulosVinculados: firebase.firestore.FieldValue.arrayUnion(tituloIdStr),
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (dl) payload.dataLiquidacao = dl;
+            if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+
+            if (snap.exists) {
+                await ref.set(payload, { merge: true });
+                didVincular = true;
+                break;
+            }
+        }
+
+        // Se o NP não existia, criamos um documento mínimo (sem documentosHabeis),
+        // para ainda registrar a lista de TC; depois o módulo NP/OPxOB pode preencher.
+        if (!didVincular) {
+            const npDocIdCriar = candidatos[0];
+            const payload = {
+                np: npDocIdCriar,
+                titulosVinculados: firebase.firestore.FieldValue.arrayUnion(tituloIdStr),
+                documentosHabeis: [],
+                ativo: true,
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (dl) payload.dataLiquidacao = dl;
+            if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+            await db.collection('np').doc(npDocIdCriar).set(payload, { merge: true });
+        }
     }
 
     // Usa o loading global (script.js) para aplicar delay (3s) e prompt (60s)

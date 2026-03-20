@@ -94,18 +94,22 @@
         // Já é completo (ou vem de base/BD): preserva.
         if (s.length > 12) return s;
 
-        // Se o BD (np) já estiver usando apenas o sufixo (12 chars) como docId/valores,
-        // não completamos para não quebrar compatibilidade.
-        const base = (typeof baseNp !== 'undefined' ? baseNp : []);
-        const modoCompleto = base.length === 0 ? true : base.some(d => {
+        // Se o array do banco ainda não foi carregado (ou está vazio), não é possível
+        // inferir com segurança se o sistema está em "modo completo" (> 12 chars).
+        // Nesse caso, preservamos a entrada de 12 para evitar quebra de compatibilidade.
+        const base = (typeof baseNp !== 'undefined' ? baseNp : undefined);
+        const baseCarregado = Array.isArray(base);
+        if (!baseCarregado || base.length === 0) return s;
+
+        const modoCompleto = base.some(d => {
             const v = (d && (d.id || d.np)) ? String(d.id || d.np) : '';
             return v.trim().length > 12;
         });
         if (!modoCompleto) return s;
 
-        const prefixFromBase = base.length
-            ? String((base[0] && (base[0].id || base[0].np)) || '').trim().slice(0, 11)
-            : '';
+        const prefixFromBase = String((base[0] && (base[0].id || base[0].np)) || '')
+            .trim()
+            .slice(0, 11);
 
         const p = String(prefix11 || prefixFromBase || PREFIX_DH_11_PADRAO).trim();
         if (p.length < 11) return '';
@@ -501,9 +505,11 @@
     const btnNovaNp = document.getElementById('btnNovaNp');
     const btnSalvarNp = document.getElementById('btnSalvarNp');
     const fileImportNpUi = document.getElementById('fileImportNp');
+    const btnImportNpCsv = document.getElementById('btnImportNpCsv');
     if (btnNovaNp && !podeNPAlterar()) btnNovaNp.style.display = 'none';
     if (btnSalvarNp && !podeNPAlterar()) btnSalvarNp.style.display = 'none';
     if (fileImportNpUi && !podeNPAlterar()) fileImportNpUi.disabled = true;
+    if (btnImportNpCsv && !podeNPAlterar()) btnImportNpCsv.style.display = 'none';
 
     formNp?.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -525,15 +531,14 @@
         const dataLiqCampo = document.getElementById('npDataLiquidacao');
         const isoDataLiq = formatarDataParaISO(dataLiqCampo ? dataLiqCampo.value : '');
 
-        if (!Array.isArray(npItensAtual) || npItensAtual.length === 0) {
-            alert('Adicione pelo menos 1 item (OP/OB).');
-            return;
-        }
+        // Regra: a NP é o único campo obrigatório para criar/atualizar o documento.
+        // Itens OP/OB podem ficar vazios (documentoHabeis = []).
+        const itensFormNp = Array.isArray(npItensAtual) ? npItensAtual : [];
 
         const userEmail = (auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
         mostrarLoading('Carregando...');
         try {
-            const documentosHabeis = npItensAtual.map(it => {
+            const documentosHabeis = itensFormNp.map(it => {
                 const opFull = completarOpDocId(it.op, prefix11);
                 const obFull = completarObDocId(it.ob, prefix11);
                 return {
@@ -600,6 +605,37 @@
         a.download = 'modelo-np-op-ob.csv';
         a.click();
         URL.revokeObjectURL(a.href);
+    };
+
+    var CABECALHOS_NP = ['NP', 'Data Liquidação', 'Qtd. Itens (OP/OB)', 'OP/OB', 'Qtd. TC vinculados'];
+
+    window.exportarNp = function(formato) {
+        if (typeof XLSX === 'undefined') return alert('Biblioteca XLSX não carregada.');
+        try {
+            const base = (typeof baseNp !== 'undefined' ? baseNp : []).filter(d => d && d.ativo !== false);
+            let dados;
+            if (base.length === 0) {
+                dados = [CABECALHOS_NP.reduce(function(o, k) { o[k] = ''; return o; }, {})];
+            } else {
+                dados = base.map(r => {
+                    const itens = Array.isArray(r.documentosHabeis) ? r.documentosHabeis : [];
+                    return {
+                        'NP': r.np || r.id,
+                        'Data Liquidação': r.dataLiquidacao || '',
+                        'Qtd. Itens (OP/OB)': String(itens.length),
+                        'OP/OB': opObResumo(r),
+                        'Qtd. TC vinculados': String(qtdTC(r))
+                    };
+                });
+            }
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'NP_OP_OB');
+            const nomeArquivo = base.length === 0 ? 'np_op_ob_modelo' : 'np_op_ob';
+            XLSX.writeFile(wb, nomeArquivo + '.' + (formato === 'csv' ? 'csv' : 'xlsx'));
+        } catch (err) {
+            alert('Erro ao exportar.');
+        }
     };
 
     // Importador NP
@@ -740,11 +776,10 @@
                     );
 
                     if (idx >= 0) {
-                        // Atualiza SOMENTE os campos pedidos em repetidos
+                        // Atualiza SOMENTE a identificação (OP/OB) do item repetido.
+                        // Mantém os campos já existentes (valores/observação) para não sobrescrever.
                         documentos[idx].op = item.op;
                         documentos[idx].ob = item.ob;
-                        documentos[idx].valorNp = item.valorNp;
-                        documentos[idx].valorOb = item.valorOb;
                         change.changed = true;
                         atualizados++;
                     } else {
@@ -763,7 +798,9 @@
                 // Persistência (parcial se houver interrupção)
                 for (const change of docsChanges.values()) {
                     if (importAbort.aborted) break;
-                    if (!change.isNew && !change.changed) continue;
+                    // Permite atualizar `dataLiquidacao` mesmo quando não houver mudanças nos itens
+                    // (ex.: arquivo traz apenas NP e DATA LIQUIDAÇÃO).
+                    if (!change.isNew && !change.changed && !isoPorNp.has(change.npNorm)) continue;
 
                     const docRef = db.collection('np').doc(change.npNorm);
                     if (change.isNew) {
@@ -781,12 +818,15 @@
                     } else {
                         const historicoAntigo = (change.docBase && Array.isArray(change.docBase.historico)) ? change.docBase.historico : [];
                         const novoHist = historicoAntigo.concat([histMsg]);
-                        await docRef.set({
+                        const payload = {
                             documentosHabeis: change.documentosHabeis,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedBy: userEmail,
                             historico: novoHist
-                        }, { merge: true });
+                        };
+                        // Se veio data de liquidação no arquivo, atualiza; caso contrário, preserva o valor existente.
+                        if (isoPorNp.has(change.npNorm)) payload.dataLiquidacao = isoPorNp.get(change.npNorm);
+                        await docRef.set(payload, { merge: true });
                     }
                 }
 

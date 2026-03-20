@@ -159,8 +159,10 @@
                 const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO;
 
                 function modoCompletoNEAtual() {
-                    const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
-                    if (!Array.isArray(baseAtual) || baseAtual.length === 0) return true;
+                    const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : undefined);
+                    // Se o banco ainda não foi carregado (ou está vazio), não inferimos o "modo".
+                    // Assim evitamos reconstruir de sufixo 12 para ID completo indevidamente.
+                    if (!Array.isArray(baseAtual) || baseAtual.length === 0) return false;
                     return baseAtual.some(e => String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12);
                 }
 

@@ -278,16 +278,18 @@
                     <div class="header-lista">
                         <h2>Nota de Pagamento (NP) x OP/OB</h2>
                         <button id="btnNovaNp" onclick="abrirFormularioNp(false)" class="btn-primary" data-permission="op_ler">+ Nova NP</button>
-                        <div style="display:flex; gap:10px; align-items:center;">
-                            <span id="ultimoImportNp" class="ultimo-import" style="font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
-                        </div>
                     </div>
 
                     <div class="toolbar">
-                        <div class="import-group" data-permission="op_ler" style="flex:1;">
-                            <label>Importar CSV/XLS (NP→OP/OB):</label>
-                            <input type="file" id="fileImportNp" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="max-width:420px;">
+                        <div class="import-group" data-permission="op_ler" style="flex:1; position:relative;">
+                            <button type="button" id="btnImportNpCsv" class="btn-outline" onclick="document.getElementById('fileImportNp').click()" title="Selecionar arquivo CSV ou Excel para importar">📤 Importar CSV</button>
+                            <input type="file" id="fileImportNp" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;">
+                            <span id="ultimoImportNp" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
                             <a href="#" onclick="downloadModeloNP(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a>
+                        </div>
+                        <div class="export-group">
+                            <button onclick="exportarNp('csv')" class="btn-outline">CSV</button>
+                            <button onclick="exportarNp('xlsx')" class="btn-outline">Excel</button>
                         </div>
                     </div>
 
