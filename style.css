@@ -88,9 +88,13 @@ body { padding-top: 50px; }
 .sidebar .badge.badge-info { background: #17a2b8; color: #fff; }
 .sidebar .nav-link.emdesevolvimento { opacity: 0.75; }
 
-/* Área de Conteúdo - ao lado do sidebar, não abaixo */
-.content { flex: 1; min-width: 0; padding: 20px; overflow-y: auto; background-color: #f7f9fa;}
-.card { background: white; border-radius: 4px; border-top: 3px solid #d2d6de; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; overflow-x: auto;}
+/* Área de Conteúdo - abaixo da topbar, ao lado do sidebar */
+.content { flex: 1; min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; overflow-x: auto; background-color: #f7f9fa; display: flex; flex-direction: column; align-items: stretch; }
+/* Seções sistema.html: apenas a visível no fluxo, sempre no topo */
+.content .secao { display: none; flex: 0 0 auto; }
+.content .secao.secao-ativa { display: block; }
+/* Card sem overflow para evitar clipping; tabelas usam wrapper com overflow-x: auto */
+.card { background: white; border-radius: 4px; border-top: 3px solid #d2d6de; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; overflow: visible;}
 
 /* Cabeçalhos e Toolbars */
 .header-lista { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #f4f4f4; padding-bottom: 15px;}
@@ -144,7 +148,7 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
 .paginacao button:disabled { color: #777; cursor: not-allowed; background: #fafafa;}
 
 /* Autocomplete e Tags DARF */
-.autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; max-height: 200px; overflow-y: auto; z-index: 1000; list-style: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; max-height: 200px; overflow-y: auto; z-index: 1100; list-style: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
 .autocomplete-list li { padding: 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #eee; }
 .autocomplete-list li:hover { background-color: #337ab7; color: white; }
 

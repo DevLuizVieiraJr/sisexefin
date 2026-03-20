@@ -695,12 +695,19 @@ function mostrarSecao(idSecao, botao) {
     window.secaoAtualSistema = idSecao;
     if (typeof escutarColecaoSecao === 'function') escutarColecaoSecao(idSecao);
 
-    document.querySelectorAll('.secao').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('.secao').forEach(s => s.classList.remove('secao-ativa'));
     const secaoAlvo = document.getElementById(idSecao);
-    if(secaoAlvo) secaoAlvo.style.display = 'block';
+    if(secaoAlvo) {
+        secaoAlvo.classList.add('secao-ativa');
+        const content = document.querySelector('main.content');
+        if (content && secaoAlvo.parentElement === content) {
+            content.insertBefore(secaoAlvo, content.firstChild);
+        }
+        if (content) content.scrollTop = 0;
+    }
 
-    document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('ativo')); 
-    if(botao) botao.classList.add('ativo');
+    document.querySelectorAll('.menu-btn, .nav-link').forEach(b => { b.classList.remove('ativo'); b.classList.remove('active'); }); 
+    if(botao) { botao.classList.add('ativo'); botao.classList.add('active'); }
     
     document.querySelectorAll('[id^="tela-formulario"]').forEach(f => f.style.display = 'none');
     document.querySelectorAll('[id^="tela-lista"]').forEach(l => l.style.display = 'block');
