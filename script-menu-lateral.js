@@ -74,6 +74,12 @@
                         <p>Contratos</p>
                     </a>
                 </li>
+                <li class="nav-item" data-permission="fornecedores_ler">
+                    <a href="sistema.html?secao=fornecedores" class="nav-link menu-secao-sistema" data-secao="fornecedores" title="Cadastro de Fornecedores">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Fornecedores</p>
+                    </a>
+                </li>
                 <li class="nav-item" data-permission="centrocustos_ler">
                     <a href="sistema.html?secao=centrocustos" class="nav-link menu-secao-sistema" data-secao="centrocustos" title="Centro de Custos">
                         <i class="far fa-circle nav-icon"></i>
@@ -179,7 +185,7 @@
         const elAtivo = ul.querySelector('[data-menu-ativo="' + ativo + '"]');
         if (elAtivo) {
             elAtivo.classList.add('active');
-        } else if (ativo === 'sistema' || ['empenhos','lf','op','darf','contratos','titulos','centrocustos','ug','backup'].indexOf(ativo) >= 0) {
+        } else if (ativo === 'sistema' || ['empenhos','lf','op','darf','contratos','fornecedores','titulos','centrocustos','ug','backup'].indexOf(ativo) >= 0) {
             const secao = ativo === 'sistema' ? (new URLSearchParams(window.location.search).get('secao') || 'empenhos') : ativo;
             const linkSecao = ul.querySelector('a[href*="secao=' + secao + '"]');
             if (linkSecao) linkSecao.classList.add('active');
@@ -192,7 +198,7 @@
 
         ul.querySelectorAll('.nav-item.has-treeview[data-tree]').forEach(function(item) {
             const id = item.getAttribute('data-tree');
-            if (id === 'tabelas' && (ativo === 'sistema' || ['empenhos','lf','op','darf','contratos','centrocustos','ug','backup'].indexOf(ativo) >= 0)) {
+            if (id === 'tabelas' && (ativo === 'sistema' || ['empenhos','lf','op','darf','contratos','fornecedores','centrocustos','ug','backup'].indexOf(ativo) >= 0)) {
                 item.classList.add('menu-open');
             } else if (treeState[id] === true) {
                 item.classList.add('menu-open');
@@ -224,7 +230,7 @@
                 if (!secao) return;
                 e.preventDefault();
                 const idSecao = 'secao-' + secao;
-                const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', darf: 'darf_ler', contratos: 'contratos_ler', centrocustos: 'centrocustos_ler', ug: 'ug_ler', backup: 'backup_ler' };
+                const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', darf: 'darf_ler', contratos: 'contratos_ler', fornecedores: 'fornecedores_ler', centrocustos: 'centrocustos_ler', ug: 'ug_ler', backup: 'backup_ler' };
                 const permsCarregadas = (typeof permissoesEmCache !== 'undefined' && Array.isArray(permissoesEmCache) && permissoesEmCache.length > 0);
                 if (permsCarregadas && typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
                 if (typeof mostrarSecao === 'function') mostrarSecao(idSecao, link);

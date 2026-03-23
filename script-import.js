@@ -180,9 +180,13 @@
                 }
 
                 const modoCompleto = modoCompletoNEAtual();
-                const nesExistentes = new Set((typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : [])
-                    .map(e => String((e.numEmpenho || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0, erros = 0;
+                const baseEmp = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
+                const mapEmpenhosPorNumero = {};
+                baseEmp.forEach(function(e) {
+                    var neBase = String((e && e.numEmpenho) ? e.numEmpenho : '').toLowerCase().trim();
+                    if (neBase && e && e.id) mapEmpenhosPorNumero[neBase] = e.id;
+                });
+                let inseridos = 0, atualizados = 0, erros = 0;
                 for (const row of rows) {
                     if (importAbort.aborted) break;
                     var rowNorm = {};
@@ -197,16 +201,29 @@
                         if (completo) numEmpenho = completo;
                     }
                     var neNorm = String(numEmpenho).toLowerCase().trim();
-                    if (nesExistentes.has(neNorm)) { duplicados++; erros++; continue; }
+                    var docIdExistente = mapEmpenhosPorNumero[neNorm];
+                    if (docIdExistente) {
+                        var updateData = {};
+                        var subitemImport = getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento']);
+                        var descricaoImport = getVal(rowNorm, ['OBS', 'descricao', 'Descricao', 'obs']);
+                        // Campos vazios no CSV não sobrescrevem valores existentes.
+                        if (String(subitemImport || '').trim() !== '') updateData.subitem = escapeHTML(String(subitemImport).trim());
+                        if (String(descricaoImport || '').trim() !== '') updateData.descricao = escapeHTML(String(descricaoImport).trim());
+                        if (Object.keys(updateData).length > 0) {
+                            await db.collection('empenhos').doc(docIdExistente).update(updateData);
+                            atualizados++;
+                        }
+                        continue;
+                    }
                     var dados = {
                         numEmpenho: escapeHTML(numEmpenho),
                         dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'dataEmissao', 'DataEmissao', 'data', 'Data'])),
                         valorGlobal: parseFloat((getVal(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']) || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
                         nd: escapeHTML(getVal(rowNorm, ['ND', 'nd'])),
-                        subitem: escapeHTML(getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel'])),
+                        subitem: escapeHTML(getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento'])),
                         ptres: escapeHTML(getVal(rowNorm, ['PTRES', 'ptres'])),
                         fr: escapeHTML(getVal(rowNorm, ['FR', 'fr'])),
-                        docOrig: escapeHTML(getVal(rowNorm, ['AES/SOLEMP', 'docOrig', 'DocOrig', 'AES', 'aes'])),
+                        docOrig: escapeHTML(getVal(rowNorm, ['AES/SOLEMP', 'docOrig', 'DocOrig', 'AES', 'aes', 'solemp', 'aessolemp', 'solempaes', 'aes_solemp', 'solemp_aes'])),
                         oi: escapeHTML(getVal(rowNorm, ['OI', 'oi'])),
                         contrato: escapeHTML(getVal(rowNorm, ['CONTRATO', 'contrato', 'Contrato'])),
                         cap: escapeHTML(getVal(rowNorm, ['CAP', 'cap'])),
@@ -221,17 +238,16 @@
                         inciso: escapeHTML(getVal(rowNorm, ['INCISO', 'inciso', 'Inciso'])),
                         lei: escapeHTML(getVal(rowNorm, ['LEI', 'lei', 'Lei'])),
                         processo: escapeHTML(getVal(rowNorm, ['PROCESSO', 'processo', 'Processo'])),
-                        cnpj: escapeHTML(getVal(rowNorm, ['CNPJ', 'cnpj'])),
+                        cnpj: escapeHTML(getVal(rowNorm, ['CNPJ', 'cnpj', 'cpf', 'cpfcnpj', 'cnpjcpf', 'cpf_cnpj', 'cnpj_cpf'])),
                         favorecido: escapeHTML(getVal(rowNorm, ['FAVORECIDO', 'favorecido', 'Favorecido'])),
                         pjPf: escapeHTML(getVal(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf'])),
                         gerencia: escapeHTML(getVal(rowNorm, ['GERÊNCIA', 'GERENCIA', 'gerencia', 'Gerencia'])),
                         projeto: escapeHTML(getVal(rowNorm, ['PROJETO', 'projeto', 'Projeto']))
                     };
-                    await db.collection('empenhos').add(dados);
-                    nesExistentes.add(neNorm);
+                    var refEmp = await db.collection('empenhos').add(dados);
+                    mapEmpenhosPorNumero[neNorm] = refEmp.id;
                     inseridos++;
                 }
-                const atualizados = 0;
                 alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
                 await salvarUltimoImport('empenhos');
             } catch (err) { alert('Erro ao tentar carregar dados.'); }

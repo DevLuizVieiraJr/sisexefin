@@ -13,6 +13,7 @@
         { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },
         { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
+        { modulo: 'fornecedores', label: 'Fornecedores', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
         { modulo: 'usuarios', label: 'Admin - Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'perfis', label: 'Admin - Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'oi', label: 'Admin - OI', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },

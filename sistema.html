@@ -469,6 +469,113 @@
                 </div>
             </section>
 
+            <section id="secao-fornecedores" class="secao" data-permission="fornecedores_ler" >
+                <div id="tela-lista-fornecedores" class="card">
+                    <div class="header-lista">
+                        <h2>Cadastro de Fornecedores</h2>
+                        <button onclick="abrirFormularioFornecedor(false)" class="btn-primary" data-permission="fornecedores_inserir">+ Novo Fornecedor</button>
+                    </div>
+                    <div class="controles-tabela">
+                        <label>A exibir <select id="itensPorPaginaFornecedores" onchange="mudarTamanhoPaginaFornecedores()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> registros</label>
+                        <div class="search-box"><input type="text" id="buscaTabelaFornecedores" placeholder="Pesquisar código, nome, contato ou telefone..."></div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="tabelaFornecedores" class="tabela-gov">
+                            <thead>
+                                <tr>
+                                    <th class="th-sortable" onclick="ordenarTabela('fornecedores', 'tipoPessoa')">Tipo Pessoa <span class="sort-icon" id="sort-fornecedores-tipoPessoa"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('fornecedores', 'codigo')">Código <span class="sort-icon" id="sort-fornecedores-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('fornecedores', 'nome')">Nome <span class="sort-icon" id="sort-fornecedores-nome"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('fornecedores', 'matrizFilial')">Matriz/Filial <span class="sort-icon" id="sort-fornecedores-matrizFilial"></span></th>
+                                    <th>Contato</th>
+                                    <th>Telefone</th>
+                                    <th>E-mail</th>
+                                    <th>Situação</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fornecedores"></tbody>
+                        </table>
+                    </div>
+                    <div class="paginacao">
+                        <span id="mostrandoFornecedores" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="mudarPaginaFornecedores('primeiro')" id="btnPrimeiroFornecedores">Primeiro</button>
+                        <button type="button" onclick="mudarPaginaFornecedores(-1)" id="btnAnteriorFornecedores">Anterior</button>
+                        <span id="infoPaginaFornecedores">Página 1 de 1</span>
+                        <button type="button" onclick="mudarPaginaFornecedores(1)" id="btnProximoFornecedores">Próximo</button>
+                        <button type="button" onclick="mudarPaginaFornecedores('ultimo')" id="btnUltimoFornecedores">Último</button>
+                    </div>
+                </div>
+
+                <div id="tela-formulario-fornecedores"  class="card">
+                    <h2 id="tituloFormFornecedores">Fornecedor</h2>
+                    <form id="formFornecedor">
+                        <input type="hidden" id="editIndexFornecedor" value="-1">
+                        <fieldset class="gov-fieldset"><legend>Dados do Fornecedor</legend>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label>Tipo de Pessoa:</label>
+                                    <select id="fornecedorTipoPessoa" required>
+                                        <option value="">Selecione</option>
+                                        <option value="FISICA">Física</option>
+                                        <option value="JURIDICA">Jurídica</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label>Código (CPF/CNPJ):</label>
+                                    <input type="text" id="fornecedorCodigo" required placeholder="Selecione o tipo de pessoa">
+                                </div>
+                                <div class="form-group flex-2">
+                                    <label>Nome:</label>
+                                    <input type="text" id="fornecedorNome" required maxlength="200">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label>Matriz ou Filial:</label>
+                                    <select id="fornecedorMatrizFilial">
+                                        <option value="">Selecione</option>
+                                        <option value="MATRIZ">Matriz</option>
+                                        <option value="FILIAL">Filial</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label>Contato:</label>
+                                    <input type="text" id="fornecedorContato" maxlength="120">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label>Telefone:</label>
+                                    <input type="text" id="fornecedorTelefone" maxlength="20" placeholder="(00) 00000-0000">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label>E-mail:</label>
+                                    <input type="email" id="fornecedorEmail" maxlength="150" placeholder="exemplo@dominio.com">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label>Situação Cadastral:</label>
+                                    <select id="fornecedorSituacao">
+                                        <option value="ATIVO">Ativo</option>
+                                        <option value="INATIVO">Inativo</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-2">
+                                    <label>Endereço:</label>
+                                    <textarea id="fornecedorEndereco" rows="3" maxlength="300"></textarea>
+                                </div>
+                            </div>
+                        </fieldset>
+                        <div class="form-acoes">
+                            <button type="submit" class="btn-primary" data-permission="fornecedores_inserir">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaFornecedores()" class="btn-default">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
             <section id="secao-empenhos" class="secao" data-permission="empenhos_ler" >
                 <div id="tela-lista-empenhos" class="card">
                     <div class="header-lista">
@@ -812,6 +919,7 @@
     <script src="script-darf.js"></script>
     <script src="script-centrocustos.js"></script>
     <script src="script-ug.js"></script>
+    <script src="script-fornecedores.js"></script>
     <script src="script-import.js"></script>
     <script src="script-np.js"></script>
 </body>

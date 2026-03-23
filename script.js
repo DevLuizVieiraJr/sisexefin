@@ -294,7 +294,7 @@ function temPermissaoUI(perm) {
     // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
     if (permissoesEmCache.includes('acesso_admin')) {
         if (perm === 'dashboard_ler' || perm === 'backup_ler') return true;
-        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'darf', 'contratos', 'titulos', 'centrocustos', 'ug'];
+        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'darf', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
     return false;
@@ -338,7 +338,7 @@ window.atualizarSeletorPerfil = atualizarSeletorPerfil;
 
 function gerarBotoesAcao(id, modulo, itemOpt) {
     const safeId = escapeHTML(id);
-    const modMap = { empenho: 'empenhos', contrato: 'contratos', titulo: 'titulos', darf: 'darf', lfpf: 'lf', centrocustos: 'centrocustos', ug: 'ug' };
+    const modMap = { empenho: 'empenhos', contrato: 'contratos', fornecedor: 'fornecedores', titulo: 'titulos', darf: 'darf', lfpf: 'lf', centrocustos: 'centrocustos', ug: 'ug' };
     const mod = modMap[modulo] || modulo;
     let html = '';
     if (modulo === 'lfpf') {
@@ -354,7 +354,7 @@ function gerarBotoesAcao(id, modulo, itemOpt) {
         return html;
     }
     // Centro de Custos e UG: editar; excluir = inativar (usuários); reativar e excluir permanente só ADMIN
-    if (modulo === 'centrocustos' || modulo === 'ug') {
+    if (modulo === 'centrocustos' || modulo === 'ug' || modulo === 'fornecedor') {
         const ativo = itemOpt && itemOpt.ativo !== false;
         if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}" title="Editar">✏️</button>`;
         if (ativo && permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-inativar-${modulo}" data-id="${safeId}" title="Inativar (excluir da lista)">🚫</button>`;
@@ -624,10 +624,11 @@ if (formUsuarioAdmin) {
 // ==========================================
 // VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================
-let baseEmpenhos = []; let baseContratos = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
+let baseEmpenhos = []; let baseContratos = []; let baseFornecedores = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
 let baseCentroCustos = []; let baseUnidadesGestoras = [];
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
+let paginaAtualFornecedores = 1; let itensPorPaginaFornecedores = 10; let termoBuscaFornecedores = "";
 let paginaAtualDarf = 1; let itensPorPaginaDarf = 10; let termoBuscaDarf = "";
 let paginaAtualTitulos = 1; let itensPorPaginaTitulos = 10; let termoBuscaTitulos = "";
 let paginaAtualLfPf = 1; let itensPorPaginaLfPf = 10; let termoBuscaLfPf = "";
@@ -643,6 +644,7 @@ let empenhoTemporarioSelecionado = null;
 let estadoOrdenacao = {
     empenhos: { coluna: 'numEmpenho', direcao: 'asc' },
     contratos: { coluna: 'fornecedor', direcao: 'asc' },
+    fornecedores: { coluna: 'nome', direcao: 'asc' },
     darf: { coluna: 'codigo', direcao: 'asc' },
     titulos: { coluna: 'idProc', direcao: 'asc' },
     lfpf: { coluna: 'lf', direcao: 'asc' },
@@ -659,6 +661,7 @@ function ordenarTabela(modulo, coluna) {
 
     if (modulo === 'empenhos') { paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); }
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
+    if (modulo === 'fornecedores' && typeof atualizarTabelaFornecedores === 'function') { paginaAtualFornecedores = 1; atualizarTabelaFornecedores(); }
     if (modulo === 'darf') { paginaAtualDarf = 1; atualizarTabelaDarf(); }
     if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
     if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { window.paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
@@ -680,7 +683,7 @@ function aplicarOrdenacao(array, modulo) {
 }
 
 function inicializarSetasOrdenacao() {
-    ['empenhos', 'contratos', 'darf', 'titulos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
+    ['empenhos', 'contratos', 'fornecedores', 'darf', 'titulos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
         if (!estadoOrdenacao[modulo]) return;
         const col = estadoOrdenacao[modulo].coluna; 
         const iconEl = document.getElementById(`sort-${modulo}-${col}`);
@@ -714,6 +717,7 @@ function mostrarSecao(idSecao, botao) {
 
     if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos();
     if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos();
+    if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores();
     if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf();
     if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
     if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
@@ -733,10 +737,11 @@ function escutarColecaoSecao(idSecao) {
         'secao-op': ['np'],
         'secao-darf': ['darf'],
         'secao-contratos': ['contratos'],
+        'secao-fornecedores': ['fornecedores'],
         'secao-titulos': ['titulos'],
         'secao-centrocustos': ['centroCustos'],
         'secao-ug': ['unidadesGestoras'],
-        'secao-backup': ['empenhos', 'contratos', 'darf', 'titulos', 'lfpf', 'centroCustos', 'unidadesGestoras']
+        'secao-backup': ['empenhos', 'contratos', 'fornecedores', 'darf', 'titulos', 'lfpf', 'centroCustos', 'unidadesGestoras']
     };
     const colecoes = mapa[idSecao] || ['empenhos'];
     const incluiConfig = true;
@@ -756,6 +761,7 @@ function escutarColecaoSecao(idSecao) {
     const handlers = {
         empenhos: snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
         contratos: snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
+        fornecedores: snap => { baseFornecedores = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores(); aoCarregar(); },
         darf: snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
         titulos: snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
         lfpf: snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); },
@@ -827,6 +833,7 @@ function exportarBancoDeDados() {
             usuario: usuarioLogadoEmail,
             empenhos: baseEmpenhos,
             contratos: baseContratos,
+            fornecedores: baseFornecedores,
             darf: baseDarf,
             titulos: baseTitulos,
             lfpf: baseLfPf
