@@ -575,6 +575,7 @@
         document.getElementById('anoTC').value = '2026';
         document.getElementById('ugTC').value = '741000';
         document.getElementById('tipoTC').value = '';
+        atualizarAvisoFiltroBuscaNE();
         limparOISelecionada();
         document.getElementById('oiEntregou').value = '';
         document.getElementById('fornecedorValor').value = '';
@@ -1148,6 +1149,32 @@
             listaEmpenhosT.appendChild(li);
         });
     }
+    function obterSufixoNDPorTipoTC(tipoTC) {
+        if (tipoTC === 'NFE') return '30 ou 52';
+        if (tipoTC === 'NFSE' || tipoTC === 'FAT' || tipoTC === 'BO') return '39';
+        if (tipoTC === 'OUT') return 'numérico válido';
+        return '--';
+    }
+    function atualizarAvisoFiltroBuscaNE() {
+        const el = document.getElementById('avisoFiltroNDTipoTC');
+        if (!el) return;
+        const tipoTC = (document.getElementById('tipoTC')?.value || '').trim();
+        const yy = tipoTC || 'não selecionado';
+        const xx = obterSufixoNDPorTipoTC(tipoTC);
+        el.textContent = "(serão listadas apenas NE com ND final '" + xx + "' em coerência com o tipo de TC '" + yy + "')";
+    }
+    function configurarAvisoFiltroBuscaNE() {
+        const selTipoTC = document.getElementById('tipoTC');
+        if (!selTipoTC) {
+            atualizarAvisoFiltroBuscaNE();
+            return;
+        }
+        if (selTipoTC.dataset.ndHintBound !== '1') {
+            selTipoTC.dataset.ndHintBound = '1';
+            selTipoTC.addEventListener('change', atualizarAvisoFiltroBuscaNE);
+        }
+        atualizarAvisoFiltroBuscaNE();
+    }
     function configurarAutocompleteEmpenho() {
         const inputBuscaEmpenhoT = document.getElementById('buscaEmpenhoT');
         const listaEmpenhosT = document.getElementById('listaResultadosEmpenhoT');
@@ -1231,6 +1258,7 @@
             const tiposValidos = Array.from(selTipoTC.options || []).map(o => o.value);
             selTipoTC.value = (t.tipoTC && tiposValidos.includes(t.tipoTC)) ? t.tipoTC : '';
         }
+        atualizarAvisoFiltroBuscaNE();
         document.getElementById('dataExefin').value = t.dataExefin || '';
         document.getElementById('numTC').value = t.numTC || '';
         const valNF = parseFloat(t.valorNotaFiscal) || 0;
@@ -2042,6 +2070,7 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarAutocompleteEmpenho();
+        configurarAvisoFiltroBuscaNE();
         configurarAutocompleteOIGenerico('buscaOIDestino', 'listaResultadosOIDestino', 'oiDestinoId', 'limparOIDestinoBtn');
         configurarAutocompleteOIGenerico('novaEntradaOI', 'listaResultadosNovaEntradaOI', 'novaEntradaOIId', 'limparNovaEntradaOIBtn');
     }
@@ -2055,5 +2084,6 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarAutocompleteEmpenho();
+        configurarAvisoFiltroBuscaNE();
     }
 })();

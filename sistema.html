@@ -475,6 +475,9 @@
                         <h2>Cadastro de Fornecedores</h2>
                         <button onclick="abrirFormularioFornecedor(false)" class="btn-primary" data-permission="fornecedores_inserir">+ Novo Fornecedor</button>
                     </div>
+                    <div class="toolbar">
+                        <div class="import-group"><span data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportFornecedores" accept=".xlsx, .xls, .csv"></span><span id="ultimoImportFornecedores" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span></div>
+                    </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPaginaFornecedores" onchange="mudarTamanhoPaginaFornecedores()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> registros</label>
                         <div class="search-box"><input type="text" id="buscaTabelaFornecedores" placeholder="Pesquisar código, nome, contato ou telefone..."></div>
@@ -625,86 +628,100 @@
                 <div id="tela-formulario-empenhos"  class="card">
                     <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
                     <div class="tabs-ne" id="tabsNE">
-                        <div class="tab-ne ativo" data-tab="0">Identificação e Dados Básicos</div>
-                        <div class="tab-ne" data-tab="1">Favorecido e Vínculos</div>
-                        <div class="tab-ne" data-tab="2">Contrato e Descrição</div>
+                        <div class="tab-ne ativo" data-tab="0">Dados Principais</div>
+                        <div class="tab-ne" data-tab="1">Célula Orçamentária e Favorecido</div>
+                        <div class="tab-ne" data-tab="2">Amparo Legal e Documento Origem</div>
                     </div>
                     <form id="formEmpenho">
                         <input type="hidden" id="editIndexEmpenho" value="-1">
                         <div class="tab-panel-ne visivel" id="panelNE0">
-                            <div class="form-row">
-                                    <div class="form-group flex-2"><label>NE (DH):</label>
-                                    <input type="text"
-                                           id="numEmpenho"
-                                           placeholder="Ex: 2026NE000001"
-                                           pattern="^(?:[0-9]{4}[Nn][Ee][0-9]{6}|[0-9]{11}[0-9]{4}[Nn][Ee][0-9]{6})$"
-                                           title="4 dígitos + NE + 6 dígitos (ou NE completo)"
-                                           required>
+                            <fieldset class="gov-fieldset">
+                                <legend>Dados Principais</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-2"><label>Núm. NE (NE):</label>
+                                        <input type="text"
+                                               id="numEmpenho"
+                                               placeholder="Ex: 2026NE000001"
+                                               pattern="^(?:[0-9]{4}[Nn][Ee][0-9]{6}|[0-9]{11}[0-9]{4}[Nn][Ee][0-9]{6})$"
+                                               title="4 dígitos + NE + 6 dígitos (ou NE completo)"
+                                               required>
+                                    </div>
+                                    <div class="form-group flex-1"><label>Data de Emissão (Data):</label><input type="date" id="dataEmpenho"></div>
+                                    <div class="form-group flex-1"><label>Tipo de NE (tipoNE):</label>
+                                        <select id="tipoNEEmpenho">
+                                            <option value="GLOBAL" selected>Global</option>
+                                            <option value="ORDINARIO">Ordinário</option>
+                                            <option value="ESTIMATIVO">Estimativo</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div class="form-group flex-1"><label>Data de Emissão:</label><input type="date" id="dataEmpenho"></div>
-                                <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Tipo NE:</label>
-                                    <select id="tipoNEEmpenho">
-                                        <option value="GLOBAL" selected>Global</option>
-                                        <option value="ORDINARIO">Ordinário</option>
-                                        <option value="ESTIMATIVO">Estimativo</option>
-                                    </select>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>NUP (processo):</label><input type="text" id="processoEmpenho" placeholder="Ex: 63014.000584/2026-21" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Valor (valor):</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
                                 </div>
-                                <div class="form-group flex-1"><label>PI:</label><input type="text" id="piEmpenho" placeholder="Ex: K4D101001L0" maxlength="20"></div>
-                                <div class="form-group flex-1"><label>ND (Natureza Desp.):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
-                                <div class="form-group flex-1"><label>Subelemento:</label><input type="text" id="subitemEmpenho" maxlength="4"></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>PTRES:</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
-                                <div class="form-group flex-1"><label>Fonte Recurso (FR):</label><input type="text" id="frEmpenho" maxlength="11"></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>CAP:</label><input type="text" id="capEmpenho" maxlength="8"></div>
-                                <div class="form-group flex-1"><label>Altcred:</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
-                                <div class="form-group flex-1"><label>Meio OM:</label><input type="text" id="meioEmpenho" maxlength="200"></div>
-                            </div>
+                            </fieldset>
                         </div>
                         <div class="tab-panel-ne" id="panelNE1">
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>CNPJ:</label><input type="text" id="cnpjEmpenho" placeholder="Ex: 00.000.000/0000-00" maxlength="20"></div>
-                                <div class="form-group flex-2"><label>Favorecido:</label><input type="text" id="favorecidoEmpenho" placeholder="Nome do favorecido" maxlength="200"></div>
-                                <div class="form-group flex-1"><label>PJ/PF:</label>
-                                    <select id="pjPfEmpenho">
-                                        <option value="">Selecione</option>
-                                        <option value="PESSOA FISICA">Pessoa Física</option>
-                                        <option value="PESSOA JURIDICA">Pessoa Jurídica</option>
-                                    </select>
+                            <fieldset class="gov-fieldset">
+                                <legend>Célula Orçamentária</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>PTRES (ptres):</label><input type="text" id="ptresEmpenho" maxlength="6"></div>
+                                    <div class="form-group flex-1"><label>Fonte de Recurso (fr):</label><input type="text" id="frEmpenho" maxlength="11"></div>
+                                    <div class="form-group flex-1"><label>Natureza de Despesa (nd):</label><input type="text" id="ndEmpenho" maxlength="6"></div>
+                                    <div class="form-group flex-1"><label>Subelemento (subitem):</label><input type="text" id="subitemEmpenho" maxlength="4"></div>
+                                    <div class="form-group flex-1"><label>Plano Interno (pi):</label><input type="text" id="piEmpenho" placeholder="Ex: K4D101001L0" maxlength="20"></div>
                                 </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Gerência:</label><input type="text" id="gerenciaEmpenho" maxlength="50"></div>
-                                <div class="form-group flex-1"><label>OI:</label><input type="text" id="oiEmpenho" placeholder="Org. Interna" maxlength="30"></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-2"><label>AES / SOLEMP:</label><input type="text" id="docOrigEmpenho" maxlength="30"></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="30"></div>
-                                <div class="form-group flex-1"><label>Projeto:</label><input type="text" id="projetoEmpenho" maxlength="50"></div>
-                            </div>
+                            </fieldset>
+                            <fieldset class="gov-fieldset">
+                                <legend>Favorecido</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Tipo de Pessoa (pj/pf):</label>
+                                        <select id="pjPfEmpenho">
+                                            <option value="">Selecione</option>
+                                            <option value="PESSOA FISICA">Pessoa Física</option>
+                                            <option value="PESSOA JURIDICA">Pessoa Jurídica</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group flex-1"><label>Código (cnpj/cpf):</label><input type="text" id="cnpjEmpenho" placeholder="Ex: 00.000.000/0000-00" maxlength="20"></div>
+                                    <div class="form-group flex-2"><label>Nome (favorecido):</label><input type="text" id="favorecidoEmpenho" placeholder="Nome do favorecido" maxlength="200"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Telefone:</label><input type="text" id="telefoneEmpenho" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Contato:</label><input type="text" id="contatoEmpenho" maxlength="120"></div>
+                                </div>
+                            </fieldset>
                         </div>
                         <div class="tab-panel-ne" id="panelNE2">
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Nº Modal:</label><input type="text" id="numModalEmpenho" maxlength="4"></div>
-                                <div class="form-group flex-1"><label>Desc. Modal:</label><input type="text" id="descModalEmpenho" placeholder="Ex: PREGAO" maxlength="30"></div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Cod. Amp:</label><input type="text" id="codAmpEmpenho" maxlength="10"></div>
-                                <div class="form-group flex-1"><label>Inciso:</label><input type="text" id="incisoEmpenho" maxlength="10"></div>
-                                <div class="form-group flex-1"><label>Lei:</label><input type="text" id="leiEmpenho" placeholder="Ex: LEI 14.133/2021" maxlength="30"></div>
-                                <div class="form-group flex-1"><label>Processo (NUP):</label><input type="text" id="processoEmpenho" placeholder="Ex: 63014.000584/2026-21" maxlength="30"></div>
-                            </div>
-                            <div class="form-group">
-                                <label>Descrição / Finalidade do Empenho:</label>
-                                <textarea id="descricaoEmpenho" rows="4" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea>
-                            </div>
+                            <fieldset class="gov-fieldset">
+                                <legend>Amparo Legal</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Código (codAmp):</label><input type="text" id="codAmpEmpenho" maxlength="10"></div>
+                                    <div class="form-group flex-1"><label>Modalidade de Licitação (descModal):</label><input type="text" id="descModalEmpenho" placeholder="Ex: PREGAO" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Ato Normativo (lei):</label><input type="text" id="leiEmpenho" placeholder="Ex: LEI 14.133/2021" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Inciso (inciso):</label><input type="text" id="incisoEmpenho" maxlength="10"></div>
+                                    <div class="form-group flex-1"><label>Núm. modalidade (numModal):</label><input type="text" id="numModalEmpenho" maxlength="4"></div>
+                                </div>
+                            </fieldset>
+                            <fieldset class="gov-fieldset">
+                                <legend>Documento Origem</legend>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Doc. Origem (aes_solemp):</label><input type="text" id="docOrigEmpenho" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Gerência (gerencia):</label><input type="text" id="gerenciaEmpenho" maxlength="50"></div>
+                                    <div class="form-group flex-1"><label>Org. Interna (oi):</label><input type="text" id="oiEmpenho" placeholder="Org. Interna" maxlength="30"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>CAP (projeto):</label><input type="text" id="capEmpenho" maxlength="8"></div>
+                                    <div class="form-group flex-1"><label>Meio Naval (meio):</label><input type="text" id="meioEmpenho" maxlength="200"></div>
+                                    <div class="form-group flex-1"><label>Altcred (altcred):</label><input type="text" id="altcredEmpenho" maxlength="200"></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Observação NE (obs):</label><textarea id="descricaoEmpenho" rows="4" placeholder="Ex: FORNECIMENTO DE SOBRESSALENTES..."></textarea></div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1"><label>Contrato:</label><input type="text" id="contratoEmpenho" maxlength="30"></div>
+                                    <div class="form-group flex-1"><label>Projeto:</label><input type="text" id="projetoEmpenho" maxlength="50"></div>
+                                </div>
+                            </fieldset>
                         </div>
                         <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px;">
                             <button type="submit" class="btn-primary">💾 Salvar</button>

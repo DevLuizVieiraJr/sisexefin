@@ -188,6 +188,8 @@
             document.getElementById('cnpjEmpenho').value = e.cnpj || '';
             document.getElementById('favorecidoEmpenho').value = e.favorecido || '';
             document.getElementById('pjPfEmpenho').value = e.pjPf || '';
+            document.getElementById('telefoneEmpenho').value = e.telefone || '';
+            document.getElementById('contatoEmpenho').value = e.contato || '';
             document.getElementById('gerenciaEmpenho').value = e.gerencia || '';
             document.getElementById('docOrigEmpenho').value = e.docOrig || '';
             document.getElementById('oiEmpenho').value = e.oi || '';
@@ -272,6 +274,8 @@
             cnpj: escapeHTML(document.getElementById('cnpjEmpenho')?.value || ''),
             favorecido: escapeHTML(document.getElementById('favorecidoEmpenho')?.value || ''),
             pjPf: escapeHTML(document.getElementById('pjPfEmpenho')?.value || ''),
+            telefone: escapeHTML(document.getElementById('telefoneEmpenho')?.value || ''),
+            contato: escapeHTML(document.getElementById('contatoEmpenho')?.value || ''),
             gerencia: escapeHTML(document.getElementById('gerenciaEmpenho')?.value || ''),
             projeto: escapeHTML(document.getElementById('projetoEmpenho')?.value || '')
         };
@@ -289,7 +293,7 @@
             const dados = baseEmpenhos.map(e => ({
             NE: e.numEmpenho, DATA: e.dataEmissao, PI: e.pi, 'TIPO NE': e.tipoNE, PTRES: e.ptres, FR: e.fr, ND: e.nd, SUBITEM: e.subitem,
             'NUM MODAL': e.numModal, 'DESC MODAL': e.descModal, 'COD AMP': e.codAmp, INCISO: e.inciso, LEI: e.lei, PROCESSO: e.processo,
-            CNPJ: e.cnpj, FAVORECIDO: e.favorecido, 'PJ/PF': e.pjPf, GERENCIA: e.gerencia, 'AES/SOLEMP': e.docOrig, OI: e.oi,
+            CNPJ: e.cnpj, FAVORECIDO: e.favorecido, 'PJ/PF': e.pjPf, TELEFONE: e.telefone, CONTATO: e.contato, GERENCIA: e.gerencia, 'AES/SOLEMP': e.docOrig, OI: e.oi,
             CONTRATO: e.contrato, PROJETO: e.projeto, ALTCRED: e.altcred, MEIO: e.meio, OBS: e.descricao
         }));
             const ws = XLSX.utils.json_to_sheet(dados);
