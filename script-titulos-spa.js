@@ -1034,13 +1034,33 @@
             return;
         }
 
-        // Filtro 2: CNPJ do contrato vem do campo "fornecedor" (CNPJ + Nome).
+        // Filtro 2: tenta obter CNPJ por múltiplos campos do contrato.
         const normalizarCNPJ = (v) => String(v || '').replace(/\D/g, '').trim();
-        const cnpjContrato = normalizarCNPJ(contratoSel.fornecedor || contratoSel.razaoSocial || '');
-        if (!cnpjContrato) {
-            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">CNPJ do contrato inválido.</li>';
-            return;
-        }
+        const normalizarNome = (v) => removerAcentos(String(v || '').toLowerCase())
+            .replace(/\d+/g, ' ')
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const extrairCnpjDoContrato = (c) => {
+            if (!c) return '';
+            const candidatos = [
+                c.cnpj,
+                c.cnpjFornecedor,
+                c.cnpj_fornecedor,
+                c.documentoFornecedor,
+                c.documento_fornecedor,
+                c.fornecedor,
+                c.razaoSocial,
+                c.empresa
+            ];
+            for (const cand of candidatos) {
+                const cnpj = normalizarCNPJ(cand);
+                if (cnpj.length === 14) return cnpj;
+            }
+            return '';
+        };
+        const cnpjContrato = extrairCnpjDoContrato(contratoSel);
+        const nomeFornecedorContrato = normalizarNome(contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
 
         // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "Outro").
         const ndValido = (nd) => {
@@ -1069,8 +1089,17 @@
         const resultados = (baseEmpenhos || [])
             .filter(e => {
                 const cnpjNE = normalizarCNPJ(e.cnpj || '');
-                if (!cnpjNE) return false;
-                if (cnpjNE !== cnpjContrato) return false;
+                const nomeFavorecido = normalizarNome(e.favorecido || '');
+                // Preferência: casar por CNPJ quando disponível; fallback: nome do favorecido.
+                if (cnpjContrato && cnpjNE) {
+                    if (cnpjNE !== cnpjContrato) return false;
+                } else if (cnpjContrato && !cnpjNE) {
+                    return false;
+                } else if (!cnpjContrato) {
+                    if (!nomeFornecedorContrato || !nomeFavorecido) return false;
+                    const nomeCasa = nomeFavorecido.includes(nomeFornecedorContrato) || nomeFornecedorContrato.includes(nomeFavorecido);
+                    if (!nomeCasa) return false;
+                }
                 if (!devePassarND(e.nd)) return false;
                 // Filtro 1 baseado no sufixo visível da NE
                 return visivelNE(e).includes(textoNorm);
