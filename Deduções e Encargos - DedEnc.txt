@@ -1,0 +1,74 @@
+Deduções e Encargos (antigo módulo DARF = Renomear módulo e outros lugares dependentes e relacionados)
+
+Na execução financeira temos a necessidade de recolher certos tributos, são eles:
+
+1) DDF021 = Retenção Previdenciária Recolhida por DARF Numerado
+Conhecido por INSS (Imposto Federal)
+
+2) DDF025 = Retenção Impostos e Contribuições
+Conhecido como apenas DARF (Imposto Federal)
+
+3) DDR001 = Imposto Sobre Serviço
+Conhecido por ISS (Imposto Municipal)
+
+============
+
+Coleção "Contratos" x Coleção "Deduções e Encargos (DedEnc)"
+
+No coleção Contratos, um contrato pode ter definido previamente quais DedEnc podem ser incluidos.
+Um contrato pode ter "Nenhum ou N" DedEnc. Com isso, quando cadastrado no contrato, o usuário terá um filtro dos tipos de REE pode adicionar ao TC.
+
+============
+
+Cada DedEnc tem suas características:
+
+DDF021 = Tem como objetivo calcular o INSS para cada nota de Serviço (somente aplicada apenas a serviço, NE final 39)que contenha mão de obra.
+Esse imposto é baseado em um valor definido pelo usuário durante o cadastro do TC. Isso por que, o valor de base de cálculo, na grande maioria das vezes é o valor do TC, porém, de acordo com a legislação, pode incidir apenas em um valor usado como mão de obra, com isso , o usuário deverá dizer qual a base de cálculo (virá automaticamente o valor do TC, podendo ser editado ou confirmado.
+Esse imposto tem como data de apuração a data de emissão do TC (campo inserido automaticamente).
+Caso esse Imposto esteja atribuído ao contrato, na ABA Processamento o sistema deverá incluir automaticamente no TC e realizar os cálculos conforme a instrução do usuário.
+
+DDF025 = Tem como objetivo calcular os Impostos Federais para cada TC, cujo o fornecedor seja Não Optante pelo Simples.
+O valor de base de cálculo, na grande maioria das vezes é o valor do TC, com isso, o usuário deverá dizer qual a base de cálculo (virá automaticamente o valor do TC, podendo ser editado ou confirmado).
+Esse imposto tem como data de apuração a data da liquidação (campo inserido automaticamente).
+
+
+DDR001 = Tem como objetivo calcular os Impostos Municipais para cada TC, cujo o fornecedor seja Não Optante pelo Simples (aplicável em alguns casos de Optante pelo Simples).
+O valor de base de cálculo, na grande maioria das vezes é o valor do TC, com isso, o usuário deverá dizer qual a base de cálculo (virá automaticamente o valor do TC, podendo ser editado ou confirmado).
+Esse imposto tem como data de apuração a data da liquidação (campo inserido automaticamente).
+
+=======================================
+CAMPOS DIFERENTES PARA PREENCHIMENTO PARA CADA IMPOSTO
+
+Quando o imposto estiver cadastrado no contrato o usuário verá as opções de adioná-lo ao TC para cálculo (exemplo na imagem).
+Caso adicionado, os campos compatíveis serão exibidos para alteração (base de cálculo) e confirmação (para vincular ao TC).
+Se adicionado, o sistema fará o cálculo automático do imposto e guardará no TC, a fim de cálculo. 
+
+Campos DDF021 (INSS): //apenas poderá ser adionado um DDF021 ou nenhum
+Base de cálculo: automático (valor do TC - editável)
+Alíquota: automático (11% - editável)
+Valor do INSS: automático (valor da base de cálculo multiplicado pela alíquota)
+Data da Apuração: automático (data da emissão do TC - não editável)
+|Desistir|  |Adionar|
+
+Campos DDR025 (DARF): //poderá ser adionado nenhum ou N quantidade de DDF025
+Natureza de Rendimento: automático (de acordo com a natureza de rendimento adionado ao Contrato - editável, podendo escolher apenas as opções oriundas da lista de NatRed da coleção DedEnc)
+Código da Receita: automático (de acordo com o codRec vinculado a natureza de rendimento adicionado na coleção DedEnc - editável, podendo escolher apenas as opções oriundas da lista de NatRed da coleção DedEnc)
+Base de cálculo: automático (valor do TC - editável)
+Alíquota: automático (de acordo com o codRec vinculado a natureza de rendimento adicionado na coleção DedEnc - não editável)
+Valor da Dedução: automático (valor da base de cálculo multiplicado pela alíquota)
+Data da Apuração: automático (data da liquidação - editável)
+|Desistir|  |Adionar|
+
+Campos DDR001 (ISS): //apenas poderá ser adionado um DDF021 ou nenhum
+Base de cálculo: automático (valor do TC - editável)
+Alíquota: automático (padrão de 5% - máximo de 5% do TC - editável)
+Valor do INSS: automático (valor da base de cálculo pela alíquota)
+Data da Apuração: automático (data da emissão do TC - não editável)
+|Desistir|  |Adionar|
+
+
+
+
+
+
+

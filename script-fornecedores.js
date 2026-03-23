@@ -9,6 +9,7 @@
     const inputCodigo = document.getElementById('fornecedorCodigo');
     const selectTipo = document.getElementById('fornecedorTipoPessoa');
     const inputTelefone = document.getElementById('fornecedorTelefone');
+    const selectOptanteSimples = document.getElementById('fornecedorOptanteSimples');
 
     function apenasDigitos(v) { return String(v || '').replace(/\D/g, ''); }
 
@@ -145,7 +146,7 @@
         const itensExibidos = base.slice(inicio, inicio + parseInt(itensPorPaginaFornecedores, 10));
 
         if (itensExibidos.length === 0) {
-            tabelaBody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Nenhum registro encontrado.</td></tr>';
+            tabelaBody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhum registro encontrado.</td></tr>';
         } else {
             itensExibidos.forEach(function(f) {
                 const tr = document.createElement('tr');
@@ -158,6 +159,7 @@
                     '<td>' + escapeHTML(f.telefone || '-') + '</td>' +
                     '<td>' + escapeHTML(f.email || '-') + '</td>' +
                     '<td>' + escapeHTML(f.situacaoCadastral || 'ATIVO') + '</td>' +
+                    '<td>' + (f.optanteSimples === true ? 'Sim' : 'Não') + '</td>' +
                     '<td>' + acoes + '</td>';
                 tabelaBody.appendChild(tr);
             });
@@ -214,6 +216,9 @@
         document.getElementById('fornecedorTelefone').value = f.telefone || '';
         document.getElementById('fornecedorEmail').value = f.email || '';
         document.getElementById('fornecedorSituacao').value = f.situacaoCadastral || 'ATIVO';
+        if (selectOptanteSimples) {
+            selectOptanteSimples.value = f.optanteSimples === true ? 'true' : 'false';
+        }
         document.getElementById('fornecedorEndereco').value = f.endereco || '';
     }
 
@@ -269,6 +274,7 @@
             telefone: escapeHTML(document.getElementById('fornecedorTelefone').value || ''),
             email: escapeHTML(document.getElementById('fornecedorEmail').value || ''),
             situacaoCadastral: escapeHTML(document.getElementById('fornecedorSituacao').value || 'ATIVO'),
+            optanteSimples: selectOptanteSimples ? selectOptanteSimples.value === 'true' : false,
             endereco: escapeHTML(document.getElementById('fornecedorEndereco').value || ''),
             ativo: true
         };

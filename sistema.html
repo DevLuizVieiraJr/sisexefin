@@ -494,6 +494,7 @@
                                     <th>Telefone</th>
                                     <th>E-mail</th>
                                     <th>Situação</th>
+                                    <th>Optante Simples</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -563,6 +564,13 @@
                                         <option value="INATIVO">Inativo</option>
                                     </select>
                                 </div>
+                                <div class="form-group flex-1">
+                                    <label>Optante de Simples:</label>
+                                    <select id="fornecedorOptanteSimples">
+                                        <option value="false">Não</option>
+                                        <option value="true">Sim</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group flex-2">
@@ -627,11 +635,6 @@
 
                 <div id="tela-formulario-empenhos"  class="card">
                     <h2 id="tituloFormEmpenhos">📄 Cadastro de Empenho</h2>
-                    <div class="tabs-ne" id="tabsNE">
-                        <div class="tab-ne ativo" data-tab="0">Dados Principais</div>
-                        <div class="tab-ne" data-tab="1">Célula Orçamentária e Favorecido</div>
-                        <div class="tab-ne" data-tab="2">Amparo Legal e Documento Origem</div>
-                    </div>
                     <form id="formEmpenho">
                         <input type="hidden" id="editIndexEmpenho" value="-1">
                         <div class="tab-panel-ne visivel" id="panelNE0">
@@ -659,9 +662,17 @@
                                     <div class="form-group flex-1"><label>NUP (processo):</label><input type="text" id="processoEmpenho" placeholder="Ex: 63014.000584/2026-21" maxlength="30"></div>
                                     <div class="form-group flex-1"><label>Valor (valor):</label><input type="text" id="valorEmpenho" inputmode="numeric" placeholder="0,00" data-moeda></div>
                                 </div>
+                                <div class="form-row">
+                                    <div class="form-group flex-1">
+                                        <label id="labelImportarNotaEmpenhoPdf">Importar Nota de Empenho:</label>
+                                        <input type="file" id="importarNotaEmpenhoPdf" accept=".pdf,application/pdf">
+                                        <small id="nomeNotaEmpenhoPdfAtual" style="display:block; margin-top:6px; color:#555;"></small>
+                                        <a id="downloadNotaEmpenhoPdf" href="#" style="display:none; margin-top:6px;" download>Baixar Nota de Empenho (PDF)</a>
+                                    </div>
+                                </div>
                             </fieldset>
                         </div>
-                        <div class="tab-panel-ne" id="panelNE1">
+                        <div class="tab-panel-ne visivel" id="panelNE1">
                             <fieldset class="gov-fieldset">
                                 <legend>Célula Orçamentária</legend>
                                 <div class="form-row">
@@ -691,7 +702,7 @@
                                 </div>
                             </fieldset>
                         </div>
-                        <div class="tab-panel-ne" id="panelNE2">
+                        <div class="tab-panel-ne visivel" id="panelNE2">
                             <fieldset class="gov-fieldset">
                                 <legend>Amparo Legal</legend>
                                 <div class="form-row">

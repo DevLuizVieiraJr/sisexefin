@@ -136,6 +136,83 @@
         });
     }
 
+    // --- IMPORT FORNECEDORES (chave única: codigoNumerico) ---
+    const fileImportFornecedores = document.getElementById('fileImportFornecedores');
+    if (fileImportFornecedores) {
+        fileImportFornecedores.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!verificarAdmin()) { e.target.value = ''; return; }
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
+            mostrarLoading();
+            try {
+                const data = await readFileAsArrayBuffer(file);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+                const codigosExistentes = new Set((typeof baseFornecedores !== 'undefined' ? baseFornecedores : [])
+                    .map(function(f) { return String((f.codigoNumerico || '')).toLowerCase().trim(); }));
+
+                let inseridos = 0, duplicados = 0, erros = 0;
+                for (const row of rows) {
+                    if (importAbort.aborted) break;
+                    var rowNorm = {};
+                    Object.keys(row).forEach(function(k) {
+                        var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
+                        rowNorm[kNorm] = row[k];
+                    });
+
+                    var codigo = getVal(rowNorm, ['codigo', 'Código', 'CPF/CNPJ', 'CpfCnpj', 'cpf_cnpj', 'cnpj_cpf', 'cpf', 'cnpj']);
+                    var codigoNumerico = String(codigo || '').replace(/\D/g, '').trim();
+                    if (!codigoNumerico) { erros++; continue; }
+
+                    const codigoNorm = codigoNumerico.toLowerCase();
+                    if (codigosExistentes.has(codigoNorm)) { duplicados++; erros++; continue; }
+
+                    var tipoPessoa = getVal(rowNorm, ['tipoPessoa', 'Tipo Pessoa', 'Tipo de Pessoa', 'tipopessoa', 'pj/pf']);
+                    tipoPessoa = String(tipoPessoa || '').toUpperCase();
+                    if (tipoPessoa.indexOf('FIS') >= 0 || tipoPessoa === 'CPF') tipoPessoa = 'FISICA';
+                    else if (tipoPessoa.indexOf('JUR') >= 0 || tipoPessoa === 'CNPJ') tipoPessoa = 'JURIDICA';
+                    else tipoPessoa = (codigoNumerico.length === 11 ? 'FISICA' : 'JURIDICA');
+
+                    var optanteSimplesRaw = getVal(rowNorm, ['optanteSimples', 'Optante de Simples', 'Optante Simples', 'simplesNacional', 'Simples Nacional']);
+                    var optanteSimplesNorm = String(optanteSimplesRaw || '').trim().toLowerCase();
+                    var optanteSimples = false;
+                    if (optanteSimplesNorm) {
+                        optanteSimples = ['sim', 's', 'true', '1', 'yes', 'y'].indexOf(optanteSimplesNorm) >= 0;
+                    }
+
+                    const dados = {
+                        tipoPessoa: escapeHTML(tipoPessoa),
+                        codigo: escapeHTML(codigo),
+                        codigoNumerico: escapeHTML(codigoNumerico),
+                        nome: escapeHTML(getVal(rowNorm, ['nome', 'Nome', 'razaoSocial', 'Razao Social', 'Fornecedor'])),
+                        matrizFilial: escapeHTML(getVal(rowNorm, ['matrizFilial', 'Matriz ou Filial', 'Matriz/Filial'])),
+                        contato: escapeHTML(getVal(rowNorm, ['contato', 'Contato'])),
+                        telefone: escapeHTML(getVal(rowNorm, ['telefone', 'Telefone', 'fone', 'Fone'])),
+                        email: escapeHTML(getVal(rowNorm, ['email', 'E-mail', 'Email'])),
+                        situacaoCadastral: escapeHTML(getVal(rowNorm, ['situacaoCadastral', 'Situação Cadastral', 'Situacao Cadastral', 'situacao']) || 'ATIVO'),
+                        optanteSimples: optanteSimples,
+                        endereco: escapeHTML(getVal(rowNorm, ['endereco', 'Endereço', 'Endereco'])),
+                        ativo: true
+                    };
+
+                    await db.collection('fornecedores').add(dados);
+                    codigosExistentes.add(codigoNorm);
+                    inseridos++;
+                }
+                const atualizados = 0;
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                await salvarUltimoImport('fornecedores');
+            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            finally { esconderLoading(); e.target.value = ''; }
+        });
+    }
+
     // --- IMPORT EMPENHOS (chave única: numEmpenho) ---
     const fileImportEmpenhos = document.getElementById('fileImportEmpenhos');
     if (fileImportEmpenhos) {
