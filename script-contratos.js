@@ -110,7 +110,8 @@
     var listaResultadosDedEnc = document.getElementById('listaResultadosDedEnc');
     if (inputBuscaDedEncContrato && listaResultadosDedEnc) {
         inputBuscaDedEncContrato.addEventListener('input', debounce(function() {
-            var texto = (this.value || '').toLowerCase();
+            // Não usar `this.value` aqui: o debounce global não preserva o contexto do input.
+            var texto = (inputBuscaDedEncContrato.value || '').toLowerCase();
             listaResultadosDedEnc.innerHTML = '';
             if (texto.length >= 2) {
                 var base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
@@ -121,11 +122,13 @@
                     var codReceita = String(d.codReceita || '').toLowerCase();
                     var natRendimento = String(d.natRendimento || '').toLowerCase();
                     var descRendimento = String(d.descRendimento || '').toLowerCase();
+                    var descricao = String(d.descricao || '').toLowerCase();
                     return codigo.indexOf(texto) !== -1 ||
                         tipo.indexOf(texto) !== -1 ||
                         codReceita.indexOf(texto) !== -1 ||
                         natRendimento.indexOf(texto) !== -1 ||
-                        descRendimento.indexOf(texto) !== -1;
+                        descRendimento.indexOf(texto) !== -1 ||
+                        descricao.indexOf(texto) !== -1;
                 });
                 resultados.sort(function(a, b) {
                     var codA = String(a.codigo || '');
