@@ -674,7 +674,7 @@
         const salvo = tcSalvo();
         const podeEditar = usuarioPodeEditarTC();
         [0, 1, 2, 3].forEach(tab => {
-            const deveHabilitar = !salvo ? true : (podeEditar && (abaEmEdicao === tab || !abaTemDados(tab)));
+            const deveHabilitar = !salvo ? true : (podeEditar && abaEmEdicao === tab);
             atualizarEstadoControlesAba(tab, deveHabilitar);
         });
         const bloquearGlobais = salvo && abaEmEdicao !== null;
@@ -698,9 +698,8 @@
             const btnEditar = document.getElementById(c.editar);
             const btnSalvar = document.getElementById(c.salvar);
             if (!acao || !btnEditar || !btnSalvar) return;
-            const tabComDados = abaTemDados(c.tab);
             const emEdicaoDestaAba = abaEmEdicao === c.tab;
-            acao.style.display = (salvo && podeEditar && tabComDados) ? 'flex' : 'none';
+            acao.style.display = (salvo && podeEditar) ? 'flex' : 'none';
             btnEditar.style.display = emEdicaoDestaAba ? 'none' : 'inline-block';
             btnSalvar.style.display = emEdicaoDestaAba ? 'inline-block' : 'none';
             btnEditar.classList.add('tc-tab-edit-control');
