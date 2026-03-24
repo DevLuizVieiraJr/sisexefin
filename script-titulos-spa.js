@@ -22,7 +22,7 @@
     let listaCentroCustos = [];
     let listaUG = [];
     let baseLfPf = [];
-    let statusFiltroAtual = null;
+    let statusFiltroAtual = 'Rascunho';
     let titulosSelecionados = new Set();
     let empenhosDaNotaAtual = [];
     let deducoesAplicadasAtual = [];
@@ -38,6 +38,7 @@
     let termoBusca = '';
     let incluirInativos = false;
     let estadoOrdenacao = { coluna: 'idProc', direcao: 'asc' };
+    let unsubscribeTitulos = null;
 
     window.baseTitulos = function() { return baseTitulos; };
 
@@ -120,6 +121,21 @@
     function mostrarLoading() { if (typeof window.mostrarLoading === 'function') window.mostrarLoading('Carregando...'); }
     function esconderLoading() { if (typeof window.esconderLoading === 'function') window.esconderLoading(); }
 
+    function normalizarParaFirestore(valor) {
+        if (valor === undefined) return null;
+        if (valor === null) return null;
+        if (Array.isArray(valor)) return valor.map(item => normalizarParaFirestore(item));
+        if (Object.prototype.toString.call(valor) === '[object Object]') {
+            const out = {};
+            Object.keys(valor).forEach(k => {
+                const v = normalizarParaFirestore(valor[k]);
+                if (v !== undefined) out[k] = v;
+            });
+            return out;
+        }
+        return valor;
+    }
+
     function inicializarTitulosSPA() {
         mostrarLoading();
         let carregamentoFinalizado = false;
@@ -138,6 +154,7 @@
                 alert('Carregamento interrompido. Verifique sua conexão ou recarregue a página.');
             });
         }
+        unsubscribers.push(() => { try { if (unsubscribeTitulos) unsubscribeTitulos(); } catch (e) {} });
 
         const finalizarCarregamento = () => {
             if (carregamentoFinalizado) return;
@@ -163,19 +180,30 @@
 
         const timeoutId = setTimeout(finalizarCarregamento, TIMEOUT_MS);
 
-        unsubscribers.push(db.collection('titulos').onSnapshot(
-            snap => {
-                try {
-                    baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    atualizarTabelaTitulos();
-                } catch (e) {
-                    console.error('Erro ao atualizar tabela de títulos:', e);
-                } finally {
-                    aoReceberSnapshot();
-                }
-            },
-            onErr
-        ));
+        let primeiroSnapshotTitulosRecebido = false;
+        function assinarTitulosPorStatus(status) {
+            try { if (unsubscribeTitulos) unsubscribeTitulos(); } catch (e) {}
+            let query = db.collection('titulos');
+            if (status && status !== 'Todos') {
+                query = query.where('status', '==', status);
+            }
+            unsubscribeTitulos = query.onSnapshot(
+                snap => {
+                    try {
+                        baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        atualizarTabelaTitulos();
+                    } catch (e) {
+                        console.error('Erro ao atualizar tabela de títulos:', e);
+                    } finally {
+                        if (!primeiroSnapshotTitulosRecebido) {
+                            primeiroSnapshotTitulosRecebido = true;
+                            aoReceberSnapshot();
+                        }
+                    }
+                },
+                onErr
+            );
+        }
         unsubscribers.push(db.collection('contratos').onSnapshot(snap => {
             baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             aoReceberSnapshot();
@@ -213,8 +241,9 @@
         }, onErr));
 
         const urlParams = new URLSearchParams(window.location.search);
-        const st = urlParams.get('status');
-        if (st) filtrarPorStatus(st);
+        const st = (urlParams.get('status') || '').trim();
+        statusFiltroAtual = st || 'Rascunho';
+        assinarTitulosPorStatus(statusFiltroAtual);
         desenharFiltrosStatus();
         ligarEventos();
     }
@@ -393,24 +422,36 @@
     function desenharFiltrosStatus() {
         const container = document.getElementById('filtrosStatusTC');
         if (!container) return;
-        const botoes = ['Todos', ...STATUS_ORDEM.filter(s => s !== 'Devolvido')];
+        const botoes = [...STATUS_ORDEM.filter(s => s !== 'Devolvido'), 'Todos'];
         container.innerHTML = botoes.map(s => {
-            const label = s === 'Todos' ? 'Todos' : s;
-            const cls = (!statusFiltroAtual && s === 'Todos') || statusFiltroAtual === s ? 'ativo' : '';
-            return `<button type="button" class="stepper-tc-btn ${cls}" data-status="${s === 'Todos' ? '' : s}">${escapeHTML(label)}</button>`;
+            const cls = statusFiltroAtual === s ? 'ativo' : '';
+            return `<button type="button" class="stepper-tc-btn ${cls}" data-status="${s}">${escapeHTML(s)}</button>`;
         }).join('');
         container.querySelectorAll('.stepper-tc-btn').forEach(btn => {
-            btn.addEventListener('click', () => filtrarPorStatus(btn.getAttribute('data-status') || null));
+            btn.addEventListener('click', () => filtrarPorStatus(btn.getAttribute('data-status') || 'Rascunho'));
         });
     }
 
     window.filtrarPorStatus = function(status) {
-        statusFiltroAtual = status || null;
+        statusFiltroAtual = status || 'Rascunho';
         titulosSelecionados.clear();
-        if (status && history.replaceState) history.replaceState({}, '', 'titulos.html?status=' + encodeURIComponent(status));
-        else if (history.replaceState) history.replaceState({}, '', 'titulos.html');
+        paginaAtual = 1;
+        if (history.replaceState) history.replaceState({}, '', 'titulos.html?status=' + encodeURIComponent(statusFiltroAtual));
+        try { if (unsubscribeTitulos) unsubscribeTitulos(); } catch (e) {}
+        let query = db.collection('titulos');
+        if (statusFiltroAtual !== 'Todos') query = query.where('status', '==', statusFiltroAtual);
+        unsubscribeTitulos = query.onSnapshot(
+            snap => {
+                baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                atualizarTabelaTitulos();
+            },
+            err => {
+                console.error('Erro ao filtrar títulos por status:', err);
+                const tbody = document.getElementById('tbody-titulos');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Erro ao carregar títulos para o status selecionado.</td></tr>';
+            }
+        );
         desenharFiltrosStatus();
-        atualizarTabelaTitulos();
     };
 
     const filtroInativosChk = document.getElementById('filtroInativosTitulos');
@@ -427,7 +468,7 @@
         if (!incluirInativos) {
             lista = lista.filter(t => !t.inativo);
         }
-        if (statusFiltroAtual) lista = lista.filter(t => t.status === statusFiltroAtual);
+        if (statusFiltroAtual && statusFiltroAtual !== 'Todos') lista = lista.filter(t => t.status === statusFiltroAtual);
         if (termoBusca.trim()) {
             const q = termoBusca.toLowerCase();
             lista = lista.filter(t =>
@@ -496,7 +537,7 @@
 
         const total = Math.ceil(lista.length / itensPorPagina) || 1;
         const info = document.getElementById('infoPagina');
-        if (info) info.textContent = `${paginaAtual} de ${total}`;
+        if (info) info.textContent = `Página ${paginaAtual} de ${total}`;
         const mostrandoDe = document.getElementById('mostrandoDe');
         const mostrandoTotal = document.getElementById('mostrandoTotal');
         if (mostrandoDe) mostrandoDe.textContent = itens.length;
@@ -629,6 +670,11 @@
         return typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_editar') : false;
     }
 
+    function podeEditarAba(tabIndex) {
+        if (!tcSalvo()) return true;
+        return usuarioPodeEditarTC() && abaEmEdicao === tabIndex;
+    }
+
     function abaTemDados(tabIndex) {
         if (tabIndex === 0) {
             return !!((document.getElementById('numTC')?.value || '').trim());
@@ -723,6 +769,12 @@
         const idx = STATUS_ORDEM.indexOf(status);
         if (idx < 0) return;
         document.querySelectorAll('.tab-tc').forEach((tab, i) => {
+            // Histórico (aba 4) deve permanecer sempre acessível para consulta.
+            if (i === 4) {
+                tab.classList.remove('bloqueado');
+                tab.style.pointerEvents = '';
+                return;
+            }
             const isBloqueado = (status === 'Devolvido' && i < 4) || (status !== 'Devolvido' && i > idx + 1);
             tab.classList.toggle('bloqueado', isBloqueado);
             tab.style.pointerEvents = isBloqueado ? 'none' : '';
@@ -786,6 +838,7 @@
         tbody.innerHTML = '';
         empenhosDaNotaAtual.forEach((v, i) => {
             const tr = document.createElement('tr');
+            const processamentoEditavel = podeEditarAba(1);
             tr.innerHTML = `<td title="NE: ${escapeHTML(v.numEmpenho || '')} | PTRES: ${escapeHTML(v.ptres || '-')} | FR: ${escapeHTML(v.fr || '-')}">${escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-'))}</td>
                 <td>${escapeHTML(v.nd || '-')}</td>
                 <td>${escapeHTML(v.subelemento || '-')}</td>
@@ -793,16 +846,18 @@
                 <td title="${escapeHTML(labelCentroCustos(v.centroCustosId))}">${escapeHTML((labelCentroCustos(v.centroCustosId) || '-').substring(0, 25))}${(labelCentroCustos(v.centroCustosId) || '').length > 25 ? '...' : ''}</td>
                 <td title="${escapeHTML(labelUG(v.ugId))}">${escapeHTML((labelUG(v.ugId) || '-').substring(0, 25))}${(labelUG(v.ugId) || '').length > 25 ? '...' : ''}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-editar-ne" data-index="${i}" title="Editar">✏️</button>
-                    <button type="button" class="btn-icon btn-rm-ne" data-index="${i}" title="Remover">🗑️</button>
+                    <button type="button" class="btn-icon btn-editar-ne" data-index="${i}" title="Editar" ${processamentoEditavel ? '' : 'disabled'}>✏️</button>
+                    <button type="button" class="btn-icon btn-rm-ne" data-index="${i}" title="Remover" ${processamentoEditavel ? '' : 'disabled'}>🗑️</button>
                 </td>`;
             tbody.appendChild(tr);
         });
 
         tbody.querySelectorAll('.btn-editar-ne').forEach(btn => btn.addEventListener('click', function() {
+            if (!podeEditarAba(1)) return;
             editarItemEmpenhoNaNota(parseInt(this.getAttribute('data-index'), 10));
         }));
         tbody.querySelectorAll('.btn-rm-ne').forEach(btn => btn.addEventListener('click', function() {
+            if (!podeEditarAba(1)) return;
             empenhosDaNotaAtual.splice(parseInt(this.getAttribute('data-index'), 10), 1);
             podeCancelarUltimaInclusaoEmpenhoNota = false;
             const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
@@ -850,6 +905,8 @@
         if (infoOptante) infoOptante.textContent = optante ? 'Optante pelo Simples' : 'Não Optante';
         if (btnOutras) btnOutras.style.display = 'inline-block';
         container.innerHTML = '';
+        const processamentoEditavel = podeEditarAba(1);
+        if (btnOutras) btnOutras.disabled = !processamentoEditavel;
         permitidas.forEach(p => {
             const tipo = p.tipo || 'DDF025';
             const label = LABEL_TIPO[tipo] || tipo;
@@ -857,6 +914,7 @@
             btn.type = 'button';
             btn.className = 'btn-default btn-small';
             btn.textContent = 'Calcular ' + (p.codigo || tipo) + ' - ' + label;
+            btn.disabled = !processamentoEditavel;
             btn.onclick = () => abrirModalCalcularDeducao(p);
             container.appendChild(btn);
         });
@@ -909,6 +967,10 @@
 
     let deducaoModalContexto = null;
     function abrirModalCalcularDeducao(permitida, editIndex = null) {
+        if (!podeEditarAba(1)) {
+            alert('Clique em "Editar Processamento" para alterar deduções.');
+            return;
+        }
         const contratoId = document.getElementById('contratoIdSelecionado')?.value || '';
         const dedEnc = baseDeducoesEncargos.find(d => d.id === permitida.dedEncId || (d.codigo === permitida.codigo && d.tipo === permitida.tipo));
         const tipo = (dedEnc && dedEnc.tipo) || permitida.tipo || 'DDF025';
@@ -982,6 +1044,10 @@
     });
 
     document.getElementById('btnInserirOutrasDeducoes')?.addEventListener('click', function() {
+        if (!podeEditarAba(1)) {
+            alert('Clique em "Editar Processamento" para alterar deduções.');
+            return;
+        }
         const permitidas = obterDeducoesPermitidasContrato();
         const idsPermitidos = new Set((permitidas || []).map(p => p.dedEncId || p.codigo + '|' + p.tipo));
         const outras = (baseDeducoesEncargos || []).filter(d => !idsPermitidos.has(d.id) && !idsPermitidos.has((d.codigo || '') + '|' + (d.tipo || '')));
@@ -997,6 +1063,7 @@
         const tbody = document.getElementById('tbodyDeducoesProcessamento');
         if (!tbody) return;
         tbody.innerHTML = '';
+        const processamentoEditavel = podeEditarAba(1);
         (deducoesAplicadasAtual || []).forEach((d, i) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -1006,18 +1073,20 @@
                 <td>${escapeHTML(String(d.aliquota || 0))}%</td>
                 <td>${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.valorCalculado || 0) : (d.valorCalculado || 0).toFixed(2)}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-edit-ded" data-index="${i}" title="Editar">✏️</button>
-                    <button type="button" class="btn-icon btn-rm-ded" data-index="${i}" title="Excluir">🗑️</button>
+                    <button type="button" class="btn-icon btn-edit-ded" data-index="${i}" title="Editar" ${processamentoEditavel ? '' : 'disabled'}>✏️</button>
+                    <button type="button" class="btn-icon btn-rm-ded" data-index="${i}" title="Excluir" ${processamentoEditavel ? '' : 'disabled'}>🗑️</button>
                 </td>`;
             tbody.appendChild(tr);
         });
         tbody.querySelectorAll('.btn-edit-ded').forEach(btn => btn.addEventListener('click', function() {
+            if (!podeEditarAba(1)) return;
             const idx = parseInt(this.getAttribute('data-index'), 10);
             const d = deducoesAplicadasAtual[idx];
             if (!d) return;
             abrirModalCalcularDeducao({ dedEncId: d.dedEncId, tipo: d.tipo, codigo: d.codigo, descricao: d.descricao }, idx);
         }));
         tbody.querySelectorAll('.btn-rm-ded').forEach(btn => btn.addEventListener('click', function() {
+            if (!podeEditarAba(1)) return;
             const idx = parseInt(this.getAttribute('data-index'), 10);
             if (!confirm('Confirma a exclusão desta dedução?')) return;
             deducoesAplicadasAtual.splice(idx, 1);
@@ -1577,8 +1646,10 @@
         }
 
         if (!empenhoTemporarioSelecionado) return alert("Selecione uma NE na busca.");
+        const numEmp = (empenhoTemporarioSelecionado.numEmpenho || empenhoTemporarioSelecionado.numNE || '').trim();
+        if (!numEmp) return alert("NE inválida. Selecione novamente pela busca.");
         empenhosDaNotaAtual.push({
-            numEmpenho: empenhoTemporarioSelecionado.numEmpenho || empenhoTemporarioSelecionado.numNE,
+            numEmpenho: numEmp,
             ptres: empenhoTemporarioSelecionado.ptres || '',
             fr: empenhoTemporarioSelecionado.fr || '',
             nd: nd || empenhoTemporarioSelecionado.nd || '',
@@ -1679,6 +1750,7 @@
         if (!tbody) return;
         tbody.innerHTML = '';
         const lfAtivas = (baseLfPf || []).filter(r => r.ativo !== false);
+        const liquidacaoEditavel = podeEditarAba(2);
         (empenhosDaNotaAtual || []).forEach((v, i) => {
             const tr = document.createElement('tr');
             const ccLabel = labelCentroCustos(v.centroCustosId);
@@ -1688,7 +1760,7 @@
                 const sel = (v.lf || '') === lfVal ? ' selected' : '';
                 return '<option value="' + escapeHTML(lfVal) + '"' + sel + '>' + escapeHTML(lfVal) + '</option>';
             }).join('');
-            const selectLf = '<select data-index="' + i + '" data-field="lf" class="select-lf-liquidacao"><option value="">Selecione LF...</option>' + opts + '</select>';
+            const selectLf = '<select data-index="' + i + '" data-field="lf" class="select-lf-liquidacao" ' + (liquidacaoEditavel ? '' : 'disabled') + '><option value="">Selecione LF...</option>' + opts + '</select>';
             const lfReg = lfAtivas.find(r => (r.lf || '') === (v.lf || ''));
             const pfExib = lfReg && lfReg.pf ? escapeHTML(lfReg.pf) : (v.pf || '-');
             tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
@@ -1701,6 +1773,7 @@
             tbody.appendChild(tr);
         });
         tbody.querySelectorAll('select[data-field="lf"]').forEach(sel => sel.addEventListener('change', function() {
+            if (!podeEditarAba(2)) return;
             const idx = parseInt(this.getAttribute('data-index'));
             if (empenhosDaNotaAtual[idx]) {
                 empenhosDaNotaAtual[idx].lf = this.value;
@@ -1716,16 +1789,18 @@
         const tbody = document.getElementById('tbodyLFPF');
         if (!tbody) return;
         tbody.innerHTML = '';
+        const financeiroEditavel = podeEditarAba(3);
         (empenhosDaNotaAtual || []).forEach((v, i) => {
             const tr = document.createElement('tr');
             const lfExib = v.lf ? escapeHTML(v.lf) : '-';
             tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
                 '<td>R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')) + '</td>' +
                 '<td class="lf-readonly">' + lfExib + '</td>' +
-                '<td><input type="text" data-index="' + i + '" data-field="pf" value="' + escapeHTML(v.pf || '') + '" placeholder="PF"></td>';
+                '<td><input type="text" data-index="' + i + '" data-field="pf" value="' + escapeHTML(v.pf || '') + '" placeholder="PF" ' + (financeiroEditavel ? '' : 'disabled') + '></td>';
             tbody.appendChild(tr);
         });
         tbody.querySelectorAll('input[data-field="pf"]').forEach(inp => inp.addEventListener('change', function() {
+            if (!podeEditarAba(3)) return;
             const idx = parseInt(this.getAttribute('data-index'));
             if (empenhosDaNotaAtual[idx]) empenhosDaNotaAtual[idx].pf = this.value;
         }));
@@ -1840,6 +1915,7 @@
         if (eraNovo) {
             dados.entradaSaida = [{ tipo: 'entrada', data: dataExefin, oiOrigem: oiEntregou }];
         }
+        const dadosSanitizados = normalizarParaFirestore(dados);
 
         // Descobre qual aba está ativa (0 = Dados básicos / Rascunho)
         const abaAtivaEl = document.querySelector('.tab-tc.ativo');
@@ -1890,24 +1966,24 @@
             const eraNovo = (fbID === '-1' || !fbID);
             let docId = fbID;
             if (eraNovo) {
-                dados.status = dados.status || 'Rascunho';
-                dados.historicoStatus = [histEntry];
-                dados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
-                const ref = await db.collection('titulos').add(dados);
+                dadosSanitizados.status = dadosSanitizados.status || 'Rascunho';
+                dadosSanitizados.historicoStatus = [histEntry];
+                dadosSanitizados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
+                const ref = await db.collection('titulos').add(dadosSanitizados);
                 docId = ref.id;
             } else {
                 const doc = await db.collection('titulos').doc(fbID).get();
                 const hist = (doc.data()?.historicoStatus || []);
                 hist.push(histEntry);
-                dados.historicoStatus = hist;
-                dados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
-                await db.collection('titulos').doc(fbID).update(dados);
+                dadosSanitizados.historicoStatus = hist;
+                dadosSanitizados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('titulos').doc(fbID).update(dadosSanitizados);
             }
 
             // Se o TC tem NP preenchida, atualiza a coleção "np" com o vínculo do TC.
-            if (dados.np && String(dados.np).trim()) {
+            if (dadosSanitizados.np && String(dadosSanitizados.np).trim()) {
                 try {
-                    await vincularTituloNaNP(docId, dados.np, dados.dataLiquidacao);
+                    await vincularTituloNaNP(docId, dadosSanitizados.np, dadosSanitizados.dataLiquidacao);
                 } catch (e) {
                     // Falha ao vincular NP não impede salvar o TC.
                     console.warn('Falha ao vincular TC na NP:', e);
@@ -1965,7 +2041,7 @@
                 document.getElementById('modalPrimeiroSalvo').style.display = 'flex';
                 return;
             }
-            alert("TC salvo com sucesso." + (dados.idProc ? ' Número: ' + dados.idProc : ''));
+            alert("TC salvo com sucesso." + (dadosSanitizados.idProc ? ' Número: ' + dadosSanitizados.idProc : ''));
             voltarParaListaTitulos();
         } catch (err) {
             alert("Erro ao gravar: " + (err.message || err));
@@ -1992,10 +2068,12 @@
             hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
             // Garanta consistência do modelo interno antes de persistir.
             normalizarEmpenhosDaNotaAtualSubelemento();
+            const empenhosSanitizados = normalizarParaFirestore(empenhosDaNotaAtual);
+            const deducoesSanitizadas = normalizarParaFirestore(deducoesAplicadasAtual);
             await db.collection('titulos').doc(docId).update({
                 status: 'Em Processamento',
-                empenhosVinculados: empenhosDaNotaAtual,
-                deducoesAplicadas: deducoesAplicadasAtual,
+                empenhosVinculados: empenhosSanitizados,
+                deducoesAplicadas: deducoesSanitizadas,
                 historicoStatus: hist,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -2310,22 +2388,137 @@
         }
     }
 
-    function downloadModeloOP() {
-        const csv = 'NP,OP\n741000000012026NP000001,2026OP000049';
+    function downloadModeloTC() {
+        const headers = [
+            'idProc', 'tipoTC', 'dataExefin', 'numTC', 'fornecedor', 'instrumento',
+            'valorNotaFiscal', 'dataEmissao', 'dataAteste', 'status', 'np', 'dataLiquidacao', 'op',
+            'ne1', 'nd1', 'subelemento1', 'valor1', 'centroCustosId1', 'ugId1', 'lf1', 'pf1',
+            'dedTipo1', 'dedCodigo1', 'dedBase1', 'dedAliquota1', 'dedValor1', 'dedDataApuracao1'
+        ];
+        const exemplo = [
+            'PROC-001', 'NFSE', '2026-03-23', '1234', '00.064.702/0003-09 - SKM ELETRO ELETRONICA LTDA',
+            '00069/2024', '4564,44', '2026-03-23', '2026-03-23', 'Em Processamento',
+            '741000000012026NP000001', '2026-03-23', '2026OP000049',
+            '2026NE000079', '339039', '17', '1245,00', 'CC-001', '741000', 'LF-001', 'PF-001',
+            'DDR001', '1160', '4564,44', '5', '228,22', '2026-03-23'
+        ];
+        const csv = headers.join(',') + '\n' + exemplo.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'modelo-op.csv';
+        a.download = 'modelo-tc.csv';
         a.click();
         URL.revokeObjectURL(a.href);
     }
-    window.downloadModeloOP = downloadModeloOP;
+    window.downloadModeloTC = downloadModeloTC;
+
+    function valorNumerico(v) {
+        if (v === null || v === undefined) return 0;
+        const s = String(v).trim();
+        if (!s) return 0;
+        if (typeof valorMoedaParaNumero === 'function') return valorMoedaParaNumero(s);
+        return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    function valorTexto(row, aliases) {
+        for (const k of aliases) {
+            if (Object.prototype.hasOwnProperty.call(row, k)) {
+                const v = String(row[k] ?? '').trim();
+                if (v) return v;
+            }
+        }
+        return '';
+    }
+
+    function valorDataISO(raw) {
+        const s = String(raw || '').trim();
+        if (!s) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return s;
+    }
+
+    function parseEmpenhosAchatados(row) {
+        const empenhos = [];
+        for (let i = 1; i <= 99; i++) {
+            const ne = valorTexto(row, [`ne${i}`, `NE${i}`, `numEmpenho${i}`, `num_empenho_${i}`]);
+            if (!ne) continue;
+            empenhos.push({
+                numEmpenho: ne,
+                nd: valorTexto(row, [`nd${i}`, `ND${i}`]),
+                subelemento: valorTexto(row, [`subelemento${i}`, `subel${i}`, `subelemento_${i}`]),
+                valorVinculado: valorNumerico(valorTexto(row, [`valor${i}`, `valorEmpenho${i}`, `valor_empenho_${i}`])),
+                centroCustosId: valorTexto(row, [`centroCustosId${i}`, `centroCustos${i}`, `cc${i}`]),
+                ugId: valorTexto(row, [`ugId${i}`, `ug${i}`]),
+                lf: valorTexto(row, [`lf${i}`, `LF${i}`]),
+                pf: valorTexto(row, [`pf${i}`, `PF${i}`])
+            });
+        }
+        return empenhos;
+    }
+
+    function parseDeducoesAchatadas(row) {
+        const deducoes = [];
+        for (let i = 1; i <= 99; i++) {
+            const tipo = valorTexto(row, [`dedTipo${i}`, `ded_tipo${i}`, `tipoDed${i}`]);
+            if (!tipo) continue;
+            deducoes.push({
+                tipo,
+                codigo: valorTexto(row, [`dedCodigo${i}`, `ded_codigo${i}`, `codDed${i}`]),
+                codReceita: valorTexto(row, [`dedCodigo${i}`, `ded_codigo${i}`, `codReceita${i}`]),
+                baseCalculo: valorNumerico(valorTexto(row, [`dedBase${i}`, `ded_base${i}`, `baseDed${i}`])),
+                aliquota: valorNumerico(valorTexto(row, [`dedAliquota${i}`, `ded_aliquota${i}`, `aliquotaDed${i}`])),
+                valorCalculado: valorNumerico(valorTexto(row, [`dedValor${i}`, `ded_valor${i}`, `valorDed${i}`])),
+                dataApuracao: valorDataISO(valorTexto(row, [`dedDataApuracao${i}`, `ded_data_apuracao${i}`, `dataApuracaoDed${i}`]))
+            });
+        }
+        return deducoes;
+    }
+
+    function montarAtualizacaoTC(row) {
+        const obrigatorios = {
+            idProc: valorTexto(row, ['idProc', 'ID_PROC', 'id_proc']),
+            tipoTC: valorTexto(row, ['tipoTC', 'TIPO_TC', 'tipo_tc']),
+            dataExefin: valorDataISO(valorTexto(row, ['dataExefin', 'DATA_EXEFIN', 'data_exefin'])),
+            numTC: valorTexto(row, ['numTC', 'NUM_TC', 'num_tc']),
+            fornecedor: valorTexto(row, ['fornecedor', 'FORNECEDOR']),
+            instrumento: valorTexto(row, ['instrumento', 'INSTRUMENTO', 'contrato']),
+            valorNotaFiscal: valorNumerico(valorTexto(row, ['valorNotaFiscal', 'VALOR_NOTA_FISCAL', 'valor_nota_fiscal'])),
+            dataEmissao: valorDataISO(valorTexto(row, ['dataEmissao', 'DATA_EMISSAO', 'data_emissao'])),
+            dataAteste: valorDataISO(valorTexto(row, ['dataAteste', 'DATA_ATESTE', 'data_ateste'])),
+            status: valorTexto(row, ['status', 'STATUS'])
+        };
+        const faltando = Object.entries(obrigatorios).filter(([, v]) => v === '' || v === 0).map(([k]) => k);
+        if (faltando.length > 0) {
+            return { erro: 'Campos obrigatórios ausentes: ' + faltando.join(', ') };
+        }
+        const update = {
+            tipoTC: obrigatorios.tipoTC,
+            dataExefin: obrigatorios.dataExefin,
+            numTC: obrigatorios.numTC,
+            fornecedor: obrigatorios.fornecedor,
+            instrumento: obrigatorios.instrumento,
+            valorNotaFiscal: obrigatorios.valorNotaFiscal,
+            dataEmissao: obrigatorios.dataEmissao,
+            dataAteste: obrigatorios.dataAteste,
+            status: obrigatorios.status,
+            np: valorTexto(row, ['np', 'NP']),
+            dataLiquidacao: valorDataISO(valorTexto(row, ['dataLiquidacao', 'DATA_LIQUIDACAO', 'data_liquidacao'])),
+            op: valorTexto(row, ['op', 'OP']),
+            empenhosVinculados: parseEmpenhosAchatados(row),
+            deducoesAplicadas: parseDeducoesAchatadas(row),
+            editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+            editado_por: usuarioLogadoEmail || ''
+        };
+        return { idProc: obrigatorios.idProc, update };
+    }
 
     document.getElementById('fileImportOP')?.addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
         if (typeof permissoesEmCache !== 'undefined' && !permissoesEmCache.includes('acesso_admin')) {
-            alert("Acesso negado. Apenas administradores podem importar OP.");
+            alert("Acesso negado. Apenas administradores podem importar TC.");
             e.target.value = '';
             return;
         }
@@ -2341,17 +2534,32 @@
             const sh = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(sh, { defval: '' });
             let atualizados = 0;
-            for (const row of rows) {
-                const np = String(row.NP || row.np || '').trim();
-                const op = String(row.OP || row.op || '').trim();
-                if (!np || !op) continue;
-                const titulosComNP = baseTitulos.filter(t => (t.np || '').trim() === np);
-                for (const t of titulosComNP) {
-                    await db.collection('titulos').doc(t.id).update({ op, editado_em: firebase.firestore.FieldValue.serverTimestamp() });
+            const rejeitadas = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i] || {};
+                const parsed = montarAtualizacaoTC(row);
+                if (parsed.erro) {
+                    rejeitadas.push(`Linha ${i + 2}: ${parsed.erro}`);
+                    continue;
+                }
+                const tc = baseTitulos.find(t => String(t.idProc || '').trim() === parsed.idProc);
+                if (!tc) {
+                    rejeitadas.push(`Linha ${i + 2}: idProc ${parsed.idProc} não encontrado.`);
+                    continue;
+                }
+                try {
+                    await db.collection('titulos').doc(tc.id).update(normalizarParaFirestore(parsed.update));
                     atualizados++;
+                } catch (errLinha) {
+                    rejeitadas.push(`Linha ${i + 2}: erro ao atualizar ${parsed.idProc} (${errLinha.message || errLinha}).`);
                 }
             }
-            alert("Importação OP: " + atualizados + " título(s) atualizado(s).");
+            let msg = `Importação TC concluída. Atualizados: ${atualizados}. Rejeitados: ${rejeitadas.length}.`;
+            if (rejeitadas.length > 0) {
+                msg += '\n\nResumo das rejeições:\n- ' + rejeitadas.slice(0, 15).join('\n- ');
+                if (rejeitadas.length > 15) msg += `\n- ... e mais ${rejeitadas.length - 15} linha(s).`;
+            }
+            alert(msg);
         } catch (err) {
             alert("Erro na importação: " + (err.message || err));
         } finally {
@@ -2511,6 +2719,15 @@
         } else {
             voltarParaListaTitulos();
         }
+    });
+
+    document.getElementById('btnExemploLayoutImportTC')?.addEventListener('click', function() {
+        const modal = document.getElementById('modalExemploLayoutImportTC');
+        if (modal) modal.style.display = 'flex';
+    });
+    document.getElementById('btnFecharModalExemploLayoutImportTC')?.addEventListener('click', function() {
+        const modal = document.getElementById('modalExemploLayoutImportTC');
+        if (modal) modal.style.display = 'none';
     });
 
     document.getElementById('formTitulo')?.addEventListener('input', function() {

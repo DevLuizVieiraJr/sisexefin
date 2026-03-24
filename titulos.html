@@ -108,10 +108,15 @@
                 </div>
                 <div class="stepper-tc" id="filtrosStatusTC" style="margin-bottom: 15px;"></div>
                 <div class="toolbar">
-                    <div class="import-group" data-permission="acesso_admin">
-                        <label>Importar OP (NP→OP):</label>
-                        <input type="file" id="fileImportOP" accept=".csv,.xlsx,.xls">
-                        <a href="#" onclick="downloadModeloOP(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a>
+                    <div class="import-group">
+                        <label>Importar TC (CSV):</label>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <div data-permission="acesso_admin" style="display:flex; gap:8px; align-items:center;">
+                                <input type="file" id="fileImportOP" accept=".csv,.xlsx,.xls">
+                            </div>
+                            <a href="#" onclick="downloadModeloTC(); return false;" class="btn-modelo-csv btn-outline" title="Baixar modelo de TC em CSV">📄 Modelo TC (CSV)</a>
+                            <button type="button" id="btnExemploLayoutImportTC" class="btn-modelo-csv btn-outline" title="Ver estrutura esperada do arquivo">🧩 Exemplo de layout</button>
+                        </div>
                     </div>
                 </div>
                 <div class="controles-tabela">
@@ -138,21 +143,17 @@
                     </thead>
                     <tbody id="tbody-titulos"></tbody>
                 </table>
-                <div class="paginacao" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; margin-top: 15px;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 12px; color: #666;">Mostrando <strong id="mostrandoDe">0</strong> de <strong id="mostrandoTotal">0</strong> registros</span>
-                        <label data-permission="titulos_ver_inativos" style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px;">
-                            <input type="checkbox" id="filtroInativosTitulos">
-                            Incluir inativos
-                        </label>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button onclick="irParaPrimeiraPagina()" id="btnPrimeira" class="btn-outline btn-small">Primeira</button>
-                        <button onclick="mudarPagina(-1)" id="btnAnterior" class="btn-outline btn-small">Anterior</button>
-                        <span id="infoPagina">1 de 1</span>
-                        <button onclick="mudarPagina(1)" id="btnProximo" class="btn-outline btn-small">Próximo</button>
-                        <button onclick="irParaUltimaPagina()" id="btnUltima" class="btn-outline btn-small">Última</button>
-                    </div>
+                <div class="paginacao">
+                    <span id="mostrandoTitulos" style="margin-right:15px;">Mostrando <strong id="mostrandoDe">0</strong> de <strong id="mostrandoTotal">0</strong> registros</span>
+                    <button type="button" onclick="irParaPrimeiraPagina()" id="btnPrimeira">Primeiro</button>
+                    <button type="button" onclick="mudarPagina(-1)" id="btnAnterior">Anterior</button>
+                    <span id="infoPagina">Página 1 de 1</span>
+                    <button type="button" onclick="mudarPagina(1)" id="btnProximo">Próximo</button>
+                    <button type="button" onclick="irParaUltimaPagina()" id="btnUltima">Último</button>
+                    <label data-permission="titulos_ver_inativos" style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px; margin-left:12px;">
+                        <input type="checkbox" id="filtroInativosTitulos">
+                        Incluir inativos
+                    </label>
                 </div>
             </div>
 
@@ -454,6 +455,37 @@
                 <button type="button" id="btnModalSaidaContinuarEditando" class="btn-default">Continuar editando</button>
                 <button type="button" id="btnModalSaidaSalvarESair" class="btn-primary">Salvar e sair</button>
                 <button type="button" id="btnModalSaidaSairSemSalvar" class="btn-default" style="color:#e74c3c;">Sair sem salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalExemploLayoutImportTC" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:720px;">
+            <h3 style="margin-bottom:10px;">Exemplo de layout para importação de TC</h3>
+            <p style="margin-bottom:10px; color:#555; font-size:13px;">
+                O arquivo CSV deve conter os campos obrigatórios abaixo. Campos de listas podem ser informados em colunas achatadas com sufixo numérico (1..99).
+            </p>
+            <div style="font-size:12px; line-height:1.4; max-height:330px; overflow:auto; border:1px solid #e5e7eb; padding:10px; background:#fafafa;">
+                <strong>Obrigatórios:</strong>
+                <div><code>idProc, tipoTC, dataExefin, numTC, fornecedor, instrumento, valorNotaFiscal, dataEmissao, dataAteste, status</code></div>
+                <br>
+                <strong>Opcionais diretos:</strong>
+                <div><code>np, dataLiquidacao, op</code></div>
+                <br>
+                <strong>Empenhos achatados (exemplo índice 1):</strong>
+                <div><code>ne1, nd1, subelemento1, valor1, centroCustosId1, ugId1, lf1, pf1</code></div>
+                <br>
+                <strong>Deduções achatadas (exemplo índice 1):</strong>
+                <div><code>dedTipo1, dedCodigo1, dedBase1, dedAliquota1, dedValor1, dedDataApuracao1</code></div>
+                <br>
+                <strong>Aliases aceitos:</strong>
+                <div><code>idProc / ID_PROC / id_proc</code> e variações equivalentes dos campos principais.</div>
+                <br>
+                <strong>Formatos recomendados:</strong>
+                <div><code>data = YYYY-MM-DD</code>, valores monetários com vírgula ou ponto decimal.</div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+                <button type="button" id="btnFecharModalExemploLayoutImportTC" class="btn-default">Fechar</button>
             </div>
         </div>
     </div>
