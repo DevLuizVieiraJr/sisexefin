@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">SisExeFin</title>
+  <desc id="desc">Ícone SisExeFin  marinha, ouro e verde</desc>
+  <defs>
+    <linearGradient id="band" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a2f4a"/>
+      <stop offset="100%" stop-color="#0f1d2e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#band)"/>
+  <rect x="64" y="420" width="384" height="44" rx="8" fill="#27ae60" opacity="0.9"/>
+  <text x="256" y="290" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-size="112" font-weight="700" fill="#c9a227">SEF</text>
+  <text x="256" y="360" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-size="36" font-weight="600" fill="#e8f4f8">SisExeFin</text>
+</svg>
