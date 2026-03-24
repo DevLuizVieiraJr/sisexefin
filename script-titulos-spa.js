@@ -25,7 +25,9 @@
     let statusFiltroAtual = null;
     let titulosSelecionados = new Set();
     let empenhosDaNotaAtual = [];
-    let tributacoesAtual = [];
+    let deducoesAplicadasAtual = [];
+    let baseDeducoesEncargos = [];
+    let baseFornecedores = [];
     let salvandoApenasAbaDadosBasicos = false;
     let enviandoParaProcessamento = false;
     let paginaAtual = 1;
@@ -196,6 +198,14 @@
         }, onErr));
         unsubscribers.push(db.collection('lfpf').onSnapshot(snap => {
             baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(r => r.ativo !== false);
+            aoReceberSnapshot();
+        }, onErr));
+        unsubscribers.push(db.collection('deducoesEncargos').onSnapshot(snap => {
+            baseDeducoesEncargos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => d.ativo !== false);
+            aoReceberSnapshot();
+        }, onErr));
+        unsubscribers.push(db.collection('fornecedores').onSnapshot(snap => {
+            baseFornecedores = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             aoReceberSnapshot();
         }, onErr));
 
@@ -582,9 +592,10 @@
         document.getElementById('contratoIdSelecionado').value = '';
         limparFornecedorSelecionado();
         empenhosDaNotaAtual = [];
-        tributacoesAtual = [];
+        deducoesAplicadasAtual = [];
         desenharEmpenhosNota();
-        desenharTributacoes();
+        desenharDeducoesAplicadas();
+        desenharBotoesCalcularDed();
         mostrarStepper('Rascunho');
         ativarTab(0);
         bloquearTabsPorStatus('Rascunho');
@@ -733,33 +744,170 @@
         atualizarTotaisEmpenhosNota();
     }
 
-    function desenharTributacoes() {
-        const container = document.getElementById('containerTributacoes');
+    const LABEL_TIPO = { DDF021: 'INSS', DDF025: 'DARF', DDR001: 'ISS' };
+
+    function obterDeducoesPermitidasContrato() {
+        const contratoId = document.getElementById('contratoIdSelecionado')?.value || '';
+        const c = baseContratos.find(x => x.id === contratoId);
+        return (c && c.deducoesPermitidas) ? c.deducoesPermitidas : [];
+    }
+
+    function ehOptanteSimples() {
+        const forn = (document.getElementById('fornecedorValor')?.value || document.getElementById('buscaFornecedorT')?.value || '').trim();
+        if (!forn) return false;
+        const digForn = (forn || '').replace(/\D/g, '');
+        const f = (baseFornecedores || []).find(x => {
+            const cod = String(x.codigo || '').replace(/\D/g, '');
+            const nome = (x.nome || '').toLowerCase();
+            return (cod && digForn && cod === digForn) || (nome && forn.toLowerCase().includes(nome)) || (forn && nome.includes(forn.toLowerCase()));
+        });
+        return f && (f.optanteSimples === true || (f.optanteSimples + '').toLowerCase() === 'sim');
+    }
+
+    function temAlgumaNE39() {
+        return (empenhosDaNotaAtual || []).some(e => String(e.nd || '').endsWith('39'));
+    }
+
+    function desenharBotoesCalcularDed() {
+        const container = document.getElementById('containerBotoesCalcularDed');
+        const aviso = document.getElementById('avisoDeducoesContrato');
+        const btnOutras = document.getElementById('btnInserirOutrasDeducoes');
+        if (!container) return;
+        const permitidas = obterDeducoesPermitidasContrato();
+        const optante = ehOptanteSimples();
+        if (aviso) aviso.textContent = permitidas.length === 0 ? 'Nenhuma dedução vinculada ao contrato. Vincule deduções no cadastro do contrato.' : (optante ? 'Fornecedor optante do Simples: deduções não são obrigatórias.' : 'Clique para calcular cada dedução permitida pelo contrato.');
+        if (btnOutras) btnOutras.style.display = permitidas.length > 0 ? 'inline-block' : 'none';
+        container.innerHTML = '';
+        permitidas.forEach(p => {
+            const tipo = p.tipo || 'DDF025';
+            const label = LABEL_TIPO[tipo] || tipo;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-default btn-small';
+            btn.textContent = 'Calcular ' + (p.codigo || tipo) + ' - ' + label;
+            btn.onclick = () => abrirModalCalcularDeducao(p);
+            container.appendChild(btn);
+        });
+    }
+
+    let deducaoModalContexto = null;
+    function abrirModalCalcularDeducao(permitida) {
+        const contratoId = document.getElementById('contratoIdSelecionado')?.value || '';
+        const dedEnc = baseDeducoesEncargos.find(d => d.id === permitida.dedEncId || (d.codigo === permitida.codigo && d.tipo === permitida.tipo));
+        const tipo = (dedEnc && dedEnc.tipo) || permitida.tipo || 'DDF025';
+        if (tipo === 'DDF021' && !temAlgumaNE39()) {
+            alert('DDF021 (INSS) só se aplica a serviços (NE com ND terminando em 39). Nenhuma NE com ND 39 encontrada.');
+            return;
+        }
+        const optante = ehOptanteSimples();
+        if ((tipo === 'DDF025' || tipo === 'DDR001') && optante) {
+            if (!confirm('Fornecedor é optante do Simples. Deseja mesmo incluir esta dedução?')) return;
+        }
+        deducaoModalContexto = { permitida, dedEnc, tipo };
+        const titulo = document.getElementById('modalCalcularDeducaoTitulo');
+        const campos = document.getElementById('modalCalcularDeducaoCampos');
+        if (titulo) titulo.textContent = 'Calcular ' + (LABEL_TIPO[tipo] || tipo);
+        const baseTC = obterTotalTC();
+        let aliquota = 11;
+        if (dedEnc) {
+            if (tipo === 'DDF021') aliquota = Number(dedEnc.aliquotaPadrao) || 11;
+            else if (tipo === 'DDF025') aliquota = Number(dedEnc.aliquotaTotal) || 0;
+            else if (tipo === 'DDR001') aliquota = Math.min(Number(dedEnc.aliquotaPadrao) || 5, Number(dedEnc.aliquotaMaxima) || 5);
+        }
+        const dataApuracao = (tipo === 'DDF021' || tipo === 'DDR001') ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0,10)) : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0,10));
+        const valorCalc = Math.round(baseTC * (aliquota / 100) * 100) / 100;
+        campos.innerHTML = `
+            <div class="form-group"><label>Base de cálculo (R$):</label><input type="text" id="dedModalBase" value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(baseTC) : baseTC.toFixed(2)}" data-moeda></div>
+            <div class="form-group"><label>Alíquota (%):</label><input type="number" id="dedModalAliquota" step="0.01" value="${aliquota}" ${tipo === 'DDF025' ? 'readonly' : ''}></div>
+            <div class="form-group"><label>Valor calculado (R$):</label><input type="text" id="dedModalValor" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorCalc) : valorCalc.toFixed(2)}"></div>
+            <div class="form-group"><label>Data apuração:</label><input type="date" id="dedModalDataApuracao" value="${dataApuracao}" ${tipo === 'DDF021' || tipo === 'DDR001' ? 'readonly' : ''}></div>
+        `;
+        const baseInp = document.getElementById('dedModalBase');
+        const aliqInp = document.getElementById('dedModalAliquota');
+        const recalc = () => {
+            const b = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(baseInp?.value || 0) : parseFloat(String(baseInp?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
+            const a = parseFloat(aliqInp?.value || 0) || 0;
+            const v = Math.round(b * (a / 100) * 100) / 100;
+            const valEl = document.getElementById('dedModalValor');
+            if (valEl) valEl.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v) : v.toFixed(2);
+        };
+        if (baseInp) baseInp.addEventListener('input', recalc);
+        if (aliqInp) aliqInp.addEventListener('input', recalc);
+        if (typeof aplicarMascaraMoedaBR === 'function') document.querySelectorAll('#modalCalcularDeducaoCampos [data-moeda]').forEach(el => { aplicarMascaraMoedaBR(el); el.addEventListener('input', function() { aplicarMascaraMoedaBR(this); }); el.addEventListener('blur', function() { aplicarMascaraMoedaBR(this); }); });
+        document.getElementById('modalCalcularDeducao').style.display = 'flex';
+    }
+
+    document.getElementById('modalCalcularDeducaoDesistir')?.addEventListener('click', () => { document.getElementById('modalCalcularDeducao').style.display = 'none'; deducaoModalContexto = null; });
+    document.getElementById('modalCalcularDeducaoAdicionar')?.addEventListener('click', function() {
+        if (!deducaoModalContexto) return;
+        const { permitida, dedEnc, tipo } = deducaoModalContexto;
+        const baseVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('dedModalBase')?.value || 0) : parseFloat(String(document.getElementById('dedModalBase')?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
+        const aliquotaVal = parseFloat(document.getElementById('dedModalAliquota')?.value || 0) || 0;
+        const valorCalc = Math.round(baseVal * (aliquotaVal / 100) * 100) / 100;
+        const dataApuracao = document.getElementById('dedModalDataApuracao')?.value || '';
+        const jaExiste = (tipo === 'DDF021' || tipo === 'DDR001') && deducoesAplicadasAtual.some(d => d.tipo === tipo);
+        if (jaExiste) { alert('Já existe uma dedução ' + (tipo === 'DDF021' ? 'INSS' : 'ISS') + ' neste TC. Remova-a antes de adicionar outra.'); return; }
+        deducoesAplicadasAtual.push({
+            dedEncId: permitida.dedEncId || dedEnc?.id,
+            tipo, codigo: permitida.codigo || dedEnc?.codigo, descricao: permitida.descricao || dedEnc?.descricao,
+            baseCalculo: baseVal, aliquota: aliquotaVal, valorCalculado: valorCalc, dataApuracao,
+            natRendimento: dedEnc?.natRendimento, codReceita: dedEnc?.codReceita
+        });
+        document.getElementById('modalCalcularDeducao').style.display = 'none';
+        deducaoModalContexto = null;
+        desenharDeducoesAplicadas();
+        desenharResumoDeducoesLiquidacao();
+    });
+
+    document.getElementById('btnInserirOutrasDeducoes')?.addEventListener('click', function() {
+        const permitidas = obterDeducoesPermitidasContrato();
+        const idsPermitidos = new Set((permitidas || []).map(p => p.dedEncId || p.codigo + '|' + p.tipo));
+        const outras = (baseDeducoesEncargos || []).filter(d => !idsPermitidos.has(d.id) && !idsPermitidos.has((d.codigo || '') + '|' + (d.tipo || '')));
+        if (outras.length === 0) { alert('Não há outras deduções disponíveis no cadastro.'); return; }
+        const opts = outras.map((d, i) => `${i + 1}. ${d.codigo} - ${LABEL_TIPO[d.tipo] || d.tipo} - ${(d.descricao || '').substring(0, 30)}`).join('\n');
+        const idx = prompt('Escolha o número da dedução (1 a ' + outras.length + '):\n\n' + opts);
+        const i = parseInt(idx, 10) - 1;
+        if (isNaN(i) || i < 0 || i >= outras.length) return;
+        abrirModalCalcularDeducao({ dedEncId: outras[i].id, tipo: outras[i].tipo, codigo: outras[i].codigo, descricao: outras[i].descricao });
+    });
+
+    function desenharDeducoesAplicadas() {
+        const container = document.getElementById('containerDeducoesAplicadas');
         if (!container) return;
         container.innerHTML = '';
-        tributacoesAtual.forEach((t, i) => {
+        (deducoesAplicadasAtual || []).forEach((d, i) => {
             const div = document.createElement('div');
             div.className = 'form-row';
-            div.innerHTML = `<div class="form-group flex-1"><input type="text" placeholder="Tipo (DARF/INSS/ISS)" value="${escapeHTML(t.tipo || '')}" data-index="${i}" data-field="tipo"></div>
-                <div class="form-group flex-1"><input type="number" step="0.01" placeholder="Valor" value="${escapeHTML(t.valor || '')}" data-index="${i}" data-field="valor"></div>
-                <div class="form-group" style="flex:0;"><button type="button" class="btn-icon btn-rm-trib" data-index="${i}">🗑️</button></div>`;
+            div.innerHTML = `<div class="form-group flex-1">${escapeHTML(d.codigo || d.tipo)} - ${escapeHTML(LABEL_TIPO[d.tipo] || d.tipo)} | Base: R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.baseCalculo || 0) : (d.baseCalculo || 0).toFixed(2)} | Alíq: ${d.aliquota || 0}% | Valor: R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.valorCalculado || 0) : (d.valorCalculado || 0).toFixed(2)}</div>
+                <div class="form-group" style="flex:0;"><button type="button" class="btn-icon btn-rm-ded" data-index="${i}">🗑️</button></div>`;
             container.appendChild(div);
         });
-        container.querySelectorAll('input[data-field]').forEach(inp => inp.addEventListener('change', function() {
-            const i = parseInt(this.getAttribute('data-index'));
-            const f = this.getAttribute('data-field');
-            if (tributacoesAtual[i]) tributacoesAtual[i][f] = this.value;
-        }));
-        container.querySelectorAll('.btn-rm-trib').forEach(btn => btn.addEventListener('click', function() {
-            tributacoesAtual.splice(parseInt(this.getAttribute('data-index')), 1);
-            desenharTributacoes();
+        container.querySelectorAll('.btn-rm-ded').forEach(btn => btn.addEventListener('click', function() {
+            deducoesAplicadasAtual.splice(parseInt(this.getAttribute('data-index')), 1);
+            desenharDeducoesAplicadas();
+            desenharResumoDeducoesLiquidacao();
         }));
     }
 
-    window.adicionarTributacao = function() {
-        tributacoesAtual.push({ tipo: '', valor: '' });
-        desenharTributacoes();
-    };
+    function desenharResumoDeducoesLiquidacao() {
+        const tbody = document.getElementById('tbodyDeducoesLiquidacao');
+        const elValorTC = document.getElementById('valorTCLiquidacao');
+        const elTotalDed = document.getElementById('totalDeducoesLiquidacao');
+        const elValorLiq = document.getElementById('valorLiquidoOB');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const valorTC = obterTotalTC();
+        const totalDed = (deducoesAplicadasAtual || []).reduce((s, d) => s + (Number(d.valorCalculado) || 0), 0);
+        const valorLiq = Math.max(0, valorTC - totalDed);
+        (deducoesAplicadasAtual || []).forEach(d => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${escapeHTML(LABEL_TIPO[d.tipo] || d.tipo)}</td><td>${escapeHTML(d.codReceita || d.codigo || '-')}</td><td>${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.baseCalculo || 0) : (d.baseCalculo || 0).toFixed(2)}</td><td>${d.aliquota || 0}%</td><td>${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.valorCalculado || 0) : (d.valorCalculado || 0).toFixed(2)}</td><td>${escapeHTML(d.dataApuracao || '-')}</td>`;
+            tbody.appendChild(tr);
+        });
+        if (elValorTC) elValorTC.textContent = 'R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorTC) : valorTC.toFixed(2));
+        if (elTotalDed) elTotalDed.textContent = 'R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(totalDed) : totalDed.toFixed(2));
+        if (elValorLiq) elValorLiq.textContent = 'R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorLiq) : valorLiq.toFixed(2));
+    }
 
     let empenhoTemporarioSelecionado = null;
     let indiceEmpenhoEditando = null; // quando != null, o botão "Adicionar" vira "Atualizar"
@@ -993,6 +1141,7 @@
             document.getElementById('contratoIdSelecionado').value = id || '';
             const c = id ? baseContratos.find(x => x.id === id) : null;
             preencherDadosContrato(c);
+            if (typeof desenharBotoesCalcularDed === 'function') desenharBotoesCalcularDed();
         });
     }
 
@@ -1297,14 +1446,19 @@
         document.getElementById('op').value = t.op || '';
         empenhosDaNotaAtual = (t.empenhosVinculados || []).map(x => ({ ...x }));
         normalizarEmpenhosDaNotaAtualSubelemento();
-        tributacoesAtual = (t.tributacoes || []).map(x => ({ ...x }));
+        deducoesAplicadasAtual = (t.deducoesAplicadas || []).map(x => ({ ...x }));
+        if (deducoesAplicadasAtual.length === 0 && (t.tributacoes || []).length > 0) {
+            deducoesAplicadasAtual = (t.tributacoes || []).map(x => ({ tipo: x.tipo || 'DDF025', valorCalculado: parseFloat(x.valor) || 0, baseCalculo: 0, aliquota: 0 }));
+        }
         const status = t.status || 'Rascunho';
         mostrarStepper(status);
         bloquearTabsPorStatus(status);
         desenharEmpenhosNota();
-        desenharTributacoes();
+        desenharDeducoesAplicadas();
+        desenharBotoesCalcularDed();
         desenharAuditoria(t.historicoStatus || []);
         desenharLiquidacao();
+        desenharResumoDeducoesLiquidacao();
         desenharFinanceiro();
         atualizarBotoesAbaDadosBasicos(false);
     }
@@ -1342,6 +1496,7 @@
                 const lfReg = lfAtivas.find(r => (r.lf || '') === this.value);
                 empenhosDaNotaAtual[idx].pf = (lfReg && lfReg.pf) ? lfReg.pf : '';
                 desenharLiquidacao();
+                desenharResumoDeducoesLiquidacao();
             }
         }));
     }
@@ -1461,7 +1616,7 @@
             observacoes: escapeHTML(document.getElementById('observacoesTC')?.value || ''),
             oiEntregou: oiEntregou || null,
             empenhosVinculados: empenhosDaNotaAtual,
-            tributacoes: tributacoesAtual,
+            deducoesAplicadas: deducoesAplicadasAtual,
             np: escapeHTML(document.getElementById('np').value),
             dataLiquidacao: escapeHTML(document.getElementById('dataLiquidacao').value),
             op: escapeHTML(document.getElementById('op').value),
@@ -1856,9 +2011,12 @@
             if (y > 270) { docPDF.addPage(); y = 15; }
         });
         y += 3;
-        addTituloSecao('Processamento - Tributações');
-        (t.tributacoes || []).forEach(tri => {
-            linha(`Tipo: ${tri.tipo || '-'} | Valor: ${tri.valor || '-'}`, 10, y);
+        addTituloSecao('Processamento - Deduções e Encargos');
+        const deducoes = t.deducoesAplicadas || t.tributacoes || [];
+        deducoes.forEach(tri => {
+            const tipo = tri.tipo || '-';
+            const valor = tri.valorCalculado != null ? tri.valorCalculado : tri.valor;
+            linha(`Tipo: ${tipo} | Base: R$ ${(tri.baseCalculo || 0).toFixed(2)} | Alíq: ${tri.aliquota || 0}% | Valor: R$ ${(valor || 0).toFixed(2)}`, 10, y);
             y += 5;
             if (y > 270) { docPDF.addPage(); y = 15; }
         });

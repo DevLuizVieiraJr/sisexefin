@@ -11,7 +11,7 @@
         { modulo: 'empenhos', label: 'Empenhos (NE)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'lf', label: 'LF x PF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },
-        { modulo: 'darf', label: 'DARF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
+        { modulo: 'dedenc', label: 'Deduções e Encargos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
         { modulo: 'fornecedores', label: 'Fornecedores', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
         { modulo: 'usuarios', label: 'Admin - Usuários', acoes: ['ler', 'inserir', 'editar', 'excluir'] },

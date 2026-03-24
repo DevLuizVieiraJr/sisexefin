@@ -261,9 +261,11 @@
                             </div>
                         </fieldset>
                         <fieldset class="gov-fieldset">
-                            <legend>Tributações (DARF/INSS/ISS)</legend>
-                            <div id="containerTributacoes"></div>
-                            <button type="button" onclick="adicionarTributacao()" class="btn-default btn-small">+ Adicionar Tributação</button>
+                            <legend>Deduções e Encargos</legend>
+                            <p id="avisoDeducoesContrato" style="font-size:12px; color:#666; margin-bottom:10px;"></p>
+                            <div id="containerBotoesCalcularDed" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;"></div>
+                            <button type="button" id="btnInserirOutrasDeducoes" class="btn-default btn-small" style="margin-bottom:12px;">+ Inserir outras deduções</button>
+                            <div id="containerDeducoesAplicadas"></div>
                         </fieldset>
                     </div>
 
@@ -277,6 +279,15 @@
                             <thead><tr><th>NE</th><th>ND</th><th>Valor</th><th>Centro Custos</th><th>UG</th><th>LF (LFxPF)</th><th>PF</th></tr></thead>
                             <tbody id="tbodyLiquidacao"></tbody>
                         </table>
+                        <div id="resumoDeducoesLiquidacao" style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:4px; border:1px solid #e9ecef;">
+                            <h4 style="margin:0 0 12px 0;">Deduções e Encargos</h4>
+                            <table class="tabela-gov" style="margin-bottom:12px;"><thead><tr><th>Tipo</th><th>Código Receita</th><th>Base (R$)</th><th>Alíquota</th><th>Valor (R$)</th><th>Data Apuração</th></tr></thead><tbody id="tbodyDeducoesLiquidacao"></tbody></table>
+                            <div style="display:flex; gap:20px; flex-wrap:wrap; font-weight:600;">
+                                <span>Valor do TC: <span id="valorTCLiquidacao">R$ 0,00</span></span>
+                                <span>Total Deduções: <span id="totalDeducoesLiquidacao">R$ 0,00</span></span>
+                                <span style="color:#27ae60;">Valor Líquido (OB): <span id="valorLiquidoOB">R$ 0,00</span></span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="tab-panel-tc" id="panel3">
@@ -341,6 +352,18 @@
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalDevolverCancelar" class="btn-default">Cancelar</button>
                 <button type="button" id="modalDevolverConfirmar" class="btn-default" style="color:#e74c3c;">Devolver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Calcular Dedução/Encargo -->
+    <div id="modalCalcularDeducao" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:480px;">
+            <h3 id="modalCalcularDeducaoTitulo" style="margin-bottom:15px;">Calcular Dedução</h3>
+            <div id="modalCalcularDeducaoCampos"></div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button type="button" id="modalCalcularDeducaoDesistir" class="btn-default">Desistir</button>
+                <button type="button" id="modalCalcularDeducaoAdicionar" class="btn-primary">Adicionar</button>
             </div>
         </div>
     </div>

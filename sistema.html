@@ -456,10 +456,10 @@
                             <div class="form-group flex-1"><label>Valor Global:</label><input type="text" id="valorContrato" inputmode="numeric" placeholder="0,00" data-moeda></div>
                         </div>
                         <div class="form-group" style="position: relative;">
-                            <label>Vincular Cód. Receita (DARF):</label>
-                            <input type="text" id="buscaDarfContrato" placeholder="Buscar DARF..." autocomplete="off">
-                            <ul id="listaResultadosDarf" class="autocomplete-list"></ul>
-                            <div id="containerDarfsContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                            <label>Deduções e Encargos permitidas:</label>
+                            <input type="text" id="buscaDedEncContrato" placeholder="Buscar por código ou descrição..." autocomplete="off">
+                            <ul id="listaResultadosDedEnc" class="autocomplete-list"></ul>
+                            <div id="containerDedEncContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
                         </div>
                         <div class="form-acoes">
                             <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
@@ -742,62 +742,75 @@
                 </div>
             </section>
 
-            <section id="secao-darf" class="secao" data-permission="darf_ler" >
-                <div id="tela-lista-darf" class="card">
+            <section id="secao-deducoes-encargos" class="secao" data-permission="dedenc_ler" >
+                <div id="tela-lista-deducoes-encargos" class="card">
                     <div class="header-lista">
-                        <h2>Códigos DARF</h2>
-                        <button onclick="abrirFormularioDarf()" class="btn-primary" data-permission="darf_inserir">+ Novo DARF</button>
+                        <h2>Deduções e Encargos</h2>
+                        <button onclick="abrirFormularioDeducoesEncargos()" class="btn-primary" data-permission="dedenc_inserir">+ Nova Dedução/Encargo</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportDarf" accept=".xlsx, .xls, .csv"></div>
-                        <div class="export-group"><button onclick="exportarDarf('csv')" class="btn-outline">CSV</button><button onclick="exportarDarf('xlsx')" class="btn-outline">Excel</button></div>
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportDeducoesEncargos" accept=".xlsx, .xls, .csv"><span id="ultimoImportDeducoesEncargos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span></div>
+                        <div class="export-group"><button onclick="exportarDeducoesEncargos('csv')" class="btn-outline">CSV</button><button onclick="exportarDeducoesEncargos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
-                        <label>A exibir <select id="itensPorPaginaDarf" onchange="mudarTamanhoPaginaDarf()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
-                        <div class="search-box"><input type="text" id="buscaTabelaDarf" placeholder="Pesquisar Código ou Nat. Rendimento..."></div>
+                        <label>A exibir <select id="itensPorPaginaDeducoesEncargos" onchange="mudarTamanhoPaginaDeducoesEncargos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registros</label>
+                        <div class="search-box"><input type="text" id="buscaTabelaDeducoesEncargos" placeholder="Pesquisar Código, Tipo ou Descrição..."></div>
                     </div>
                     <div style="overflow-x: auto;">
-                    <table id="tabelaDarf" class="tabela-gov">
+                    <table id="tabelaDeducoesEncargos" class="tabela-gov">
                         <thead>
                             <tr>
-                                <th class="th-sortable" onclick="ordenarTabela('darf', 'codigo')">Cód Receita <span class="sort-icon" id="sort-darf-codigo"></span></th>
-                                <th class="th-sortable" onclick="ordenarTabela('darf', 'natRendimento')">Nat. Rend. <span class="sort-icon" id="sort-darf-natRendimento"></span></th>
-                                <th class="th-sortable" onclick="ordenarTabela('darf', 'aplicacao')">Aplicação <span class="sort-icon" id="sort-darf-aplicacao"></span></th>
-                                <th class="th-sortable" onclick="ordenarTabela('darf', 'sitSiafi')">SIAFI <span class="sort-icon" id="sort-darf-sitSiafi"></span></th>
-                                <th class="th-sortable" onclick="ordenarTabela('darf', 'total')">Total <span class="sort-icon" id="sort-darf-total"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('deducoesEncargos', 'codigo')">Código <span class="sort-icon" id="sort-deducoesEncargos-codigo"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('deducoesEncargos', 'tipo')">Tipo <span class="sort-icon" id="sort-deducoesEncargos-tipo"></span></th>
+                                <th>Nome</th>
+                                <th class="th-sortable" onclick="ordenarTabela('deducoesEncargos', 'descricao')">Descrição <span class="sort-icon" id="sort-deducoesEncargos-descricao"></span></th>
+                                <th>Nat.Rend./Alíq.</th>
+                                <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-darf"></tbody>
+                        <tbody id="tbody-deducoes-encargos"></tbody>
                     </table>
                     </div>
                     <div class="paginacao">
-                        <button onclick="mudarPaginaDarf(-1)" id="btnAnteriorDarf">Anterior</button><span id="infoPaginaDarf">Página 1</span><button onclick="mudarPaginaDarf(1)" id="btnProximoDarf">Próximo</button>
+                        <button onclick="mudarPaginaDeducoesEncargos(-1)" id="btnAnteriorDeducoesEncargos">Anterior</button><span id="infoPaginaDeducoesEncargos">Página 1</span><button onclick="mudarPaginaDeducoesEncargos(1)" id="btnProximoDeducoesEncargos">Próximo</button>
                     </div>
                 </div>
 
-                <div id="tela-formulario-darf"  class="card">
-                    <h2>Cadastro de DARF</h2>
-                    <form id="formDarf">
-                        <input type="hidden" id="editIndexDarf" value="-1"> 
+                <div id="tela-formulario-deducoes-encargos" class="card">
+                    <h2>Cadastro de Dedução e Encargo</h2>
+                    <form id="formDeducoesEncargos">
+                        <input type="hidden" id="editIndexDeducoesEncargos" value="-1">
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Cód. Receita:</label><input type="text" id="codigoDarf" required></div>
-                            <div class="form-group flex-1"><label>Nat. Rendimento:</label><input type="text" id="natRendimentoDarf" required></div>
-                            <div class="form-group flex-1"><label>Situação SIAFI:</label><input type="text" id="sitSiafiDarf"></div>
+                            <div class="form-group flex-1"><label>Código:</label><input type="text" id="codigoDeducoesEncargos" required placeholder="Ex: 2640, 2682, código receita"></div>
+                            <div class="form-group flex-1"><label>Tipo:</label><select id="tipoDeducoesEncargos" required><option value="DDF021">DDF021 - INSS</option><option value="DDF025">DDF025 - DARF</option><option value="DDR001">DDR001 - ISS</option></select></div>
+                            <div class="form-group flex-1"><label>Ativo:</label><input type="checkbox" id="ativoDeducoesEncargos" checked></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Aplicação / Descrição:</label><textarea id="aplicacaoDarf" rows="2" style="width: 100%; border: 1px solid #ccc;" required></textarea></div>
+                            <div class="form-group flex-2"><label>Descrição:</label><input type="text" id="descricaoDeducoesEncargos" placeholder="Descrição da dedução/encargo"></div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1"><label>IR (%):</label><input type="text" id="irDarf" placeholder="Ex: 1,20%"></div>
-                            <div class="form-group flex-1"><label>CSLL (%):</label><input type="text" id="csllDarf" placeholder="Ex: 1,00%"></div>
-                            <div class="form-group flex-1"><label>COFINS (%):</label><input type="text" id="cofinsDarf" placeholder="Ex: 3,00%"></div>
-                            <div class="form-group flex-1"><label>PIS (%):</label><input type="text" id="pisDarf" placeholder="Ex: 0,65%"></div>
-                            <div class="form-group flex-1"><label>Alíquota Total (%):</label><input type="text" id="totalDarf" placeholder="Ex: 5,85%"></div>
+                        <div id="grupoDDF021" class="form-row" style="display:none;">
+                            <div class="form-group flex-1"><label>Alíquota Padrão (%):</label><input type="number" id="aliquotaPadraoDDF021" step="0.01" min="0" placeholder="Ex: 11"></div>
+                        </div>
+                        <div id="grupoDDF025" class="form-row" style="display:none;">
+                            <div class="form-group flex-1"><label>Nat. Rendimento:</label><input type="text" id="natRendimentoDDF025" placeholder="Ex: 01"></div>
+                            <div class="form-group flex-1"><label>Desc. Rendimento:</label><input type="text" id="descRendimentoDDF025" placeholder="Descrição"></div>
+                            <div class="form-group flex-1"><label>Cód. Receita:</label><input type="text" id="codReceitaDDF025" placeholder="Código receita"></div>
+                            <div class="form-group flex-1"><label>Alíquota Total (%):</label><input type="number" id="aliquotaTotalDDF025" step="0.01" min="0" placeholder="Ex: 5,85"></div>
+                        </div>
+                        <div id="grupoDDF025_2" class="form-row" style="display:none;">
+                            <div class="form-group flex-1"><label>IR (%):</label><input type="number" id="irDDF025" step="0.01" min="0" placeholder="1,20"></div>
+                            <div class="form-group flex-1"><label>CSLL (%):</label><input type="number" id="csllDDF025" step="0.01" min="0" placeholder="1,00"></div>
+                            <div class="form-group flex-1"><label>COFINS (%):</label><input type="number" id="cofinsDDF025" step="0.01" min="0" placeholder="3,00"></div>
+                            <div class="form-group flex-1"><label>PIS (%):</label><input type="number" id="pisDDF025" step="0.01" min="0" placeholder="0,65"></div>
+                        </div>
+                        <div id="grupoDDR001" class="form-row" style="display:none;">
+                            <div class="form-group flex-1"><label>Alíquota Padrão (%):</label><input type="number" id="aliquotaPadraoDDR001" step="0.01" min="0" placeholder="Ex: 5"></div>
+                            <div class="form-group flex-1"><label>Alíquota Máxima (%):</label><input type="number" id="aliquotaMaximaDDR001" step="0.01" min="0" placeholder="Ex: 5"></div>
                         </div>
                         <div class="form-acoes">
-                            <button type="submit" class="btn-primary">💾 Salvar DARF</button>
-                            <button type="button" onclick="voltarParaListaDarf()" class="btn-default">Cancelar</button>
+                            <button type="submit" class="btn-primary">💾 Salvar</button>
+                            <button type="button" onclick="voltarParaListaDeducoesEncargos()" class="btn-default">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -944,7 +957,7 @@
     <script src="script-empenhos.js"></script>
     <script src="script-contratos.js"></script>
     <script src="script-lfpf.js"></script>
-    <script src="script-darf.js"></script>
+    <script src="script-deducoes-encargos.js"></script>
     <script src="script-centrocustos.js"></script>
     <script src="script-ug.js"></script>
     <script src="script-fornecedores.js"></script>

@@ -37,10 +37,10 @@
         } catch (e) { console.warn('Erro ao salvar último import:', e); }
     }
 
-    // --- IMPORT DARF (chave única: codigo) ---
-    const fileImportDarf = document.getElementById('fileImportDarf');
-    if (fileImportDarf) {
-        fileImportDarf.addEventListener('change', async function(e) {
+    // --- IMPORT DEDUÇÕES E ENCARGOS (chave única: codigo + tipo) ---
+    const fileImportDeducoesEncargos = document.getElementById('fileImportDeducoesEncargos');
+    if (fileImportDeducoesEncargos) {
+        fileImportDeducoesEncargos.addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
             if (!verificarAdmin()) { e.target.value = ''; return; }
@@ -55,31 +55,43 @@
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const codigosExistentes = new Set((typeof baseDarf !== 'undefined' ? baseDarf : []).map(d => String((d.codigo || '')).toLowerCase().trim()));
+                const base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
+                const chavesExistentes = new Set(base.map(d => String((d.codigo || '') + '|' + (d.tipo || '')).toLowerCase().trim()));
                 let inseridos = 0, duplicados = 0, erros = 0;
                 for (const row of rows) {
                     if (importAbort.aborted) break;
                     const codigo = getVal(row, ['codigo', 'Codigo', 'Código', 'CODIGO', 'cod']);
+                    const tipo = getVal(row, ['tipo', 'Tipo', 'TIPO']) || 'DDF025';
                     if (!codigo) { erros++; continue; }
-                    const codigoNorm = codigo.toLowerCase();
-                    if (codigosExistentes.has(codigoNorm)) { duplicados++; erros++; continue; }
+                    const chave = (codigo + '|' + tipo).toLowerCase();
+                    if (chavesExistentes.has(chave)) { duplicados++; continue; }
+                    const parseNum = v => { const n = parseFloat(String(v || '0').replace(',', '.').replace(/[^\d.-]/g, '')); return isNaN(n) ? null : n; };
                     const dados = {
                         codigo: escapeHTML(codigo),
-                        natRendimento: escapeHTML(getVal(row, ['natRendimento', 'NatRendimento', 'Nat.Rend', 'nat_rend'])),
-                        sitSiafi: escapeHTML(getVal(row, ['sitSiafi', 'SitSiafi', 'situacao', 'Situacao'])),
-                        aplicacao: escapeHTML(getVal(row, ['aplicacao', 'Aplicacao', 'Aplicação', 'descricao', 'Descricao'])),
-                        ir: escapeHTML(getVal(row, ['ir', 'IR', 'ir_pct'])),
-                        csll: escapeHTML(getVal(row, ['csll', 'CSLL', 'csll_pct'])),
-                        cofins: escapeHTML(getVal(row, ['cofins', 'COFINS', 'cofins_pct'])),
-                        pis: escapeHTML(getVal(row, ['pis', 'PIS', 'pis_pct'])),
-                        total: escapeHTML(getVal(row, ['total', 'Total', 'aliquota', 'Aliquota']))
+                        tipo: ['DDF021','DDF025','DDR001'].includes(tipo) ? tipo : 'DDF025',
+                        descricao: escapeHTML(getVal(row, ['descricao', 'Descricao', 'desc'])),
+                        ativo: (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== '0' && (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== 'nao'
                     };
-                    await db.collection('darf').add(dados);
-                    codigosExistentes.add(codigoNorm);
+                    if (dados.tipo === 'DDF021') dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao', 'aliquota']));
+                    else if (dados.tipo === 'DDF025') {
+                        dados.natRendimento = escapeHTML(getVal(row, ['natRendimento', 'NatRendimento']));
+                        dados.descRendimento = escapeHTML(getVal(row, ['descRendimento', 'DescRendimento']));
+                        dados.codReceita = escapeHTML(getVal(row, ['codReceita', 'CodReceita']));
+                        dados.aliquotaTotal = parseNum(getVal(row, ['aliquotaTotal', 'AliquotaTotal', 'total']));
+                        dados.ir = parseNum(getVal(row, ['ir', 'IR']));
+                        dados.csll = parseNum(getVal(row, ['csll', 'CSLL']));
+                        dados.cofins = parseNum(getVal(row, ['cofins', 'COFINS']));
+                        dados.pis = parseNum(getVal(row, ['pis', 'PIS']));
+                    } else if (dados.tipo === 'DDR001') {
+                        dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao']));
+                        dados.aliquotaMaxima = parseNum(getVal(row, ['aliquotaMaxima', 'AliquotaMaxima']));
+                    }
+                    await db.collection('deducoesEncargos').add(dados);
+                    chavesExistentes.add(chave);
                     inseridos++;
                 }
-                const atualizados = 0;
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Duplicados ' + duplicados + '; Erros ' + erros);
+                await salvarUltimoImport('deducoesEncargos');
             } catch (err) { alert('Erro ao tentar carregar dados.'); }
             finally { esconderLoading(); e.target.value = ''; }
         });
@@ -122,7 +134,7 @@
                         dataInicio: escapeHTML(getVal(row, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio'])),
                         dataFim: escapeHTML(getVal(row, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim'])),
                         valorContrato: numVal,
-                        codigosReceita: []
+                        deducoesPermitidas: []
                     };
                     await db.collection('contratos').add(dados);
                     numerosExistentes.add(numNorm);

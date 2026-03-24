@@ -8,7 +8,7 @@
         empenhos: 'secao-empenhos',
         lf: 'secao-lf',
         op: 'secao-op',
-        darf: 'secao-darf',
+        deducoesEncargos: 'secao-deducoes-encargos',
         contratos: 'secao-contratos',
         fornecedores: 'secao-fornecedores',
         titulos: 'secao-titulos',
@@ -20,7 +20,7 @@
         'secao-empenhos': 'empenhos_ler',
         'secao-lf': 'lf_ler',
         'secao-op': 'op_ler',
-        'secao-darf': 'darf_ler',
+        'secao-deducoes-encargos': 'dedenc_ler',
         'secao-contratos': 'contratos_ler',
         'secao-fornecedores': 'fornecedores_ler',
         'secao-titulos': 'titulos_ler',
@@ -30,7 +30,7 @@
     };
     const params = new URLSearchParams(window.location.search);
     let secaoParam = params.get('secao');
-    const ordemSecoes = ['empenhos', 'lf', 'op', 'darf', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug', 'backup'];
+    const ordemSecoes = ['empenhos', 'lf', 'op', 'deducoesEncargos', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug', 'backup'];
 
     function executarInicializacao() {
         let idSecao, permissaoRequerida;

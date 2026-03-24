@@ -9,7 +9,7 @@
         atualizarTabelaContratos();
     }));
     function abrirFormularioContrato(isEdit) {
-        if (!isEdit) { formContrato.reset(); document.getElementById('editIndexContrato').value = -1; darfsDoContratoAtual = []; desenharDarfsContrato(); }
+        if (!isEdit) { formContrato.reset(); document.getElementById('editIndexContrato').value = -1; deducoesPermitidasContratoAtual = []; desenharDedEncContrato(); }
         document.getElementById('tela-lista-contratos').style.display = 'none';
         document.getElementById('tela-formulario-contratos').style.display = 'block';
     }
@@ -73,8 +73,8 @@
             else if (typeof valorTratado === 'string' && valorTratado.indexOf('R$') !== -1) { valorTratado = valorTratado.replace('R$', '').replace(/\./g, '').replace(',', '.').trim(); numVal = parseFloat(valorTratado) || 0; }
             else numVal = parseFloat(valorTratado) || 0;
             document.getElementById('valorContrato').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(numVal)) : (numVal || '');
-            darfsDoContratoAtual = (c.codigosReceita && Array.isArray(c.codigosReceita)) ? c.codigosReceita.slice() : [];
-            desenharDarfsContrato();
+            deducoesPermitidasContratoAtual = (c.deducoesPermitidas && Array.isArray(c.deducoesPermitidas)) ? c.deducoesPermitidas.map(function(x) { return { dedEncId: x.dedEncId, tipo: x.tipo, codigo: x.codigo, descricao: x.descricao }; }) : (c.codigosReceita && Array.isArray(c.codigosReceita)) ? c.codigosReceita.map(function(cod) { return { codigo: cod, tipo: 'DDF025' }; }) : [];
+            desenharDedEncContrato();
         }
     }
     async function apagarContrato(id) {
@@ -98,7 +98,7 @@
         mostrarLoading();
         var fbID = document.getElementById('editIndexContrato').value;
         var numVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorContrato').value) : (parseFloat(document.getElementById('valorContrato').value) || 0);
-        var dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: numVal, codigosReceita: darfsDoContratoAtual };
+        var dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: numVal, deducoesPermitidas: deducoesPermitidasContratoAtual };
         try {
             if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); }
             else { await db.collection('contratos').doc(fbID).update(dados); }
@@ -106,33 +106,35 @@
         } catch (err) { alert("Erro ao guardar contrato."); }
         finally { esconderLoading(); }
     });
-    var inputBuscaDarfContrato = document.getElementById('buscaDarfContrato');
-    var listaResultadosDarf = document.getElementById('listaResultadosDarf');
-    if (inputBuscaDarfContrato && listaResultadosDarf) {
-        inputBuscaDarfContrato.addEventListener('input', debounce(function() {
-            var texto = this.value.toLowerCase();
-            listaResultadosDarf.innerHTML = '';
+    var inputBuscaDedEncContrato = document.getElementById('buscaDedEncContrato');
+    var listaResultadosDedEnc = document.getElementById('listaResultadosDedEnc');
+    if (inputBuscaDedEncContrato && listaResultadosDedEnc) {
+        inputBuscaDedEncContrato.addEventListener('input', debounce(function() {
+            var texto = (this.value || '').toLowerCase();
+            listaResultadosDedEnc.innerHTML = '';
             if (texto.length >= 2) {
-                var resultados = baseDarf.filter(function(d) { return d.codigo.indexOf(texto) !== -1 || (d.aplicacao && d.aplicacao.toLowerCase().indexOf(texto) !== -1); });
-                if (resultados.length === 0) { listaResultadosDarf.innerHTML = '<li style="color:red; padding:10px;">Nenhum DARF encontrado.</li>'; }
-                else { resultados.forEach(function(d) { var li = document.createElement('li'); li.innerHTML = '<strong>' + escapeHTML(d.codigo) + '</strong> - ' + escapeHTML((d.aplicacao || '').substring(0, 40)) + '...'; li.onclick = function() { selecionarDarfContrato(d); }; listaResultadosDarf.appendChild(li); }); }
+                var base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
+                var resultados = base.filter(function(d) { return d.ativo !== false && ((d.codigo && String(d.codigo).toLowerCase().indexOf(texto) !== -1) || (d.descricao && d.descricao.toLowerCase().indexOf(texto) !== -1) || (d.tipo && String(d.tipo).toLowerCase().indexOf(texto) !== -1)); });
+                if (resultados.length === 0) { listaResultadosDedEnc.innerHTML = '<li style="color:red; padding:10px;">Nenhuma Dedução/Encargo encontrada.</li>'; }
+                else { resultados.forEach(function(d) { var li = document.createElement('li'); var labelTipo = (typeof labelTipoDedEnc === 'function' ? labelTipoDedEnc(d.tipo) : d.tipo) || d.tipo; li.innerHTML = '<strong>' + escapeHTML(d.codigo) + '</strong> (' + escapeHTML(labelTipo) + ') - ' + escapeHTML((d.descricao || '').substring(0, 40)) + ((d.descricao || '').length > 40 ? '...' : ''); li.onclick = function() { selecionarDedEncContrato(d); }; listaResultadosDedEnc.appendChild(li); }); }
             }
         }));
     }
-    function selecionarDarfContrato(d) { if (darfsDoContratoAtual.indexOf(d.codigo) === -1) { darfsDoContratoAtual.push(d.codigo); desenharDarfsContrato(); } inputBuscaDarfContrato.value = ''; listaResultadosDarf.innerHTML = ''; }
-    function desenharDarfsContrato() {
-        var container = document.getElementById('containerDarfsContrato');
+    function jaIncluida(d) { return deducoesPermitidasContratoAtual.some(function(p) { return p.dedEncId === d.id || (p.codigo === d.codigo && p.tipo === d.tipo); }); }
+    function selecionarDedEncContrato(d) { if (!jaIncluida(d)) { deducoesPermitidasContratoAtual.push({ dedEncId: d.id, tipo: d.tipo, codigo: d.codigo, descricao: d.descricao }); desenharDedEncContrato(); } inputBuscaDedEncContrato.value = ''; listaResultadosDedEnc.innerHTML = ''; }
+    function desenharDedEncContrato() {
+        var container = document.getElementById('containerDedEncContrato');
         if (!container) return;
         container.innerHTML = '';
-        darfsDoContratoAtual.forEach(function(codigo, index) {
+        deducoesPermitidasContratoAtual.forEach(function(p, index) {
             var span = document.createElement('span');
             span.className = 'badge-tag';
-            span.innerHTML = escapeHTML(codigo) + ' <button type="button" data-index="' + index + '" class="btn-rm-darf">&times;</button>';
+            span.innerHTML = escapeHTML(p.codigo || p.tipo) + ' <button type="button" data-index="' + index + '" class="btn-rm-dedenc">&times;</button>';
             container.appendChild(span);
         });
     }
-    var containerDarfs = document.getElementById('containerDarfsContrato');
-    if (containerDarfs) containerDarfs.addEventListener('click', function(e) { if (e.target.classList.contains('btn-rm-darf')) { darfsDoContratoAtual.splice(parseInt(e.target.getAttribute('data-index'), 10), 1); desenharDarfsContrato(); } });
+    var containerDedEnc = document.getElementById('containerDedEncContrato');
+    if (containerDedEnc) containerDedEnc.addEventListener('click', function(e) { if (e.target.classList.contains('btn-rm-dedenc')) { deducoesPermitidasContratoAtual.splice(parseInt(e.target.getAttribute('data-index'), 10), 1); desenharDedEncContrato(); } });
     window.atualizarTabelaContratos = atualizarTabelaContratos;
     window.abrirFormularioContrato = abrirFormularioContrato;
 })();

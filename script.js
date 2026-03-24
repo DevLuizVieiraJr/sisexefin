@@ -294,7 +294,7 @@ function temPermissaoUI(perm) {
     // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
     if (permissoesEmCache.includes('acesso_admin')) {
         if (perm === 'dashboard_ler' || perm === 'backup_ler') return true;
-        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'darf', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
+        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
     return false;
@@ -338,7 +338,7 @@ window.atualizarSeletorPerfil = atualizarSeletorPerfil;
 
 function gerarBotoesAcao(id, modulo, itemOpt) {
     const safeId = escapeHTML(id);
-    const modMap = { empenho: 'empenhos', contrato: 'contratos', fornecedor: 'fornecedores', titulo: 'titulos', darf: 'darf', lfpf: 'lf', centrocustos: 'centrocustos', ug: 'ug' };
+    const modMap = { empenho: 'empenhos', contrato: 'contratos', fornecedor: 'fornecedores', titulo: 'titulos', darf: 'darf', deducoesEncargos: 'dedenc', lfpf: 'lf', centrocustos: 'centrocustos', ug: 'ug' };
     const mod = modMap[modulo] || modulo;
     let html = '';
     if (modulo === 'lfpf') {
@@ -348,6 +348,7 @@ function gerarBotoesAcao(id, modulo, itemOpt) {
         return html;
     }
     if (modulo === 'empenho') {
+        if (permissoesEmCache.includes('empenhos_ler')) html += `<button type="button" class="btn-icon btn-visualizar-empenho" data-id="${safeId}" title="Visualizar">👁️</button>`;
         if (permissoesEmCache.includes('empenhos_editar')) html += `<button type="button" class="btn-icon btn-editar-empenho" data-id="${safeId}" title="Editar">✏️</button>`;
         if (permissoesEmCache.includes('empenhos_excluir')) html += `<button type="button" class="btn-icon btn-inativar-empenho" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
         if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-empenho-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
@@ -360,6 +361,11 @@ function gerarBotoesAcao(id, modulo, itemOpt) {
         if (ativo && permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-inativar-${modulo}" data-id="${safeId}" title="Inativar (excluir da lista)">🚫</button>`;
         if (!ativo && permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-reativar-${modulo}" data-id="${safeId}" title="Reativar">✓</button>`;
         if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        return html;
+    }
+    if (modulo === 'deducoesEncargos') {
+        if (permissoesEmCache.includes('dedenc_editar')) html += `<button type="button" class="btn-icon btn-editar-deducoesEncargos" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (permissoesEmCache.includes('dedenc_excluir')) html += `<button type="button" class="btn-icon btn-apagar-deducoesEncargos" data-id="${safeId}" title="Excluir">🗑️</button>`;
         return html;
     }
     if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
@@ -624,17 +630,17 @@ if (formUsuarioAdmin) {
 // ==========================================
 // VARIÁVEIS DE ESTADO (Paginação e Busca)
 // ==========================================
-let baseEmpenhos = []; let baseContratos = []; let baseFornecedores = []; let baseDarf = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
+let baseEmpenhos = []; let baseContratos = []; let baseFornecedores = []; let baseDeducoesEncargos = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
 let baseCentroCustos = []; let baseUnidadesGestoras = [];
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
 let paginaAtualFornecedores = 1; let itensPorPaginaFornecedores = 10; let termoBuscaFornecedores = "";
-let paginaAtualDarf = 1; let itensPorPaginaDarf = 10; let termoBuscaDarf = "";
+let paginaAtualDeducoesEncargos = 1; let itensPorPaginaDeducoesEncargos = 10; let termoBuscaDeducoesEncargos = "";
 let paginaAtualTitulos = 1; let itensPorPaginaTitulos = 10; let termoBuscaTitulos = "";
 let paginaAtualLfPf = 1; let itensPorPaginaLfPf = 10; let termoBuscaLfPf = "";
 let paginaAtualCentroCustos = 1; let itensPorPaginaCentroCustos = 10; let termoBuscaCentroCustos = "";
 let paginaAtualUG = 1; let itensPorPaginaUG = 10; let termoBuscaUG = "";
-let darfsDoContratoAtual = []; 
+let deducoesPermitidasContratoAtual = []; 
 let empenhosDaNotaAtual = []; 
 let empenhoTemporarioSelecionado = null;
 
@@ -645,7 +651,7 @@ let estadoOrdenacao = {
     empenhos: { coluna: 'numEmpenho', direcao: 'asc' },
     contratos: { coluna: 'fornecedor', direcao: 'asc' },
     fornecedores: { coluna: 'nome', direcao: 'asc' },
-    darf: { coluna: 'codigo', direcao: 'asc' },
+    deducoesEncargos: { coluna: 'codigo', direcao: 'asc' },
     titulos: { coluna: 'idProc', direcao: 'asc' },
     lfpf: { coluna: 'lf', direcao: 'asc' },
     centrocustos: { coluna: 'codigo', direcao: 'asc' },
@@ -662,7 +668,7 @@ function ordenarTabela(modulo, coluna) {
     if (modulo === 'empenhos') { paginaAtualEmpenhos = 1; atualizarTabelaEmpenhos(); }
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
     if (modulo === 'fornecedores' && typeof atualizarTabelaFornecedores === 'function') { paginaAtualFornecedores = 1; atualizarTabelaFornecedores(); }
-    if (modulo === 'darf') { paginaAtualDarf = 1; atualizarTabelaDarf(); }
+    if (modulo === 'deducoesEncargos') { paginaAtualDeducoesEncargos = 1; atualizarTabelaDeducoesEncargos(); }
     if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
     if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { window.paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
     if (modulo === 'centrocustos' && typeof atualizarTabelaCentroCustos === 'function') { paginaAtualCentroCustos = 1; atualizarTabelaCentroCustos(); }
@@ -683,7 +689,7 @@ function aplicarOrdenacao(array, modulo) {
 }
 
 function inicializarSetasOrdenacao() {
-    ['empenhos', 'contratos', 'fornecedores', 'darf', 'titulos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
+    ['empenhos', 'contratos', 'fornecedores', 'deducoesEncargos', 'titulos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
         if (!estadoOrdenacao[modulo]) return;
         const col = estadoOrdenacao[modulo].coluna; 
         const iconEl = document.getElementById(`sort-${modulo}-${col}`);
@@ -718,7 +724,7 @@ function mostrarSecao(idSecao, botao) {
     if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos();
     if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos();
     if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores();
-    if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf();
+    if (typeof atualizarTabelaDeducoesEncargos === 'function') atualizarTabelaDeducoesEncargos();
     if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
     if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
     if (typeof atualizarTabelaNp === 'function') atualizarTabelaNp();
@@ -735,13 +741,13 @@ function escutarColecaoSecao(idSecao) {
         'secao-empenhos': ['empenhos'],
         'secao-lf': ['lfpf'],
         'secao-op': ['np'],
-        'secao-darf': ['darf'],
+        'secao-deducoes-encargos': ['deducoesEncargos'],
         'secao-contratos': ['contratos'],
         'secao-fornecedores': ['fornecedores'],
         'secao-titulos': ['titulos'],
         'secao-centrocustos': ['centroCustos'],
         'secao-ug': ['unidadesGestoras'],
-        'secao-backup': ['empenhos', 'contratos', 'fornecedores', 'darf', 'titulos', 'lfpf', 'centroCustos', 'unidadesGestoras']
+        'secao-backup': ['empenhos', 'contratos', 'fornecedores', 'deducoesEncargos', 'titulos', 'lfpf', 'centroCustos', 'unidadesGestoras']
     };
     const colecoes = mapa[idSecao] || ['empenhos'];
     const incluiConfig = true;
@@ -762,7 +768,7 @@ function escutarColecaoSecao(idSecao) {
         empenhos: snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
         contratos: snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
         fornecedores: snap => { baseFornecedores = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores(); aoCarregar(); },
-        darf: snap => { baseDarf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDarf === 'function') atualizarTabelaDarf(); aoCarregar(); },
+        deducoesEncargos: snap => { baseDeducoesEncargos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDeducoesEncargos === 'function') atualizarTabelaDeducoesEncargos(); aoCarregar(); },
         titulos: snap => { baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos(); aoCarregar(); },
         lfpf: snap => { baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf(); aoCarregar(); },
         np: snap => { baseNp = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaNp === 'function') atualizarTabelaNp(); aoCarregar(); },
@@ -799,7 +805,7 @@ function escutarFirebase() {
 }
 
 // ==========================================
-// MÓDULOS (script-empenhos.js, script-contratos.js, script-darf.js, script-titulos.js)
+// MÓDULOS (script-empenhos.js, script-contratos.js, script-deducoes-encargos.js, script-titulos.js)
 // ==========================================
 // Funções atualizarTabela* são definidas pelos módulos. mostrarSecao chama-as.
 
@@ -815,15 +821,19 @@ function atualizarUltimoImportUI(data) {
     const elLf = document.getElementById('ultimoImportLfPf');
     const elNe = document.getElementById('ultimoImportEmpenhos');
     const elContratos = document.getElementById('ultimoImportContratos');
+    const elFornecedores = document.getElementById('ultimoImportFornecedores');
     const elNp = document.getElementById('ultimoImportNp');
+    const elDedEnc = document.getElementById('ultimoImportDeducoesEncargos');
     if (elLf && data.lfpf) elLf.textContent = 'Último upload: ' + formatarData(data.lfpf);
     if (elNe && data.empenhos) elNe.textContent = 'Último upload: ' + formatarData(data.empenhos);
     if (elContratos && data.contratos) elContratos.textContent = 'Último upload: ' + formatarData(data.contratos);
+    if (elFornecedores && data.fornecedores) elFornecedores.textContent = 'Último upload: ' + formatarData(data.fornecedores);
     if (elNp && data.np) elNp.textContent = 'Último upload: ' + formatarData(data.np);
+    if (elDedEnc && data.deducoesEncargos) elDedEnc.textContent = 'Último upload: ' + formatarData(data.deducoesEncargos);
 }
 window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 
-// Stub - DARF e Títulos definidos em script-darf.js e script-titulos.js
+// Deduções e Encargos em script-deducoes-encargos.js; Títulos em script-titulos.js
 
 // 6. FUNÇÃO DE BACKUP GLOBAL (Implementada)
 function exportarBancoDeDados() {
@@ -834,7 +844,7 @@ function exportarBancoDeDados() {
             empenhos: baseEmpenhos,
             contratos: baseContratos,
             fornecedores: baseFornecedores,
-            darf: baseDarf,
+            deducoesEncargos: baseDeducoesEncargos,
             titulos: baseTitulos,
             lfpf: baseLfPf
         };
