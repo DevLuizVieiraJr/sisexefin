@@ -114,9 +114,42 @@
             listaResultadosDedEnc.innerHTML = '';
             if (texto.length >= 2) {
                 var base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
-                var resultados = base.filter(function(d) { return d.ativo !== false && ((d.codigo && String(d.codigo).toLowerCase().indexOf(texto) !== -1) || (d.descricao && d.descricao.toLowerCase().indexOf(texto) !== -1) || (d.tipo && String(d.tipo).toLowerCase().indexOf(texto) !== -1)); });
-                if (resultados.length === 0) { listaResultadosDedEnc.innerHTML = '<li style="color:red; padding:10px;">Nenhuma Dedução/Encargo encontrada.</li>'; }
-                else { resultados.forEach(function(d) { var li = document.createElement('li'); var labelTipo = (typeof labelTipoDedEnc === 'function' ? labelTipoDedEnc(d.tipo) : d.tipo) || d.tipo; li.innerHTML = '<strong>' + escapeHTML(d.codigo) + '</strong> (' + escapeHTML(labelTipo) + ') - ' + escapeHTML((d.descricao || '').substring(0, 40)) + ((d.descricao || '').length > 40 ? '...' : ''); li.onclick = function() { selecionarDedEncContrato(d); }; listaResultadosDedEnc.appendChild(li); }); }
+                var resultados = base.filter(function(d) {
+                    if (d.ativo === false) return false;
+                    var codigo = String(d.codigo || '').toLowerCase();
+                    var tipo = String(d.tipo || '').toLowerCase();
+                    var codReceita = String(d.codReceita || '').toLowerCase();
+                    var natRendimento = String(d.natRendimento || '').toLowerCase();
+                    var descRendimento = String(d.descRendimento || '').toLowerCase();
+                    return codigo.indexOf(texto) !== -1 ||
+                        tipo.indexOf(texto) !== -1 ||
+                        codReceita.indexOf(texto) !== -1 ||
+                        natRendimento.indexOf(texto) !== -1 ||
+                        descRendimento.indexOf(texto) !== -1;
+                });
+                resultados.sort(function(a, b) {
+                    var codA = String(a.codigo || '');
+                    var codB = String(b.codigo || '');
+                    var cmpCodigo = codA.localeCompare(codB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+                    if (cmpCodigo !== 0) return cmpCodigo;
+                    var tipoA = String(a.tipo || '');
+                    var tipoB = String(b.tipo || '');
+                    return tipoA.localeCompare(tipoB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+                });
+                if (resultados.length === 0) {
+                    listaResultadosDedEnc.innerHTML = '<li style="color:red; padding:10px;">Nenhuma dedução encontrada.</li>';
+                } else {
+                    resultados.forEach(function(d) {
+                        var li = document.createElement('li');
+                        li.innerHTML = '<strong>' + escapeHTML(d.codigo || '-') + '</strong> | ' +
+                            escapeHTML(d.tipo || '-') + ' | ' +
+                            'CodReceita ' + escapeHTML(d.codReceita || '-') + ' | ' +
+                            'Nat ' + escapeHTML(d.natRendimento || '-') + ' | ' +
+                            escapeHTML((d.descRendimento || d.descricao || ''));
+                        li.onclick = function() { selecionarDedEncContrato(d); };
+                        listaResultadosDedEnc.appendChild(li);
+                    });
+                }
             }
         }));
     }

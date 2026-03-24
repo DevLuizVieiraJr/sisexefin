@@ -56,15 +56,18 @@
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
                 const base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
-                const chavesExistentes = new Set(base.map(d => String((d.codigo || '') + '|' + (d.tipo || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0, erros = 0;
+                const mapDedEncPorChave = {};
+                base.forEach(function(d) {
+                    const chaveBase = String((d.codigo || '') + '|' + (d.tipo || '')).toLowerCase().trim();
+                    if (chaveBase && d.id) mapDedEncPorChave[chaveBase] = d.id;
+                });
+                let inseridos = 0, atualizados = 0, erros = 0;
                 for (const row of rows) {
                     if (importAbort.aborted) break;
                     const codigo = getVal(row, ['codigo', 'Codigo', 'Código', 'CODIGO', 'cod']);
                     const tipo = getVal(row, ['tipo', 'Tipo', 'TIPO']) || 'DDF025';
                     if (!codigo) { erros++; continue; }
                     const chave = (codigo + '|' + tipo).toLowerCase();
-                    if (chavesExistentes.has(chave)) { duplicados++; continue; }
                     const parseNum = v => { const n = parseFloat(String(v || '0').replace(',', '.').replace(/[^\d.-]/g, '')); return isNaN(n) ? null : n; };
                     const dados = {
                         codigo: escapeHTML(codigo),
@@ -72,8 +75,12 @@
                         descricao: escapeHTML(getVal(row, ['descricao', 'Descricao', 'desc'])),
                         ativo: (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== '0' && (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== 'nao'
                     };
-                    if (dados.tipo === 'DDF021') dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao', 'aliquota']));
-                    else if (dados.tipo === 'DDF025') {
+                    if (dados.tipo === 'DDF021') {
+                        dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao', 'aliquota']));
+                        // Para DDF021 importado, replica no BD
+                        dados.codReceita = dados.codigo;
+                        dados.aliquotaTotal = dados.aliquotaPadrao;
+                    } else if (dados.tipo === 'DDF025') {
                         dados.natRendimento = escapeHTML(getVal(row, ['natRendimento', 'NatRendimento']));
                         dados.descRendimento = escapeHTML(getVal(row, ['descRendimento', 'DescRendimento']));
                         dados.codReceita = escapeHTML(getVal(row, ['codReceita', 'CodReceita']));
@@ -85,12 +92,21 @@
                     } else if (dados.tipo === 'DDR001') {
                         dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao']));
                         dados.aliquotaMaxima = parseNum(getVal(row, ['aliquotaMaxima', 'AliquotaMaxima']));
+                        // Para DDR001 importado, replica no BD
+                        dados.codReceita = dados.codigo;
+                        dados.aliquotaTotal = dados.aliquotaPadrao;
                     }
-                    await db.collection('deducoesEncargos').add(dados);
-                    chavesExistentes.add(chave);
-                    inseridos++;
+                    const docIdExistente = mapDedEncPorChave[chave];
+                    if (docIdExistente) {
+                        await db.collection('deducoesEncargos').doc(docIdExistente).update(dados);
+                        atualizados++;
+                    } else {
+                        const ref = await db.collection('deducoesEncargos').add(dados);
+                        mapDedEncPorChave[chave] = ref.id;
+                        inseridos++;
+                    }
                 }
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Duplicados ' + duplicados + '; Erros ' + erros);
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
                 await salvarUltimoImport('deducoesEncargos');
             } catch (err) { alert('Erro ao tentar carregar dados.'); }
             finally { esconderLoading(); e.target.value = ''; }

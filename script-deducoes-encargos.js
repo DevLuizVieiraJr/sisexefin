@@ -75,7 +75,7 @@
         const fim = inicio + parseInt(itensPorPaginaDeducoesEncargos, 10);
         const itens = baseFiltrada.slice(inicio, fim);
         if (itens.length === 0) {
-            tbodyEl.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhuma Dedução e Encargo encontrada.</td></tr>';
+            tbodyEl.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma Dedução e Encargo encontrada.</td></tr>';
             const total = Math.ceil(baseFiltrada.length / itensPorPaginaDeducoesEncargos) || 1;
             document.getElementById('infoPaginaDeducoesEncargos').textContent = `Página ${paginaAtualDeducoesEncargos} de ${total}`;
             document.getElementById('btnAnteriorDeducoesEncargos').disabled = true;
@@ -84,18 +84,20 @@
         }
         itens.forEach(d => {
             const tr = document.createElement('tr');
-            const acoesHTML = gerarBotoesAcao(d.id, 'deducoesEncargos');
-            let descCurta = (d.descricao || '').substring(0, 35);
-            if ((d.descricao || '').length > 35) descCurta += '...';
-            const statusAtivo = d.ativo === false ? 'Inativo' : 'Ativo';
+            const nome = d.descricao || '-';
+            const codReceita = d.codReceita || '-';
+            let aliquota = '-';
+            if (d.tipo === 'DDF025') aliquota = d.aliquotaTotal ?? '-';
+            else if (d.tipo === 'DDR001') aliquota = d.aliquotaMaxima ?? d.aliquotaPadrao ?? '-';
+            else aliquota = d.aliquotaPadrao ?? '-';
+            const aplicacao = d.descRendimento || '-';
             tr.innerHTML = `
                 <td><strong>${escapeHTML(d.codigo || '-')}</strong></td>
                 <td>${escapeHTML(d.tipo || '-')}</td>
-                <td>${escapeHTML(labelTipo(d.tipo) || '-')}</td>
-                <td title="${escapeHTML(d.descricao || '')}">${escapeHTML(descCurta || '-')}</td>
-                <td>${escapeHTML(d.natRendimento || d.aliquotaPadrao || d.aliquotaTotal || '-')}</td>
-                <td><span class="status-${d.ativo === false ? 'bloqueado' : 'ativo'}">${statusAtivo}</span></td>
-                <td>${acoesHTML}</td>`;
+                <td title="${escapeHTML(nome)}">${escapeHTML(nome)}</td>
+                <td>${escapeHTML(codReceita)}</td>
+                <td>${escapeHTML(String(aliquota))}</td>
+                <td>${escapeHTML(aplicacao)}</td>`;
             tbodyEl.appendChild(tr);
         });
         const total = Math.ceil(baseFiltrada.length / itensPorPaginaDeducoesEncargos) || 1;
@@ -188,6 +190,9 @@
         };
         if (tipo === 'DDF021') {
             dados.aliquotaPadrao = numeroOuNull(document.getElementById('aliquotaPadraoDDF021').value);
+            // Para DDF021, Cod. Receita replica o Código e Alíquota Total replica Alíquota Padrão
+            dados.codReceita = escapeHTML(codigo);
+            dados.aliquotaTotal = dados.aliquotaPadrao;
         } else if (tipo === 'DDF025') {
             dados.natRendimento = escapeHTML(document.getElementById('natRendimentoDDF025').value || '');
             dados.descRendimento = escapeHTML(document.getElementById('descRendimentoDDF025').value || '');
@@ -200,6 +205,9 @@
         } else if (tipo === 'DDR001') {
             dados.aliquotaPadrao = numeroOuNull(document.getElementById('aliquotaPadraoDDR001').value);
             dados.aliquotaMaxima = numeroOuNull(document.getElementById('aliquotaMaximaDDR001').value);
+            // Para DDR001, Cod. Receita replica o Código e Alíquota Total replica Alíquota Padrão
+            dados.codReceita = escapeHTML(codigo);
+            dados.aliquotaTotal = dados.aliquotaPadrao;
         }
         mostrarLoading();
         const fbID = document.getElementById('editIndexDeducoesEncargos').value;

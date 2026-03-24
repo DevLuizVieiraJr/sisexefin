@@ -6,6 +6,13 @@
 
     const formEmpenho = document.getElementById('formEmpenho');
     const tabelaEmpenhosBody = document.querySelector('#tabelaEmpenhos tbody');
+    const btnSubmitEmpenho = formEmpenho ? formEmpenho.querySelector('button[type="submit"]') : null;
+    const inputImportarPdfEmpenho = document.getElementById('importarNotaEmpenhoPdf');
+    const linkDownloadPdfEmpenho = document.getElementById('downloadNotaEmpenhoPdf');
+    const nomePdfAtualEmpenho = document.getElementById('nomeNotaEmpenhoPdfAtual');
+    const labelImportarPdfEmpenho = document.getElementById('labelImportarNotaEmpenhoPdf');
+    let anexoPdfEmpenhoAtual = { nome: '', dataUrl: '' };
+    let modoVisualizacaoEmpenho = false;
 
     const UG_PADRAO = '741000';
     const GESTAO_PADRAO = '00001';
@@ -50,14 +57,102 @@
             document.getElementById('editIndexEmpenho').value = -1;
             document.getElementById('dataEmpenho').value = new Date().toISOString().slice(0, 10);
             document.getElementById('tipoNEEmpenho').value = 'GLOBAL';
-            ativarTabNE(0);
+            anexoPdfEmpenhoAtual = { nome: '', dataUrl: '' };
         }
+        setModoVisualizacaoEmpenho(false);
+        atualizarPainelAnexoEmpenho();
+        ativarTabNE(0);
         document.getElementById('tela-lista-empenhos').style.display = 'none';
         document.getElementById('tela-formulario-empenhos').style.display = 'block';
     }
     function ativarTabNE(i) {
-        document.querySelectorAll('.tab-ne').forEach(function(t, j) { t.classList.toggle('ativo', j === i); });
-        document.querySelectorAll('.tab-panel-ne').forEach(function(p, j) { p.classList.toggle('visivel', j === i); });
+        document.querySelectorAll('#tela-formulario-empenhos .tab-panel-ne').forEach(function(p) { p.classList.add('visivel'); });
+    }
+    function atualizarPainelAnexoEmpenho() {
+        if (!inputImportarPdfEmpenho || !linkDownloadPdfEmpenho || !nomePdfAtualEmpenho || !labelImportarPdfEmpenho) return;
+        const temAnexo = !!(anexoPdfEmpenhoAtual && anexoPdfEmpenhoAtual.dataUrl);
+        inputImportarPdfEmpenho.style.display = modoVisualizacaoEmpenho ? 'none' : '';
+        labelImportarPdfEmpenho.textContent = modoVisualizacaoEmpenho ? 'Nota de Empenho:' : 'Importar Nota de Empenho:';
+        if (temAnexo) {
+            const nome = anexoPdfEmpenhoAtual.nome || 'nota-empenho.pdf';
+            linkDownloadPdfEmpenho.href = anexoPdfEmpenhoAtual.dataUrl;
+            linkDownloadPdfEmpenho.download = nome;
+            linkDownloadPdfEmpenho.style.display = 'inline-block';
+            linkDownloadPdfEmpenho.textContent = 'Baixar ' + nome;
+            nomePdfAtualEmpenho.textContent = modoVisualizacaoEmpenho ? '' : ('Arquivo atual: ' + nome);
+        } else {
+            linkDownloadPdfEmpenho.href = '#';
+            linkDownloadPdfEmpenho.style.display = 'none';
+            nomePdfAtualEmpenho.textContent = modoVisualizacaoEmpenho ? 'Sem PDF anexado.' : '';
+        }
+    }
+    function setModoVisualizacaoEmpenho(ativo) {
+        modoVisualizacaoEmpenho = !!ativo;
+        if (!formEmpenho) return;
+        formEmpenho.querySelectorAll('input, select, textarea').forEach(function(el) {
+            if (el.id === 'editIndexEmpenho') return;
+            if (modoVisualizacaoEmpenho) {
+                el.setAttribute('disabled', 'disabled');
+            } else {
+                el.removeAttribute('disabled');
+            }
+        });
+        if (btnSubmitEmpenho) btnSubmitEmpenho.style.display = modoVisualizacaoEmpenho ? 'none' : '';
+        atualizarPainelAnexoEmpenho();
+    }
+    function lerArquivoComoDataURL(file) {
+        return new Promise(function(resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function(ev) { resolve(String(ev.target.result || '')); };
+            reader.onerror = function() { reject(new Error('Falha ao ler o PDF.')); };
+            reader.readAsDataURL(file);
+        });
+    }
+    function preencherFormularioEmpenho(e) {
+        document.getElementById('editIndexEmpenho').value = e.id;
+        const elNum = document.getElementById('numEmpenho');
+        if (elNum) {
+            elNum.value = typeof formatarNumEmpenhoVisivel === 'function'
+                ? (formatarNumEmpenhoVisivel(e.numEmpenho) || '')
+                : (e.numEmpenho || '');
+        }
+        document.getElementById('dataEmpenho').value = dataParaInputDate(e.dataEmissao) || '';
+        var valEmp = parseFloat(e.valorGlobal) || 0;
+        document.getElementById('valorEmpenho').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valEmp)) : (e.valorGlobal || '');
+        document.getElementById('piEmpenho').value = e.pi || '';
+        var tipoSelect = document.getElementById('tipoNEEmpenho');
+        var tipoVal = (e.tipoNE || '').toUpperCase().replace(/[ÁÀÂÃ]/g,'A').replace(/[ÍÌÎ]/g,'I').replace(/[ÓÒÔÕ]/g,'O').replace(/[ÉÈÊ]/g,'E');
+        tipoSelect.value = (['GLOBAL','ORDINARIO','ESTIMATIVO'].indexOf(tipoVal) >= 0) ? tipoVal : 'GLOBAL';
+        document.getElementById('ndEmpenho').value = e.nd || '';
+        document.getElementById('subitemEmpenho').value = e.subitem || '';
+        document.getElementById('ptresEmpenho').value = e.ptres || '';
+        document.getElementById('frEmpenho').value = e.fr || '';
+        document.getElementById('numModalEmpenho').value = e.numModal || '';
+        document.getElementById('descModalEmpenho').value = e.descModal || '';
+        document.getElementById('codAmpEmpenho').value = e.codAmp || '';
+        document.getElementById('incisoEmpenho').value = e.inciso || '';
+        document.getElementById('leiEmpenho').value = e.lei || '';
+        document.getElementById('processoEmpenho').value = e.processo || '';
+        document.getElementById('cnpjEmpenho').value = e.cnpj || '';
+        document.getElementById('favorecidoEmpenho').value = e.favorecido || '';
+        document.getElementById('pjPfEmpenho').value = e.pjPf || '';
+        document.getElementById('telefoneEmpenho').value = e.telefone || '';
+        document.getElementById('contatoEmpenho').value = e.contato || '';
+        document.getElementById('gerenciaEmpenho').value = e.gerencia || '';
+        document.getElementById('docOrigEmpenho').value = e.docOrig || '';
+        document.getElementById('oiEmpenho').value = e.oi || '';
+        document.getElementById('contratoEmpenho').value = e.contrato || '';
+        document.getElementById('projetoEmpenho').value = e.projeto || '';
+        document.getElementById('capEmpenho').value = e.cap || '';
+        document.getElementById('altcredEmpenho').value = e.altcred || '';
+        document.getElementById('meioEmpenho').value = e.meio || '';
+        document.getElementById('descricaoEmpenho').value = e.descricao || '';
+        anexoPdfEmpenhoAtual = {
+            nome: e.notaEmpenhoPdfNome || '',
+            dataUrl: e.notaEmpenhoPdfDataUrl || ''
+        };
+        if (inputImportarPdfEmpenho) inputImportarPdfEmpenho.value = '';
+        atualizarPainelAnexoEmpenho();
     }
     function voltarParaListaEmpenhos() {
         document.getElementById('tela-formulario-empenhos').style.display = 'none';
@@ -68,7 +163,7 @@
 
     document.getElementById('btnCancelarEmpenho')?.addEventListener('click', function() { voltarParaListaEmpenhos(); });
 
-    document.querySelectorAll('.tab-ne').forEach(function(tab, i) {
+    document.querySelectorAll('#tabsNE .tab-ne').forEach(function(tab, i) {
         tab.addEventListener('click', function() { ativarTabNE(i); });
     });
 
@@ -131,9 +226,11 @@
     }
 
     tabelaEmpenhosBody.addEventListener('click', function(e) {
+        const btnVisualizar = e.target.closest('.btn-visualizar-empenho');
         const btnEditar = e.target.closest('.btn-editar-empenho');
         const btnInativar = e.target.closest('.btn-inativar-empenho');
         const btnApagar = e.target.closest('.btn-apagar-empenho-permanente');
+        if (btnVisualizar) visualizarEmpenho(btnVisualizar.getAttribute('data-id'));
         if (btnEditar) editarEmpenho(btnEditar.getAttribute('data-id'));
         if (btnInativar) inativarEmpenho(btnInativar.getAttribute('data-id'));
         if (btnApagar) apagarEmpenho(btnApagar.getAttribute('data-id'));
@@ -160,46 +257,16 @@
         const e = baseEmpenhos.find(item => item.id === id);
         if (e) {
             abrirFormularioEmpenho(true);
-            ativarTabNE(0);
-            document.getElementById('editIndexEmpenho').value = e.id;
-            const elNum = document.getElementById('numEmpenho');
-            if (elNum) {
-                elNum.value = typeof formatarNumEmpenhoVisivel === 'function'
-                    ? (formatarNumEmpenhoVisivel(e.numEmpenho) || '')
-                    : (e.numEmpenho || '');
-            }
-            document.getElementById('dataEmpenho').value = dataParaInputDate(e.dataEmissao) || '';
-            var valEmp = parseFloat(e.valorGlobal) || 0;
-            document.getElementById('valorEmpenho').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valEmp)) : (e.valorGlobal || '');
-            document.getElementById('piEmpenho').value = e.pi || '';
-            var tipoSelect = document.getElementById('tipoNEEmpenho');
-            var tipoVal = (e.tipoNE || '').toUpperCase().replace(/[ÁÀÂÃ]/g,'A').replace(/[ÍÌÎ]/g,'I').replace(/[ÓÒÔÕ]/g,'O').replace(/[ÉÈÊ]/g,'E');
-            tipoSelect.value = (['GLOBAL','ORDINARIO','ESTIMATIVO'].indexOf(tipoVal) >= 0) ? tipoVal : 'GLOBAL';
-            document.getElementById('ndEmpenho').value = e.nd || '';
-            document.getElementById('subitemEmpenho').value = e.subitem || '';
-            document.getElementById('ptresEmpenho').value = e.ptres || '';
-            document.getElementById('frEmpenho').value = e.fr || '';
-            document.getElementById('numModalEmpenho').value = e.numModal || '';
-            document.getElementById('descModalEmpenho').value = e.descModal || '';
-            document.getElementById('codAmpEmpenho').value = e.codAmp || '';
-            document.getElementById('incisoEmpenho').value = e.inciso || '';
-            document.getElementById('leiEmpenho').value = e.lei || '';
-            document.getElementById('processoEmpenho').value = e.processo || '';
-            document.getElementById('cnpjEmpenho').value = e.cnpj || '';
-            document.getElementById('favorecidoEmpenho').value = e.favorecido || '';
-            document.getElementById('pjPfEmpenho').value = e.pjPf || '';
-            document.getElementById('telefoneEmpenho').value = e.telefone || '';
-            document.getElementById('contatoEmpenho').value = e.contato || '';
-            document.getElementById('gerenciaEmpenho').value = e.gerencia || '';
-            document.getElementById('docOrigEmpenho').value = e.docOrig || '';
-            document.getElementById('oiEmpenho').value = e.oi || '';
-            document.getElementById('contratoEmpenho').value = e.contrato || '';
-            document.getElementById('projetoEmpenho').value = e.projeto || '';
-            document.getElementById('capEmpenho').value = e.cap || '';
-            document.getElementById('altcredEmpenho').value = e.altcred || '';
-            document.getElementById('meioEmpenho').value = e.meio || '';
-            document.getElementById('descricaoEmpenho').value = e.descricao || '';
+            preencherFormularioEmpenho(e);
+            setModoVisualizacaoEmpenho(false);
         }
+    }
+    function visualizarEmpenho(id) {
+        const e = baseEmpenhos.find(item => item.id === id);
+        if (!e) return;
+        abrirFormularioEmpenho(true);
+        preencherFormularioEmpenho(e);
+        setModoVisualizacaoEmpenho(true);
     }
 
     async function inativarEmpenho(id) {
@@ -239,6 +306,7 @@
 
     formEmpenho.addEventListener('submit', async function(e) {
         e.preventDefault();
+        if (modoVisualizacaoEmpenho) return;
         mostrarLoading();
         const fbID = document.getElementById('editIndexEmpenho').value;
 
@@ -280,10 +348,24 @@
             projeto: escapeHTML(document.getElementById('projetoEmpenho')?.value || '')
         };
         try {
+            const file = inputImportarPdfEmpenho && inputImportarPdfEmpenho.files ? inputImportarPdfEmpenho.files[0] : null;
+            if (file) {
+                if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') throw new Error('Selecione um arquivo PDF válido.');
+                if (file.size > 5 * 1024 * 1024) throw new Error('O PDF deve ter no máximo 5MB.');
+                const dataUrl = await lerArquivoComoDataURL(file);
+                dados.notaEmpenhoPdfNome = file.name;
+                dados.notaEmpenhoPdfDataUrl = dataUrl;
+            } else if (anexoPdfEmpenhoAtual && anexoPdfEmpenhoAtual.dataUrl) {
+                dados.notaEmpenhoPdfNome = anexoPdfEmpenhoAtual.nome || '';
+                dados.notaEmpenhoPdfDataUrl = anexoPdfEmpenhoAtual.dataUrl || '';
+            } else {
+                dados.notaEmpenhoPdfNome = '';
+                dados.notaEmpenhoPdfDataUrl = '';
+            }
             if (fbID == -1 || fbID === "") { await db.collection('empenhos').add(dados); }
             else { await db.collection('empenhos').doc(fbID).update(dados); }
             voltarParaListaEmpenhos();
-        } catch (err) { alert("Erro ao guardar Empenho."); }
+        } catch (err) { alert(err && err.message ? err.message : "Erro ao guardar Empenho."); }
         finally { esconderLoading(); }
     });
 
