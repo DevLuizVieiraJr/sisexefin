@@ -585,14 +585,23 @@ if (formUsuarioAdmin) {
                     alert("Para novo usuário, informe senha forte: mínimo 8 caracteres, incluindo letras e números.");
                     return;
                 }
-                const adminEmail = auth.currentUser ? auth.currentUser.email : '';
-                const adminSenha = (document.getElementById('adminUsuarioSenhaAdmin') || {}).value || '';
-                const userCred = await auth.createUserWithEmailAndPassword(email, senhaInicial);
+                const secondaryAppName = 'adminUserCreator';
+                const secondaryApp = firebase.apps.find(app => app.name === secondaryAppName) ||
+                    firebase.initializeApp(firebaseConfig, secondaryAppName);
+                const secondaryAuth = secondaryApp.auth();
+                const userCred = await secondaryAuth.createUserWithEmailAndPassword(email, senhaInicial);
                 uidFinal = userCred.user.uid;
-                await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });
-                await auth.signOut();
-                if (adminSenha && adminEmail) {
-                    await auth.signInWithEmailAndPassword(adminEmail, adminSenha);
+                try {
+                    await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });
+                } catch (saveErr) {
+                    try {
+                        if (secondaryAuth.currentUser) await secondaryAuth.currentUser.delete();
+                    } catch (rollbackErr) {
+                        console.error('Falha no rollback de usuário criado no Auth:', rollbackErr);
+                    }
+                    throw saveErr;
+                } finally {
+                    try { await secondaryAuth.signOut(); } catch (e) { /* ignorar */ }
                 }
                 if (typeof registrarAuditoria === 'function') registrarAuditoria('criar_usuario', email, { perfis, perfil_ativo: perfilAtual });
                 alert(`Usuário criado com sucesso. UID gerado automaticamente pelo Firebase Auth. Perfis: ${perfis.join(', ')}.`);
@@ -600,9 +609,6 @@ if (formUsuarioAdmin) {
                 const uidInput = document.getElementById('adminUsuarioUid');
                 if (uidInput) uidInput.value = '';
                 if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
-                if (!adminSenha && adminEmail) {
-                    window.location.href = (window.location.pathname.replace(/admin\.html?$/, '') || '/') + 'index.html';
-                }
                 return;
             }
             await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });

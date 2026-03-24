@@ -28,7 +28,10 @@
     let deducoesAplicadasAtual = [];
     let baseDeducoesEncargos = [];
     let baseFornecedores = [];
-    let salvandoApenasAbaDadosBasicos = false;
+    let salvandoApenasAba = false;
+    let abaEmEdicao = null;
+    let alteracoesPendentesAba = false;
+    let acaoPendenteDeSaida = null;
     let enviandoParaProcessamento = false;
     let paginaAtual = 1;
     let itensPorPagina = 10;
@@ -601,8 +604,10 @@
         bloquearTabsPorStatus('Rascunho');
         const tituloEl = document.getElementById('tituloFormTC');
         if (tituloEl) tituloEl.textContent = 'Entrada de Título de Crédito';
-        setCamposDadosBasicosHabilitados(true);
-        atualizarBotoesAbaDadosBasicos(false);
+        abaEmEdicao = 0;
+        alteracoesPendentesAba = false;
+        atualizarModoEdicaoAbas();
+        atualizarBotoesEdicaoPorAba();
         atualizarBotoesFormulario('Rascunho', false);
         const dataExefinEl = document.getElementById('dataExefin');
         if (dataExefinEl && !dataExefinEl.value) dataExefinEl.value = new Date().toISOString().slice(0, 10);
@@ -615,42 +620,92 @@
         document.getElementById('tela-lista-titulos').style.display = 'block';
     };
 
-    /** Habilita ou desabilita os campos da aba Dados Básicos (exceto Observações, Ano, UG). */
-    function setCamposDadosBasicosHabilitados(habilitado) {
-        const ids = ['tipoTC', 'dataExefin', 'buscaOIT', 'buscaFornecedorT', 'contratoSelecionado', 'numTC', 'valorNotaFiscal', 'dataEmissao', 'dataAteste'];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.disabled = !habilitado;
-        });
-        const limparOIBtn = document.getElementById('limparOIBtn');
-        if (limparOIBtn) limparOIBtn.disabled = !habilitado;
-        const limparFornecedorBtn = document.getElementById('limparFornecedorBtn');
-        if (limparFornecedorBtn) limparFornecedorBtn.disabled = !habilitado;
+    function tcSalvo() {
+        const fbID = document.getElementById('editIndexTitulo')?.value || '';
+        return fbID !== '-1' && fbID !== '';
     }
 
-    /** Exibe/oculta botões Editar Aba e Salvar Aba na aba Dados Básicos (apenas quando TC já salvo). */
-    function atualizarBotoesAbaDadosBasicos(emEdicao) {
-        const container = document.getElementById('acoesAbaDadosBasicos');
-        const btnEditar = document.getElementById('btnEditarAbaDadosBasicos');
-        const btnSalvar = document.getElementById('btnSalvarAbaDadosBasicos');
-        const fbID = document.getElementById('editIndexTitulo')?.value || '';
-        const ehEdicao = (fbID !== '-1' && fbID !== '');
-        if (!container || !btnEditar || !btnSalvar) return;
-        if (!ehEdicao) {
-            container.style.display = 'none';
-            setCamposDadosBasicosHabilitados(true);
-            return;
+    function usuarioPodeEditarTC() {
+        return typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_editar') : false;
+    }
+
+    function abaTemDados(tabIndex) {
+        if (tabIndex === 0) {
+            return !!((document.getElementById('numTC')?.value || '').trim());
         }
-        container.style.display = 'flex';
-        if (emEdicao) {
-            btnEditar.style.display = 'none';
-            btnSalvar.style.display = 'inline-block';
-            setCamposDadosBasicosHabilitados(true);
-        } else {
-            btnEditar.style.display = 'inline-block';
-            btnSalvar.style.display = 'none';
-            setCamposDadosBasicosHabilitados(false);
+        if (tabIndex === 1) {
+            return (empenhosDaNotaAtual || []).length > 0 || (deducoesAplicadasAtual || []).length > 0;
         }
+        if (tabIndex === 2) {
+            return !!((document.getElementById('np')?.value || '').trim() || (document.getElementById('dataLiquidacao')?.value || '').trim()) ||
+                (empenhosDaNotaAtual || []).some(v => !!(v.lf || '').trim());
+        }
+        if (tabIndex === 3) {
+            return !!((document.getElementById('op')?.value || '').trim()) ||
+                (empenhosDaNotaAtual || []).some(v => !!(v.pf || '').trim());
+        }
+        return true;
+    }
+
+    function atualizarEstadoControlesAba(tabIndex, habilitado) {
+        const painel = document.getElementById('panel' + tabIndex);
+        if (!painel) return;
+        painel.classList.toggle('tc-panel-bloqueado', !habilitado);
+        const controles = painel.querySelectorAll('input, select, textarea, button');
+        controles.forEach(el => {
+            if (el.classList.contains('tc-tab-edit-control')) return;
+            if (el.closest('.tc-acao-aba')) return;
+            if (!el.dataset.tcOrigDisabled) {
+                el.dataset.tcOrigDisabled = String(!!el.disabled);
+                el.dataset.tcOrigReadonly = String(!!el.readOnly);
+            }
+            const origDisabled = el.dataset.tcOrigDisabled === 'true';
+            const origReadonly = el.dataset.tcOrigReadonly === 'true';
+            if (!habilitado) {
+                el.disabled = true;
+            } else {
+                el.disabled = origDisabled;
+                if ('readOnly' in el) el.readOnly = origReadonly;
+            }
+        });
+    }
+
+    function atualizarModoEdicaoAbas() {
+        const salvo = tcSalvo();
+        const podeEditar = usuarioPodeEditarTC();
+        [0, 1, 2, 3].forEach(tab => {
+            const deveHabilitar = !salvo ? true : (podeEditar && (abaEmEdicao === tab || !abaTemDados(tab)));
+            atualizarEstadoControlesAba(tab, deveHabilitar);
+        });
+        const bloquearGlobais = salvo && abaEmEdicao !== null;
+        ['btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = bloquearGlobais;
+        });
+    }
+
+    function atualizarBotoesEdicaoPorAba() {
+        const config = [
+            { tab: 0, acao: 'acoesAbaDadosBasicos', editar: 'btnEditarAbaDadosBasicos', salvar: 'btnSalvarAbaDadosBasicos' },
+            { tab: 1, acao: 'acoesAbaProcessamento', editar: 'btnEditarAbaProcessamento', salvar: 'btnSalvarAbaProcessamento' },
+            { tab: 2, acao: 'acoesAbaLiquidacao', editar: 'btnEditarAbaLiquidacao', salvar: 'btnSalvarAbaLiquidacao' },
+            { tab: 3, acao: 'acoesAbaFinanceiro', editar: 'btnEditarAbaFinanceiro', salvar: 'btnSalvarAbaFinanceiro' }
+        ];
+        const salvo = tcSalvo();
+        const podeEditar = usuarioPodeEditarTC();
+        config.forEach(c => {
+            const acao = document.getElementById(c.acao);
+            const btnEditar = document.getElementById(c.editar);
+            const btnSalvar = document.getElementById(c.salvar);
+            if (!acao || !btnEditar || !btnSalvar) return;
+            const tabComDados = abaTemDados(c.tab);
+            const emEdicaoDestaAba = abaEmEdicao === c.tab;
+            acao.style.display = (salvo && podeEditar && tabComDados) ? 'flex' : 'none';
+            btnEditar.style.display = emEdicaoDestaAba ? 'none' : 'inline-block';
+            btnSalvar.style.display = emEdicaoDestaAba ? 'inline-block' : 'none';
+            btnEditar.classList.add('tc-tab-edit-control');
+            btnSalvar.classList.add('tc-tab-edit-control');
+        });
     }
 
     function mostrarStepper(status) {
@@ -690,12 +745,28 @@
     function ativarTab(i) {
         document.querySelectorAll('.tab-tc').forEach((t, j) => t.classList.toggle('ativo', j === i));
         document.querySelectorAll('.tab-panel-tc').forEach((p, j) => p.classList.toggle('visivel', j === i));
+        atualizarBotoesEdicaoPorAba();
+        if (i === 1) {
+            desenharBotoesCalcularDed();
+            if ((deducoesAplicadasAtual || []).length === 0 && obterDeducoesPermitidasContrato().length > 0) {
+                recalcularDeducoesContratoSubstituindo();
+            } else {
+                desenharDeducoesAplicadas();
+                desenharResumoDeducoesLiquidacao();
+            }
+        }
     }
 
     document.querySelectorAll('.tab-tc').forEach(tab => {
         tab.addEventListener('click', function() {
             if (this.classList.contains('bloqueado')) return;
-            ativarTab(parseInt(this.getAttribute('data-tab') || 0));
+            const destino = parseInt(this.getAttribute('data-tab') || 0);
+            const ativa = parseInt((document.querySelector('.tab-tc.ativo')?.getAttribute('data-tab') || '0'), 10);
+            if (abaEmEdicao !== null && destino !== ativa) {
+                alert('Salve a aba atual antes.');
+                return;
+            }
+            ativarTab(destino);
         });
     });
 
@@ -771,12 +842,14 @@
     function desenharBotoesCalcularDed() {
         const container = document.getElementById('containerBotoesCalcularDed');
         const aviso = document.getElementById('avisoDeducoesContrato');
+        const infoOptante = document.getElementById('infoOptanteSimples');
         const btnOutras = document.getElementById('btnInserirOutrasDeducoes');
         if (!container) return;
         const permitidas = obterDeducoesPermitidasContrato();
         const optante = ehOptanteSimples();
-        if (aviso) aviso.textContent = permitidas.length === 0 ? 'Nenhuma dedução vinculada ao contrato. Vincule deduções no cadastro do contrato.' : (optante ? 'Fornecedor optante do Simples: deduções não são obrigatórias.' : 'Clique para calcular cada dedução permitida pelo contrato.');
-        if (btnOutras) btnOutras.style.display = permitidas.length > 0 ? 'inline-block' : 'none';
+        if (aviso) aviso.textContent = permitidas.length === 0 ? 'Nenhuma dedução vinculada ao contrato. Você pode incluir deduções diversas.' : (optante ? 'Clique para calcular cada dedução permitida pelo contrato.' : 'Clique para calcular cada dedução permitida pelo contrato.');
+        if (infoOptante) infoOptante.textContent = optante ? 'Optante pelo Simples' : 'Não Optante';
+        if (btnOutras) btnOutras.style.display = 'inline-block';
         container.innerHTML = '';
         permitidas.forEach(p => {
             const tipo = p.tipo || 'DDF025';
@@ -790,8 +863,53 @@
         });
     }
 
+    function calcularDeducaoAutomaticamente(permitida, opcoes = {}) {
+        const dedEnc = baseDeducoesEncargos.find(d => d.id === permitida.dedEncId || (d.codigo === permitida.codigo && d.tipo === permitida.tipo));
+        const tipo = (dedEnc && dedEnc.tipo) || permitida.tipo || 'DDF025';
+        if (tipo === 'DDF021' && !temAlgumaNE39()) return null;
+        const baseVal = obterTotalTC();
+        let aliquota = 11;
+        if (dedEnc) {
+            if (tipo === 'DDF021') aliquota = Number(dedEnc.aliquotaPadrao) || 11;
+            else if (tipo === 'DDF025') aliquota = Number(dedEnc.aliquotaTotal) || 0;
+            else if (tipo === 'DDR001') aliquota = Math.min(Number(dedEnc.aliquotaPadrao) || 5, Number(dedEnc.aliquotaMaxima) || 5);
+        }
+        const dataApuracao = (tipo === 'DDF021' || tipo === 'DDR001')
+            ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0, 10))
+            : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0, 10));
+        const valorCalculado = Math.round(baseVal * (aliquota / 100) * 100) / 100;
+        return {
+            dedEncId: permitida.dedEncId || dedEnc?.id,
+            tipo,
+            codigo: permitida.codigo || dedEnc?.codigo,
+            descricao: permitida.descricao || dedEnc?.descricao,
+            baseCalculo: baseVal,
+            aliquota,
+            valorCalculado,
+            dataApuracao,
+            natRendimento: dedEnc?.natRendimento,
+            codReceita: dedEnc?.codReceita || permitida.codigo,
+            _origemContrato: !!opcoes.origemContrato
+        };
+    }
+
+    function recalcularDeducoesContratoSubstituindo() {
+        const permitidas = obterDeducoesPermitidasContrato();
+        const novas = [];
+        (permitidas || []).forEach(p => {
+            const calc = calcularDeducaoAutomaticamente(p, { origemContrato: true });
+            if (!calc) return;
+            const unico = (calc.tipo === 'DDF021' || calc.tipo === 'DDR001');
+            if (unico && novas.some(x => x.tipo === calc.tipo)) return;
+            novas.push(calc);
+        });
+        deducoesAplicadasAtual = novas;
+        desenharDeducoesAplicadas();
+        desenharResumoDeducoesLiquidacao();
+    }
+
     let deducaoModalContexto = null;
-    function abrirModalCalcularDeducao(permitida) {
+    function abrirModalCalcularDeducao(permitida, editIndex = null) {
         const contratoId = document.getElementById('contratoIdSelecionado')?.value || '';
         const dedEnc = baseDeducoesEncargos.find(d => d.id === permitida.dedEncId || (d.codigo === permitida.codigo && d.tipo === permitida.tipo));
         const tipo = (dedEnc && dedEnc.tipo) || permitida.tipo || 'DDF025';
@@ -803,18 +921,21 @@
         if ((tipo === 'DDF025' || tipo === 'DDR001') && optante) {
             if (!confirm('Fornecedor é optante do Simples. Deseja mesmo incluir esta dedução?')) return;
         }
-        deducaoModalContexto = { permitida, dedEnc, tipo };
+        deducaoModalContexto = { permitida, dedEnc, tipo, editIndex };
         const titulo = document.getElementById('modalCalcularDeducaoTitulo');
         const campos = document.getElementById('modalCalcularDeducaoCampos');
         if (titulo) titulo.textContent = 'Calcular ' + (LABEL_TIPO[tipo] || tipo);
-        const baseTC = obterTotalTC();
+        const edicao = (editIndex !== null && editIndex >= 0) ? (deducoesAplicadasAtual[editIndex] || null) : null;
+        const baseTC = edicao ? (Number(edicao.baseCalculo) || 0) : obterTotalTC();
         let aliquota = 11;
-        if (dedEnc) {
+        if (edicao) {
+            aliquota = Number(edicao.aliquota) || 0;
+        } else if (dedEnc) {
             if (tipo === 'DDF021') aliquota = Number(dedEnc.aliquotaPadrao) || 11;
             else if (tipo === 'DDF025') aliquota = Number(dedEnc.aliquotaTotal) || 0;
             else if (tipo === 'DDR001') aliquota = Math.min(Number(dedEnc.aliquotaPadrao) || 5, Number(dedEnc.aliquotaMaxima) || 5);
         }
-        const dataApuracao = (tipo === 'DDF021' || tipo === 'DDR001') ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0,10)) : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0,10));
+        const dataApuracao = edicao?.dataApuracao || ((tipo === 'DDF021' || tipo === 'DDR001') ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0,10)) : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0,10)));
         const valorCalc = Math.round(baseTC * (aliquota / 100) * 100) / 100;
         campos.innerHTML = `
             <div class="form-group"><label>Base de cálculo (R$):</label><input type="text" id="dedModalBase" value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(baseTC) : baseTC.toFixed(2)}" data-moeda></div>
@@ -840,19 +961,21 @@
     document.getElementById('modalCalcularDeducaoDesistir')?.addEventListener('click', () => { document.getElementById('modalCalcularDeducao').style.display = 'none'; deducaoModalContexto = null; });
     document.getElementById('modalCalcularDeducaoAdicionar')?.addEventListener('click', function() {
         if (!deducaoModalContexto) return;
-        const { permitida, dedEnc, tipo } = deducaoModalContexto;
+        const { permitida, dedEnc, tipo, editIndex } = deducaoModalContexto;
         const baseVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('dedModalBase')?.value || 0) : parseFloat(String(document.getElementById('dedModalBase')?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
         const aliquotaVal = parseFloat(document.getElementById('dedModalAliquota')?.value || 0) || 0;
         const valorCalc = Math.round(baseVal * (aliquotaVal / 100) * 100) / 100;
         const dataApuracao = document.getElementById('dedModalDataApuracao')?.value || '';
-        const jaExiste = (tipo === 'DDF021' || tipo === 'DDR001') && deducoesAplicadasAtual.some(d => d.tipo === tipo);
+        const jaExiste = (tipo === 'DDF021' || tipo === 'DDR001') && deducoesAplicadasAtual.some((d, idx) => d.tipo === tipo && idx !== editIndex);
         if (jaExiste) { alert('Já existe uma dedução ' + (tipo === 'DDF021' ? 'INSS' : 'ISS') + ' neste TC. Remova-a antes de adicionar outra.'); return; }
-        deducoesAplicadasAtual.push({
+        const item = {
             dedEncId: permitida.dedEncId || dedEnc?.id,
             tipo, codigo: permitida.codigo || dedEnc?.codigo, descricao: permitida.descricao || dedEnc?.descricao,
             baseCalculo: baseVal, aliquota: aliquotaVal, valorCalculado: valorCalc, dataApuracao,
             natRendimento: dedEnc?.natRendimento, codReceita: dedEnc?.codReceita
-        });
+        };
+        if (editIndex !== null && editIndex >= 0 && deducoesAplicadasAtual[editIndex]) deducoesAplicadasAtual[editIndex] = { ...deducoesAplicadasAtual[editIndex], ...item };
+        else deducoesAplicadasAtual.push(item);
         document.getElementById('modalCalcularDeducao').style.display = 'none';
         deducaoModalContexto = null;
         desenharDeducoesAplicadas();
@@ -872,18 +995,33 @@
     });
 
     function desenharDeducoesAplicadas() {
-        const container = document.getElementById('containerDeducoesAplicadas');
-        if (!container) return;
-        container.innerHTML = '';
+        const tbody = document.getElementById('tbodyDeducoesProcessamento');
+        if (!tbody) return;
+        tbody.innerHTML = '';
         (deducoesAplicadasAtual || []).forEach((d, i) => {
-            const div = document.createElement('div');
-            div.className = 'form-row';
-            div.innerHTML = `<div class="form-group flex-1">${escapeHTML(d.codigo || d.tipo)} - ${escapeHTML(LABEL_TIPO[d.tipo] || d.tipo)} | Base: R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.baseCalculo || 0) : (d.baseCalculo || 0).toFixed(2)} | Alíq: ${d.aliquota || 0}% | Valor: R$ ${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.valorCalculado || 0) : (d.valorCalculado || 0).toFixed(2)}</div>
-                <div class="form-group" style="flex:0;"><button type="button" class="btn-icon btn-rm-ded" data-index="${i}">🗑️</button></div>`;
-            container.appendChild(div);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${escapeHTML(LABEL_TIPO[d.tipo] || d.tipo)}</td>
+                <td>${escapeHTML(d.codReceita || d.codigo || '-')}</td>
+                <td>${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.baseCalculo || 0) : (d.baseCalculo || 0).toFixed(2)}</td>
+                <td>${escapeHTML(String(d.aliquota || 0))}%</td>
+                <td>${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(d.valorCalculado || 0) : (d.valorCalculado || 0).toFixed(2)}</td>
+                <td>
+                    <button type="button" class="btn-icon btn-edit-ded" data-index="${i}" title="Editar">✏️</button>
+                    <button type="button" class="btn-icon btn-rm-ded" data-index="${i}" title="Excluir">🗑️</button>
+                </td>`;
+            tbody.appendChild(tr);
         });
-        container.querySelectorAll('.btn-rm-ded').forEach(btn => btn.addEventListener('click', function() {
-            deducoesAplicadasAtual.splice(parseInt(this.getAttribute('data-index')), 1);
+        tbody.querySelectorAll('.btn-edit-ded').forEach(btn => btn.addEventListener('click', function() {
+            const idx = parseInt(this.getAttribute('data-index'), 10);
+            const d = deducoesAplicadasAtual[idx];
+            if (!d) return;
+            abrirModalCalcularDeducao({ dedEncId: d.dedEncId, tipo: d.tipo, codigo: d.codigo, descricao: d.descricao }, idx);
+        }));
+        tbody.querySelectorAll('.btn-rm-ded').forEach(btn => btn.addEventListener('click', function() {
+            const idx = parseInt(this.getAttribute('data-index'), 10);
+            if (!confirm('Confirma a exclusão desta dedução?')) return;
+            deducoesAplicadasAtual.splice(idx, 1);
             desenharDeducoesAplicadas();
             desenharResumoDeducoesLiquidacao();
         }));
@@ -988,13 +1126,10 @@
         const ndEl = document.getElementById('vinculoND');
         if (ndEl) ndEl.value = v.nd || '';
 
-        const subEl = document.getElementById('vinculoSubelemento');
-        if (subEl) {
-            const subelemento = String(v.subelemento || v.subitem || '').trim();
-            v.subelemento = subelemento;
-            if (typeof v.subitem !== 'undefined') delete v.subitem; // evita persistir legado
-            subEl.value = subelemento;
-        }
+        // Na edição, o subelemento deve ser recalculado pela NE selecionada (sobrescreve salvo).
+        const neEdicao = obterEmpenhoPorNumero(v.numEmpenho);
+        const opcoesSub = obterOpcoesSubelementoDaNE(neEdicao || v);
+        configurarCampoSubelemento(opcoesSub, true);
 
         const valorEl = document.getElementById('vinculoValor');
         if (valorEl) {
@@ -1011,6 +1146,79 @@
         const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
         if (btnUndo) btnUndo.style.display = 'none';
         atualizarBotaoAdicionarEmpenhoNaNota();
+    }
+
+    function obterEmpenhoPorNumero(numEmpenho) {
+        const alvo = String(numEmpenho || '').trim();
+        if (!alvo) return null;
+        const alvo12 = alvo.slice(-12);
+        return (baseEmpenhos || []).find(e => {
+            const ne = String(e.numEmpenho || e.numNE || '').trim();
+            return ne === alvo || ne.slice(-12) === alvo12;
+        }) || null;
+    }
+
+    function obterOpcoesSubelementoDaNE(e) {
+        if (!e) return [];
+        const candidatos = [];
+        const pushValor = (v) => {
+            const s = String(v || '').trim();
+            if (!s) return;
+            // Aceita lista no mesmo campo: "01,02" / "01;02" / "01|02"
+            s.split(/[;,|]/).forEach(p => {
+                const limpo = String(p || '').trim().replace(/\D/g, '');
+                if (!limpo) return;
+                candidatos.push(limpo.padStart(2, '0').slice(-2));
+            });
+        };
+        if (Array.isArray(e.subelementos)) e.subelementos.forEach(pushValor);
+        pushValor(e.subelemento);
+        pushValor(e.subitem);
+        const unicos = Array.from(new Set(candidatos));
+        return unicos.filter(v => /^\d{2}$/.test(v));
+    }
+
+    function configurarCampoSubelemento(opcoes, permitirManualSemOpcao) {
+        const atual = document.getElementById('vinculoSubelemento');
+        if (!atual) return;
+        const parent = atual.parentNode;
+        if (!parent) return;
+        const valorAtual = String(atual.value || '').trim();
+
+        let novoEl;
+        if (opcoes.length > 1) {
+            novoEl = document.createElement('select');
+            novoEl.id = 'vinculoSubelemento';
+            novoEl.maxLength = 2;
+            novoEl.title = 'Selecione um subelemento disponível na NE';
+            opcoes.forEach(op => {
+                const o = document.createElement('option');
+                o.value = op;
+                o.textContent = op;
+                novoEl.appendChild(o);
+            });
+            novoEl.value = opcoes.includes(valorAtual) ? valorAtual : opcoes[0];
+        } else {
+            novoEl = document.createElement('input');
+            novoEl.type = 'text';
+            novoEl.id = 'vinculoSubelemento';
+            novoEl.maxLength = 2;
+            novoEl.pattern = '[0-9]*';
+            novoEl.placeholder = 'Ex: 01';
+            novoEl.title = 'Apenas números, 2 dígitos';
+            if (opcoes.length === 1) {
+                novoEl.readOnly = true;
+                novoEl.value = opcoes[0];
+            } else {
+                // Sem subelemento na NE: permite inclusão manual.
+                novoEl.readOnly = !permitirManualSemOpcao ? true : false;
+                novoEl.value = '';
+            }
+        }
+
+        if (atual.nextSibling) parent.insertBefore(novoEl, atual.nextSibling);
+        else parent.appendChild(novoEl);
+        parent.removeChild(atual);
     }
 
     /** Fornecedores únicos da coleção contratos */
@@ -1142,6 +1350,7 @@
             const c = id ? baseContratos.find(x => x.id === id) : null;
             preencherDadosContrato(c);
             if (typeof desenharBotoesCalcularDed === 'function') desenharBotoesCalcularDed();
+            if (typeof recalcularDeducoesContratoSubstituindo === 'function') recalcularDeducoesContratoSubstituindo();
         });
     }
 
@@ -1279,8 +1488,8 @@
                     'NE: ' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numNE) : numNE);
                 const ndEl = document.getElementById('vinculoND');
                 if (ndEl) ndEl.value = e.nd || '';
-                const subEl = document.getElementById('vinculoSubelemento');
-                if (subEl) subEl.value = (e.subitem || e.subelemento || '').trim();
+                const opcoesSub = obterOpcoesSubelementoDaNE(e);
+                configurarCampoSubelemento(opcoesSub, true);
                 document.getElementById('vinculoValor').value = '';
                 const cc = document.getElementById('vinculoCentroCustos');
                 if (cc) cc.value = '';
@@ -1460,7 +1669,10 @@
         desenharLiquidacao();
         desenharResumoDeducoesLiquidacao();
         desenharFinanceiro();
-        atualizarBotoesAbaDadosBasicos(false);
+        abaEmEdicao = null;
+        alteracoesPendentesAba = false;
+        atualizarModoEdicaoAbas();
+        atualizarBotoesEdicaoPorAba();
     }
 
     function desenharLiquidacao() {
@@ -1634,7 +1846,10 @@
         const abaAtivaEl = document.querySelector('.tab-tc.ativo');
         const indiceAbaAtiva = abaAtivaEl ? parseInt(abaAtivaEl.getAttribute('data-tab') || '0', 10) : 0;
 
-        if (indiceAbaAtiva === 0) {
+        if (salvandoApenasAba) {
+            dados.status = statusAtual || 'Rascunho';
+            novoStatus = dados.status;
+        } else if (indiceAbaAtiva === 0) {
             // Na aba Dados básicos: apenas salva os dados, mantendo o status atual
             dados.status = statusAtual || 'Rascunho';
             novoStatus = dados.status;
@@ -1701,9 +1916,25 @@
             }
             esconderLoading();
 
-            if (salvandoApenasAbaDadosBasicos) {
-                salvandoApenasAbaDadosBasicos = false;
-                atualizarBotoesAbaDadosBasicos(false);
+            if (salvandoApenasAba) {
+                salvandoApenasAba = false;
+                abaEmEdicao = null;
+                alteracoesPendentesAba = false;
+                atualizarModoEdicaoAbas();
+                atualizarBotoesEdicaoPorAba();
+                const form = document.getElementById('formTitulo');
+                const fecharAposSalvar = form && form.dataset.tcFecharAposSalvar === '1';
+                if (form) delete form.dataset.tcFecharAposSalvar;
+                if (fecharAposSalvar) {
+                    if (typeof acaoPendenteDeSaida === 'function') {
+                        const acao = acaoPendenteDeSaida;
+                        acaoPendenteDeSaida = null;
+                        acao();
+                    } else {
+                        voltarParaListaTitulos();
+                    }
+                    return;
+                }
                 alert("Dados da aba salvos com sucesso.");
                 return;
             }
@@ -1711,11 +1942,13 @@
             if (typeof enviandoParaProcessamento !== 'undefined' && enviandoParaProcessamento) {
                 enviandoParaProcessamento = false;
                 try {
+                    recalcularDeducoesContratoSubstituindo();
                     const doc = await db.collection('titulos').doc(docId).get();
                     const hist = (doc.data()?.historicoStatus || []);
                     hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
                     await db.collection('titulos').doc(docId).update({
                         status: 'Em Processamento',
+                        deducoesAplicadas: deducoesAplicadasAtual,
                         historicoStatus: hist,
                         editado_em: firebase.firestore.FieldValue.serverTimestamp()
                     });
@@ -1754,6 +1987,7 @@
         if (!docId) return;
         mostrarLoading();
         try {
+            recalcularDeducoesContratoSubstituindo();
             const doc = await db.collection('titulos').doc(docId).get();
             const hist = (doc.data()?.historicoStatus || []);
             hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
@@ -1762,6 +1996,7 @@
             await db.collection('titulos').doc(docId).update({
                 status: 'Em Processamento',
                 empenhosVinculados: empenhosDaNotaAtual,
+                deducoesAplicadas: deducoesAplicadasAtual,
                 historicoStatus: hist,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -1784,6 +2019,7 @@
     });
 
     document.getElementById('btnCancelarTitulo')?.addEventListener('click', function() {
+        if (tentarSairComPendencia(() => voltarParaListaTitulos())) return;
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1' || !fbID) {
             if (document.getElementById('numTC').value || document.getElementById('valorNotaFiscal').value) {
@@ -1791,6 +2027,13 @@
             }
         }
         voltarParaListaTitulos();
+    });
+
+    window.addEventListener('beforeunload', function(e) {
+        if (abaEmEdicao !== null && alteracoesPendentesAba) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
     });
 
     document.getElementById('btnDevolver')?.addEventListener('click', function() {
@@ -2215,13 +2458,94 @@
         }
     });
 
-    document.getElementById('btnEditarAbaDadosBasicos')?.addEventListener('click', function() {
-        atualizarBotoesAbaDadosBasicos(true);
-    });
-    document.getElementById('btnSalvarAbaDadosBasicos')?.addEventListener('click', function() {
-        salvandoApenasAbaDadosBasicos = true;
+    function iniciarEdicaoDaAba(tabIndex) {
+        abaEmEdicao = tabIndex;
+        alteracoesPendentesAba = false;
+        ativarTab(tabIndex);
+        atualizarModoEdicaoAbas();
+        atualizarBotoesEdicaoPorAba();
+    }
+
+    function salvarAba(tabIndex) {
+        salvandoApenasAba = true;
+        ativarTab(tabIndex);
         document.getElementById('formTitulo')?.requestSubmit();
+    }
+
+    [
+        ['btnEditarAbaDadosBasicos', 0, true],
+        ['btnEditarAbaProcessamento', 1, true],
+        ['btnEditarAbaLiquidacao', 2, true],
+        ['btnEditarAbaFinanceiro', 3, true],
+        ['btnSalvarAbaDadosBasicos', 0, false],
+        ['btnSalvarAbaProcessamento', 1, false],
+        ['btnSalvarAbaLiquidacao', 2, false],
+        ['btnSalvarAbaFinanceiro', 3, false]
+    ].forEach(([id, tabIndex, editar]) => {
+        document.getElementById(id)?.addEventListener('click', function() {
+            if (editar) iniciarEdicaoDaAba(tabIndex);
+            else salvarAba(tabIndex);
+        });
     });
+
+    document.getElementById('btnModalSaidaContinuarEditando')?.addEventListener('click', function() {
+        document.getElementById('modalSaidaComAlteracoes').style.display = 'none';
+        acaoPendenteDeSaida = null;
+    });
+    document.getElementById('btnModalSaidaSalvarESair')?.addEventListener('click', function() {
+        document.getElementById('modalSaidaComAlteracoes').style.display = 'none';
+        if (abaEmEdicao !== null) {
+            const abaAtual = abaEmEdicao;
+            const form = document.getElementById('formTitulo');
+            if (form) form.dataset.tcFecharAposSalvar = '1';
+            salvarAba(abaAtual);
+        }
+    });
+    document.getElementById('btnModalSaidaSairSemSalvar')?.addEventListener('click', function() {
+        document.getElementById('modalSaidaComAlteracoes').style.display = 'none';
+        abaEmEdicao = null;
+        alteracoesPendentesAba = false;
+        if (typeof acaoPendenteDeSaida === 'function') {
+            const acao = acaoPendenteDeSaida;
+            acaoPendenteDeSaida = null;
+            acao();
+        } else {
+            voltarParaListaTitulos();
+        }
+    });
+
+    document.getElementById('formTitulo')?.addEventListener('input', function() {
+        if (abaEmEdicao !== null) alteracoesPendentesAba = true;
+    });
+    document.getElementById('formTitulo')?.addEventListener('change', function() {
+        if (abaEmEdicao !== null) alteracoesPendentesAba = true;
+    });
+
+    function tentarSairComPendencia(acaoSaida) {
+        if (abaEmEdicao !== null && alteracoesPendentesAba) {
+            acaoPendenteDeSaida = typeof acaoSaida === 'function' ? acaoSaida : null;
+            const modal = document.getElementById('modalSaidaComAlteracoes');
+            if (modal) modal.style.display = 'flex';
+            return true;
+        }
+        return false;
+    }
+
+    document.querySelector('.topbar-voltar')?.addEventListener('click', function(e) {
+        if (tentarSairComPendencia(() => { location.href = 'dashboard.html'; })) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
+    document.querySelector('.topbar-sair')?.addEventListener('click', function(e) {
+        if (tentarSairComPendencia(() => {
+            if (typeof fazerLogout === 'function') fazerLogout();
+        })) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
 
     function ligarEventos() {
         configurarAutocompleteOI();

@@ -44,6 +44,33 @@
         .input-com-clear input { flex: 1; }
         .btn-clear-input { flex-shrink: 0; width: 28px; height: 34px; padding: 0; font-size: 18px; line-height: 1; color: #777; background: #eee; border: 1px solid #d2d6de; border-radius: 0; cursor: pointer; }
         .btn-clear-input:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
+        .tab-panel-tc.tc-panel-bloqueado input:disabled,
+        .tab-panel-tc.tc-panel-bloqueado select:disabled,
+        .tab-panel-tc.tc-panel-bloqueado textarea:disabled,
+        .tab-panel-tc.tc-panel-bloqueado button:disabled {
+            background: #f3f4f6 !important;
+            color: #6b7280 !important;
+            border-color: #d1d5db !important;
+            opacity: 1;
+        }
+        .tc-acao-aba {
+            position: sticky;
+            bottom: 8px;
+            display: none;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 18px;
+            padding: 10px 0;
+            background: rgba(255, 255, 255, 0.95);
+            border-top: 1px solid #e8eaed;
+            z-index: 2;
+        }
+        .tc-acao-aba .btn-editar-aba {
+            box-shadow: 0 2px 8px rgba(51, 122, 183, 0.25);
+            border-color: #337ab7;
+            color: #337ab7;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body style="display: none;" id="corpo-titulos">
@@ -216,8 +243,8 @@
                                 <textarea id="observacoesTC" rows="3" placeholder="Registe informações adicionais relevantes para este TC..."></textarea>
                             </div>
                         </div>
-                        <div id="acoesAbaDadosBasicos" class="form-row" style="display: none; margin-top: 15px; gap: 10px;">
-                            <button type="button" id="btnEditarAbaDadosBasicos" class="btn-default">Editar Aba</button>
+                        <div id="acoesAbaDadosBasicos" class="tc-acao-aba">
+                            <button type="button" id="btnEditarAbaDadosBasicos" class="btn-default btn-editar-aba" data-permission="titulos_editar">Editar Aba Dados Básicos</button>
                             <button type="button" id="btnSalvarAbaDadosBasicos" class="btn-primary" style="display: none;">Salvar Aba</button>
                         </div>
                         <input type="hidden" id="notaFiscal">
@@ -263,10 +290,29 @@
                         <fieldset class="gov-fieldset">
                             <legend>Deduções e Encargos</legend>
                             <p id="avisoDeducoesContrato" style="font-size:12px; color:#666; margin-bottom:10px;"></p>
+                            <p id="infoOptanteSimples" style="font-size:12px; font-weight:600; margin-bottom:8px;"></p>
                             <div id="containerBotoesCalcularDed" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;"></div>
-                            <button type="button" id="btnInserirOutrasDeducoes" class="btn-default btn-small" style="margin-bottom:12px;">+ Inserir outras deduções</button>
-                            <div id="containerDeducoesAplicadas"></div>
+                            <button type="button" id="btnInserirOutrasDeducoes" class="btn-default btn-small" style="margin-bottom:12px;">+ Incluir Deduções diversas</button>
+                            <div id="containerDeducoesAplicadas">
+                                <table class="tabela-gov" style="margin-bottom:12px;">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Cód. Receita</th>
+                                            <th>Base (R$)</th>
+                                            <th>Alíquota</th>
+                                            <th>Valor (R$)</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyDeducoesProcessamento"></tbody>
+                                </table>
+                            </div>
                         </fieldset>
+                        <div id="acoesAbaProcessamento" class="tc-acao-aba">
+                            <button type="button" id="btnEditarAbaProcessamento" class="btn-default btn-editar-aba" data-permission="titulos_editar">Editar Aba Processamento</button>
+                            <button type="button" id="btnSalvarAbaProcessamento" class="btn-primary" style="display: none;">Salvar Aba</button>
+                        </div>
                     </div>
 
                     <div class="tab-panel-tc" id="panel2">
@@ -288,6 +334,10 @@
                                 <span style="color:#27ae60;">Valor Líquido (OB): <span id="valorLiquidoOB">R$ 0,00</span></span>
                             </div>
                         </div>
+                        <div id="acoesAbaLiquidacao" class="tc-acao-aba">
+                            <button type="button" id="btnEditarAbaLiquidacao" class="btn-default btn-editar-aba" data-permission="titulos_editar">Editar Aba Liquidação</button>
+                            <button type="button" id="btnSalvarAbaLiquidacao" class="btn-primary" style="display: none;">Salvar Aba</button>
+                        </div>
                     </div>
 
                     <div class="tab-panel-tc" id="panel3">
@@ -298,6 +348,10 @@
                         </table>
                         <div class="form-row" style="margin-top:15px;">
                             <div class="form-group flex-1"><label>OP (Ordem de Pagamento):</label><input type="text" id="op" placeholder="Preenchido via import CSV"></div>
+                        </div>
+                        <div id="acoesAbaFinanceiro" class="tc-acao-aba">
+                            <button type="button" id="btnEditarAbaFinanceiro" class="btn-default btn-editar-aba" data-permission="titulos_editar">Editar Aba Financeiro</button>
+                            <button type="button" id="btnSalvarAbaFinanceiro" class="btn-primary" style="display: none;">Salvar Aba</button>
                         </div>
                     </div>
 
@@ -386,6 +440,20 @@
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalNovaEntradaCancelar" class="btn-default">Cancelar</button>
                 <button type="button" id="modalNovaEntradaConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalSaidaComAlteracoes" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:460px;">
+            <h3 style="margin-bottom:12px;">Alterações não salvas</h3>
+            <p style="margin-bottom:16px; color:#555;">
+                Se sair agora, você poderá perder as informações não salvas desta aba.
+            </p>
+            <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                <button type="button" id="btnModalSaidaContinuarEditando" class="btn-default">Continuar editando</button>
+                <button type="button" id="btnModalSaidaSalvarESair" class="btn-primary">Salvar e sair</button>
+                <button type="button" id="btnModalSaidaSairSemSalvar" class="btn-default" style="color:#e74c3c;">Sair sem salvar</button>
             </div>
         </div>
     </div>
