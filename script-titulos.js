@@ -3,6 +3,18 @@
 // ==========================================
 (function() {
     if (!document.getElementById('tbody-titulos')) return;
+    function normalizarCNPJ(v) {
+        return String(v || '').replace(/\D/g, '').slice(0, 14);
+    }
+
+    function fornecedorLabel(cnpj, nome) {
+        const cnpjFmt = cnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(cnpj) : cnpj) : '-';
+        const n = nome ? String(nome).trim() : '';
+        return n ? `${cnpjFmt} - ${n}` : cnpjFmt;
+    }
+
+    // Mantém o contrato selecionado no autocomplete para salvar fornecedor/contrato com precisão
+    let contratoTemporarioSelecionado = null;
 
     document.getElementById('buscaTabelaTitulos').addEventListener('input', debounce(() => {
         termoBuscaTitulos = document.getElementById('buscaTabelaTitulos').value.toLowerCase();
@@ -14,6 +26,7 @@
         document.getElementById('formTitulo').reset();
         document.getElementById('editIndexTitulo').value = -1;
         document.getElementById('idProc').value = "";
+        contratoTemporarioSelecionado = null;
         const dadosContrato = document.getElementById('dadosContratoSelecionado');
         if (dadosContrato) dadosContrato.style.display = 'none';
         empenhosDaNotaAtual = [];
@@ -35,6 +48,9 @@
         if (termoBuscaTitulos.trim() !== "") {
             baseFiltrada = baseFiltrada.filter(t =>
                 (t.idProc && t.idProc.toLowerCase().includes(termoBuscaTitulos)) ||
+                (t.fornecedorNome && t.fornecedorNome.toLowerCase().includes(termoBuscaTitulos)) ||
+                (t.fornecedorCnpj && t.fornecedorCnpj.toLowerCase().includes(termoBuscaTitulos)) ||
+                // legado
                 (t.fornecedor && t.fornecedor.toLowerCase().includes(termoBuscaTitulos)) ||
                 (t.numTC && t.numTC.toLowerCase().includes(termoBuscaTitulos))
             );
@@ -53,7 +69,8 @@
             var valorExib = t.valorNotaFiscal;
             if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
             else valorExib = valorExib != null && valorExib !== '' ? valorExib : '0,00';
-            tr.innerHTML = '<td><strong>' + escapeHTML(t.idProc) + '</strong></td><td>' + (escapeHTML(t.numTC) || '-') + '</td><td>' + (escapeHTML(t.fornecedor) || '-') + '</td><td>R$ ' + escapeHTML(String(valorExib)) + '</td><td>' + acoesHTML + '</td>';
+            const nomeForn = t.fornecedorNome || t.fornecedor || '-';
+            tr.innerHTML = '<td><strong>' + escapeHTML(t.idProc) + '</strong></td><td>' + (escapeHTML(t.numTC) || '-') + '</td><td title="' + escapeHTML(t.fornecedorCnpj ? fornecedorLabel(t.fornecedorCnpj, t.fornecedorNome) : '') + '">' + escapeHTML(nomeForn) + '</td><td>R$ ' + escapeHTML(String(valorExib)) + '</td><td>' + acoesHTML + '</td>';
             tbody.appendChild(tr);
         });
     }
@@ -72,15 +89,23 @@
     if (inputBuscaContratoT && listaContratosT) {
         inputBuscaContratoT.addEventListener('input', debounce(function() {
             const texto = this.value.toLowerCase();
+            const textoCnpj = normalizarCNPJ(texto);
             listaContratosT.innerHTML = '';
             if (texto.length >= 3) {
-                const resultados = baseContratos.filter(c => (c.fornecedor && c.fornecedor.toLowerCase().includes(texto)) || (c.numContrato && c.numContrato.toLowerCase().includes(texto)));
+                const resultados = baseContratos.filter(c => {
+                    const nome = String(c.nomeFornecedor || '').toLowerCase();
+                    const cnpj = String(c.cnpjFornecedor || '').toLowerCase();
+                    const cnpjFmt = (c.cnpjFornecedor && typeof formatarCNPJ === 'function') ? String(formatarCNPJ(c.cnpjFornecedor)).toLowerCase() : '';
+                    const cnpjMatch = textoCnpj ? cnpj.includes(textoCnpj) || cnpjFmt.includes(texto) : false;
+                    return nome.includes(texto) || cnpjMatch || (c.numContrato && c.numContrato.toLowerCase().includes(texto));
+                });
                 resultados.forEach(c => {
                     const li = document.createElement('li');
-                    li.innerHTML = '<strong>' + escapeHTML(c.numContrato) + '</strong> - ' + escapeHTML(c.fornecedor);
+                    li.innerHTML = '<strong>' + escapeHTML(c.numContrato) + '</strong> - ' + escapeHTML(fornecedorLabel(c.cnpjFornecedor, c.nomeFornecedor));
                     li.onclick = () => {
                         document.getElementById('dadosContratoSelecionado').style.display = 'block';
-                        document.getElementById('readFornecedor').value = c.fornecedor;
+                        contratoTemporarioSelecionado = c;
+                        document.getElementById('readFornecedor').value = fornecedorLabel(c.cnpjFornecedor, c.nomeFornecedor);
                         document.getElementById('readInstrumento').value = c.numContrato;
                         listaContratosT.innerHTML = '';
                         inputBuscaContratoT.value = '';
@@ -166,12 +191,17 @@
         mostrarLoading();
         const fbID = document.getElementById('editIndexTitulo').value;
         const idProcOriginal = document.getElementById('idProc').value;
+        const instrumento = document.getElementById('readInstrumento').value;
+        const contratoSel = contratoTemporarioSelecionado || (baseContratos || []).find(c => (c.numContrato || '') === (instrumento || ''));
+        const fornecedorCnpj = normalizarCNPJ(contratoSel?.cnpjFornecedor || '');
+        const fornecedorNome = contratoSel?.nomeFornecedor || '';
         const dados = {
             idProc: escapeHTML(idProcOriginal || gerarNovoIDProc()),
             dataExefin: escapeHTML(document.getElementById('dataExefin').value),
             numTC: escapeHTML(document.getElementById('numTC').value),
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
-            fornecedor: escapeHTML(document.getElementById('readFornecedor').value),
+            fornecedorCnpj: escapeHTML(fornecedorCnpj),
+            fornecedorNome: escapeHTML(fornecedorNome),
             instrumento: escapeHTML(document.getElementById('readInstrumento').value),
             valorNotaFiscal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal').value) : (parseFloat(document.getElementById('valorNotaFiscal').value) || 0),
             dataEmissao: escapeHTML(document.getElementById('dataEmissao').value),
@@ -208,10 +238,17 @@
             document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
             document.getElementById('dataEmissao').value = t.dataEmissao || '';
             document.getElementById('dataAteste').value = t.dataAteste || '';
-            if (t.fornecedor) {
+            if (t.fornecedorCnpj || t.fornecedorNome || t.fornecedor) {
                 document.getElementById('dadosContratoSelecionado').style.display = 'block';
-                document.getElementById('readFornecedor').value = t.fornecedor;
+                const fornTexto = (t.fornecedorCnpj || t.fornecedorNome)
+                    ? fornecedorLabel(t.fornecedorCnpj, t.fornecedorNome)
+                    : (t.fornecedor || '');
+                document.getElementById('readFornecedor').value = fornTexto;
                 document.getElementById('readInstrumento').value = t.instrumento || '';
+                contratoTemporarioSelecionado = (baseContratos || []).find(c =>
+                    (c.numContrato || '') === (t.instrumento || '') &&
+                    (!t.fornecedorCnpj || normalizarCNPJ(c.cnpjFornecedor) === normalizarCNPJ(t.fornecedorCnpj))
+                ) || null;
             }
             empenhosDaNotaAtual = t.empenhosVinculados ? JSON.parse(JSON.stringify(t.empenhosVinculados)) : [];
             desenharMiniTabelaEmpenhos();

@@ -312,7 +312,7 @@
             String(c.idContrato || '').trim(),
             String(c.numContrato || c.instrumento || '').trim(),
             String(c.situacao || '').trim(),
-            String(c.fornecedor || c.razaoSocial || c.empresa || '').trim(),
+            String(c.nomeFornecedor || c.fornecedor || c.razaoSocial || c.empresa || '').trim(),
             String(c.nup || '').trim()
         ];
     }
@@ -473,6 +473,9 @@
             const q = termoBusca.toLowerCase();
             lista = lista.filter(t =>
                 (t.idProc && t.idProc.toLowerCase().includes(q)) ||
+                (t.fornecedorNome && t.fornecedorNome.toLowerCase().includes(q)) ||
+                (t.fornecedorCnpj && t.fornecedorCnpj.toLowerCase().includes(q)) ||
+                // legado
                 (t.fornecedor && t.fornecedor.toLowerCase().includes(q)) ||
                 (t.numTC && t.numTC.toLowerCase().includes(q)) ||
                 ((t.empenhosVinculados || []).some(v => (v.numEmpenho || '').toLowerCase().includes(q)))
@@ -527,7 +530,9 @@
                 tr.innerHTML = `<td><input type="checkbox" class="check-tc check-titulo" data-id="${escapeHTML(t.id)}"${checked}></td>
                     <td><strong>${escapeHTML(t.idProc || '-')}</strong></td>
                     <td>${escapeHTML(t.numTC || '-')}</td>
-                    <td>${escapeHTML((t.fornecedor || '').substring(0, 40))}${(t.fornecedor || '').length > 40 ? '...' : ''}</td>
+                    <td title="${escapeHTML(t.fornecedorCnpj ? formatarCNPJ(t.fornecedorCnpj) : '')}">
+                        ${escapeHTML((t.fornecedorNome || t.fornecedor || '').substring(0, 40))}${(t.fornecedorNome || t.fornecedor || '').length > 40 ? '...' : ''}
+                    </td>
                     <td>R$ ${escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(t.valorNotaFiscal || 0) : String(t.valorNotaFiscal || '0.00'))}</td>
                     <td><span class="badge-status ${badgeCls}">${escapeHTML(status)}</span></td>
                     <td>${acoes}</td>`;
@@ -1289,35 +1294,58 @@
         parent.removeChild(atual);
     }
 
-    /** Fornecedores únicos da coleção contratos */
-    function fornecedoresUnicos() {
-        const set = new Set();
-        baseContratos.forEach(c => {
-            const f = (c.fornecedor || c.razaoSocial || c.empresa || '').trim();
-            if (f) set.add(f);
-        });
-        return Array.from(set);
+    function normalizarCNPJ(v) {
+        return String(v || '').replace(/\D/g, '').slice(0, 14);
+    }
+
+    function fornecedorDisplay(f) {
+        const cnpj = normalizarCNPJ(f?.codigoNumerico || f?.codigo || '');
+        const nome = String(f?.nome || f?.nomeFornecedor || '').trim();
+        const cnpjFmt = cnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(cnpj) : cnpj) : '-';
+        return nome ? `${cnpjFmt} - ${nome}` : cnpjFmt;
+    }
+
+    function obterFornecedorPorCnpj(cnpj) {
+        const cnpjN = normalizarCNPJ(cnpj);
+        if (!cnpjN) return null;
+        return (baseFornecedores || []).find(f => normalizarCNPJ(f?.codigoNumerico || f?.codigo || '') === cnpjN) || null;
     }
 
     function mostrarSugestoesFornecedor() {
         const input = document.getElementById('buscaFornecedorT');
         const lista = document.getElementById('listaResultadosFornecedorT');
         if (!input || !lista || input.readOnly) return;
-        const texto = (input.value || '').trim().toLowerCase();
-        const textoSemAcento = removerAcentos(texto);
+
+        const texto = (input.value || '').trim();
+        const textoSemAcento = removerAcentos(texto.toLowerCase());
+        const textoCnpj = normalizarCNPJ(texto);
+
         lista.innerHTML = '';
-        if (texto.length < 2) return;
-        const fornecedores = fornecedoresUnicos().filter(f => removerAcentos(f).toLowerCase().includes(textoSemAcento));
+        if (textoSemAcento.length < 2 && textoCnpj.length < 2) return;
+
+        const fornecedores = (baseFornecedores || [])
+            .filter(f => f && f.ativo !== false)
+            .filter(f => {
+                const nome = removerAcentos(String(f.nome || '').toLowerCase());
+                const cnpj = normalizarCNPJ(f.codigoNumerico || f.codigo);
+                const codigoFmt = cnpj ? (typeof formatarCNPJ === 'function' ? removerAcentos(String(formatarCNPJ(cnpj)).toLowerCase()) : '') : '';
+                const codigoTxt = String(f.codigo || '').toLowerCase();
+                const cnpjMatch = textoCnpj ? cnpj.includes(textoCnpj) : false;
+                const nomeMatch = nome.includes(textoSemAcento);
+                const codigoMatch = codigoFmt.includes(textoSemAcento) || codigoTxt.includes(textoSemAcento);
+                return nomeMatch || cnpjMatch || codigoMatch;
+            })
+            .slice(0, 20);
+
         if (fornecedores.length === 0) {
             lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Nenhum fornecedor encontrado.</li>';
         } else {
             fornecedores.forEach(forn => {
                 const li = document.createElement('li');
-                li.textContent = forn;
+                li.textContent = fornecedorDisplay(forn);
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault();
-                    selecionarFornecedor(forn);
-                    input.value = '';
+                    selecionarFornecedorPorCnpj(forn?.codigoNumerico || forn?.codigo || '');
                     lista.innerHTML = '';
                 });
                 lista.appendChild(li);
@@ -1325,19 +1353,27 @@
         }
     }
 
-    function selecionarFornecedor(fornecedor) {
-        document.getElementById('fornecedorValor').value = fornecedor || '';
+    function selecionarFornecedorPorCnpj(cnpjSelecionado) {
+        const cnpjN = normalizarCNPJ(cnpjSelecionado);
+        const fornecedorObj = obterFornecedorPorCnpj(cnpjN);
+
+        document.getElementById('fornecedorValor').value = cnpjN || '';
         const input = document.getElementById('buscaFornecedorT');
-        if (input) { input.value = fornecedor || ''; input.readOnly = true; }
+        if (input) {
+            input.value = fornecedorObj ? fornecedorDisplay(fornecedorObj) : (cnpjN ? cnpjN : '');
+            input.readOnly = true;
+        }
+
         const btn = document.getElementById('limparFornecedorBtn');
-        if (btn) btn.style.display = fornecedor ? 'block' : 'none';
+        if (btn) btn.style.display = cnpjN ? 'block' : 'none';
+
         document.getElementById('contratoIdSelecionado').value = '';
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
-            sel.disabled = !fornecedor;
+            sel.disabled = !cnpjN;
             sel.innerHTML = '<option value="">Selecione o contrato</option>';
-            if (fornecedor) {
-                const contratosDoFornecedor = baseContratos.filter(c => (c.fornecedor || c.razaoSocial || c.empresa || '').trim() === fornecedor);
+            if (cnpjN) {
+                const contratosDoFornecedor = (baseContratos || []).filter(c => normalizarCNPJ(c?.cnpjFornecedor) === cnpjN);
                 contratosDoFornecedor.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c.id;
@@ -1358,7 +1394,7 @@
         document.getElementById('contratoIdSelecionado').value = '';
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
-            sel.innerHTML = '<option value="">Selecione o fornecedor primeiro</option>';
+            sel.innerHTML = '<option value="">Selecione o fornecedor (CNPJ) primeiro</option>';
             sel.disabled = true;
         }
         preencherDadosContrato(null);
@@ -1487,7 +1523,7 @@
             return '';
         };
         const cnpjContrato = extrairCnpjDoContrato(contratoSel);
-        const nomeFornecedorContrato = normalizarNome(contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
+        const nomeFornecedorContrato = normalizarNome(contratoSel.nomeFornecedor || contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
 
         // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "Outro").
         const ndValido = (nd) => {
@@ -1693,9 +1729,13 @@
         document.getElementById('valorNotaFiscal').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(valNF)) : (t.valorNotaFiscal || '');
         document.getElementById('dataEmissao').value = t.dataEmissao || '';
         document.getElementById('dataAteste').value = t.dataAteste || '';
-        if (t.fornecedor) {
-            selecionarFornecedor(t.fornecedor);
-            const contratoLigado = baseContratos.find(c => (c.numContrato || c.instrumento || '') === (t.instrumento || '') && (c.fornecedor || c.razaoSocial || c.empresa || '').trim() === t.fornecedor);
+        const fornecedorCnpj = t.fornecedorCnpj ? normalizarCNPJ(t.fornecedorCnpj) : '';
+        if (fornecedorCnpj) {
+            selecionarFornecedorPorCnpj(fornecedorCnpj);
+            const contratoLigado = (baseContratos || []).find(c =>
+                normalizarCNPJ(c?.cnpjFornecedor) === fornecedorCnpj &&
+                (c.numContrato || c.instrumento || '') === (t.instrumento || '')
+            );
             if (contratoLigado) {
                 document.getElementById('contratoIdSelecionado').value = contratoLigado.id;
                 const sel = document.getElementById('contratoSelecionado');
@@ -1705,6 +1745,12 @@
                     const rcEl = document.getElementById('rcSelecionada');
                     if (rcEl && t.rc) rcEl.value = t.rc;
                 }
+            }
+        } else if (t.fornecedor) {
+            // legado: tenta extrair CNPJ do texto concatenado "CNPJ - Nome"
+            const legadoCnpj = normalizarCNPJ(t.fornecedor);
+            if (legadoCnpj) {
+                selecionarFornecedorPorCnpj(legadoCnpj);
             }
         }
         const obsEl = document.getElementById('observacoesTC');
@@ -1838,7 +1884,9 @@
 
         const dataExefin = (document.getElementById('dataExefin').value || '').trim();
         const numTC = (document.getElementById('numTC').value || '').trim();
-        const fornecedor = (document.getElementById('fornecedorValor').value || document.getElementById('buscaFornecedorT')?.value || '').trim();
+        const fornecedorCnpj = normalizarCNPJ((document.getElementById('fornecedorValor').value || document.getElementById('buscaFornecedorT')?.value || '').trim());
+        const fornecedorObj = fornecedorCnpj ? obterFornecedorPorCnpj(fornecedorCnpj) : null;
+        const fornecedorNome = fornecedorObj ? (fornecedorObj.nome || fornecedorObj.nomeFornecedor || '') : '';
         const contratoId = document.getElementById('contratoIdSelecionado').value || '';
         const contratoSel = baseContratos.find(c => c.id === contratoId);
         const instrumento = contratoSel ? (contratoSel.numContrato || contratoSel.instrumento || '') : '';
@@ -1851,7 +1899,7 @@
 
         if (!dataExefin) return alert("Preencha a Entrada na EXEFIN.");
         if (!numTC) return alert("Preencha o Número do TC.");
-        if (!fornecedor || !instrumento) return alert("Selecione Fornecedor e Contrato.");
+        if (!fornecedorCnpj || !instrumento) return alert("Selecione o Fornecedor (CNPJ) e o Contrato.");
         if (!oiEntregou) return alert("Selecione a OI de Origem.");
         const tipoTCVal = (document.getElementById('tipoTC')?.value || '').trim();
         if (!tipoTCVal) return alert("Selecione o Tipo de TC.");
@@ -1888,7 +1936,8 @@
             dataExefin: escapeHTML(dataExefin),
             numTC: escapeHTML(numTC),
             notaFiscal: escapeHTML(document.getElementById('notaFiscal').value),
-            fornecedor: escapeHTML(fornecedor),
+            fornecedorCnpj: escapeHTML(fornecedorCnpj),
+            fornecedorNome: escapeHTML(fornecedorNome),
             instrumento: escapeHTML(instrumento),
             rc: escapeHTML((document.getElementById('rcSelecionada')?.value || '')),
             valorContrato: valorContratoNum,
@@ -2314,7 +2363,9 @@
         addTituloSecao('Dados Básicos');
         linha(`Data EXEFIN: ${t.dataExefin || '-'}`, 10, y); y += 5;
         linha(`OI de Origem: ${t.oiEntregou || '-'}`, 10, y); y += 5;
-        linha(`Contrato/Empresa: ${t.instrumento || '-'} | ${t.fornecedor || '-'}`, 10, y); y += 5;
+        const fornCnpjFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
+        const fornNome = t.fornecedorNome || '';
+        linha(`Contrato/Empresa: ${t.instrumento || '-'} | ${fornCnpjFmt}${fornNome ? ' - ' + fornNome : ''}`, 10, y); y += 5;
         linha(`RC: ${t.rc || '-'}`, 10, y); y += 5;
         linha(`Valor do TC: R$ ${(t.valorNotaFiscal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 10, y); y += 5;
         linha(`Data Emissão: ${t.dataEmissao || '-'}`, 10, y); y += 5;
@@ -2390,13 +2441,13 @@
 
     function downloadModeloTC() {
         const headers = [
-            'idProc', 'tipoTC', 'dataExefin', 'numTC', 'fornecedor', 'instrumento',
+            'idProc', 'tipoTC', 'dataExefin', 'numTC', 'fornecedorCnpj', 'fornecedorNome', 'instrumento',
             'valorNotaFiscal', 'dataEmissao', 'dataAteste', 'status', 'np', 'dataLiquidacao', 'op',
             'ne1', 'nd1', 'subelemento1', 'valor1', 'centroCustosId1', 'ugId1', 'lf1', 'pf1',
             'dedTipo1', 'dedCodigo1', 'dedBase1', 'dedAliquota1', 'dedValor1', 'dedDataApuracao1'
         ];
         const exemplo = [
-            'PROC-001', 'NFSE', '2026-03-23', '1234', '00.064.702/0003-09 - SKM ELETRO ELETRONICA LTDA',
+            'PROC-001', 'NFSE', '2026-03-23', '1234', '00.064.702/0003-09', 'SKM ELETRO ELETRONICA LTDA',
             '00069/2024', '4564,44', '2026-03-23', '2026-03-23', 'Em Processamento',
             '741000000012026NP000001', '2026-03-23', '2026OP000049',
             '2026NE000079', '339039', '17', '1245,00', 'CC-001', '741000', 'LF-001', 'PF-001',
@@ -2477,12 +2528,31 @@
     }
 
     function montarAtualizacaoTC(row) {
+        // Aceita legado: coluna "fornecedor" no formato "CNPJ - Nome"
+        const fornecedorTexto = valorTexto(row, ['fornecedor', 'FORNECEDOR']);
+        const fornecedorCnpjRaw = valorTexto(row, [
+            'fornecedorCnpj', 'FORNECEDOR_CNPJ', 'fornecedor_cnpj', 'cnpjFornecedor', 'CNPJ_FORNECEDOR', 'cnpj_fornecedor'
+        ]);
+        const fornecedorNomeRaw = valorTexto(row, [
+            'fornecedorNome', 'FORNECEDOR_NOME', 'fornecedor_nome', 'nomeFornecedor', 'NOME_FORNECEDOR', 'nome_fornecedor'
+        ]);
+
+        const fornecedorCnpjLegado = fornecedorTexto ? normalizarCNPJ(fornecedorTexto) : '';
+        let fornecedorCnpj = normalizarCNPJ(fornecedorCnpjRaw) || fornecedorCnpjLegado || '';
+        let fornecedorNome = fornecedorNomeRaw || '';
+
+        if ((!fornecedorNome || fornecedorNome === '') && fornecedorTexto) {
+            const m = String(fornecedorTexto).trim().match(/-\s*(.+)$/);
+            fornecedorNome = (m && m[1]) ? m[1].trim() : String(fornecedorTexto).trim().replace(/\d+/g, ' ').replace(/[-./\\]/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
         const obrigatorios = {
             idProc: valorTexto(row, ['idProc', 'ID_PROC', 'id_proc']),
             tipoTC: valorTexto(row, ['tipoTC', 'TIPO_TC', 'tipo_tc']),
             dataExefin: valorDataISO(valorTexto(row, ['dataExefin', 'DATA_EXEFIN', 'data_exefin'])),
             numTC: valorTexto(row, ['numTC', 'NUM_TC', 'num_tc']),
-            fornecedor: valorTexto(row, ['fornecedor', 'FORNECEDOR']),
+            fornecedorCnpj: fornecedorCnpj,
+            fornecedorNome: valorTexto(row, ['fornecedorNome', 'FORNECEDOR_NOME', 'fornecedor_nome', 'nomeFornecedor', 'NOME_FORNECEDOR', 'nome_fornecedor']) || fornecedorNome,
             instrumento: valorTexto(row, ['instrumento', 'INSTRUMENTO', 'contrato']),
             valorNotaFiscal: valorNumerico(valorTexto(row, ['valorNotaFiscal', 'VALOR_NOTA_FISCAL', 'valor_nota_fiscal'])),
             dataEmissao: valorDataISO(valorTexto(row, ['dataEmissao', 'DATA_EMISSAO', 'data_emissao'])),
@@ -2497,7 +2567,8 @@
             tipoTC: obrigatorios.tipoTC,
             dataExefin: obrigatorios.dataExefin,
             numTC: obrigatorios.numTC,
-            fornecedor: obrigatorios.fornecedor,
+            fornecedorCnpj: obrigatorios.fornecedorCnpj,
+            fornecedorNome: obrigatorios.fornecedorNome,
             instrumento: obrigatorios.instrumento,
             valorNotaFiscal: obrigatorios.valorNotaFiscal,
             dataEmissao: obrigatorios.dataEmissao,

@@ -21,12 +21,43 @@
         return '';
     }
 
+    // Converte formatos BR (ex.: "R$ 1.234.567,89" ou "R$ 1.2346,00") para número.
+    function parseValorMonetarioBR(valor) {
+        var s = String(valor || '').trim();
+        if (!s) return 0;
+        s = s.replace(/\s+/g, '').replace(/[Rr]\$/g, '').replace(/[^\d,.-]/g, '');
+
+        // Quando houver vírgula, considera vírgula como decimal e remove separadores de milhar.
+        if (s.indexOf(',') !== -1) {
+            s = s.replace(/\./g, '').replace(',', '.');
+        }
+
+        var n = Number(s);
+        return isNaN(n) ? 0 : n;
+    }
+
     function verificarAdmin() {
         if (typeof permissoesEmCache !== 'undefined' && !permissoesEmCache.includes('acesso_admin')) {
             alert('Acesso negado. Apenas administradores podem importar.');
             return false;
         }
         return true;
+    }
+
+    function normalizarCNPJ(v) {
+        return String(v || '').replace(/\D/g, '').slice(0, 14);
+    }
+
+    // Espera campo fornecedor geralmente em formato: "CNPJ - Nome"
+    function extrairCnpjNomeFornecedor(valor) {
+        const s = String(valor || '').trim();
+        const dig = s.replace(/\D/g, '');
+        const cnpjFornecedor = dig.length >= 14 ? dig.slice(0, 14) : dig;
+        let nomeFornecedor = '';
+        const m = s.match(/-\s*(.+)$/);
+        if (m && m[1]) nomeFornecedor = m[1].trim();
+        else nomeFornecedor = s.replace(/\d+/g, ' ').replace(/[-./\\]/g, ' ').replace(/\s+/g, ' ').trim();
+        return { cnpjFornecedor, nomeFornecedor };
     }
 
     async function salvarUltimoImport(modulo) {
@@ -140,12 +171,31 @@
                     const numNorm = numContrato.toLowerCase();
                     if (numerosExistentes.has(numNorm)) { duplicados++; erros++; continue; }
                     const valorRaw = getVal(row, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
-                    const numVal = parseFloat((valorRaw || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+                    const numVal = parseValorMonetarioBR(valorRaw);
+                    const cnpjFornecedorRaw = getVal(row, [
+                        'cnpjFornecedor', 'cnpj_fornecedor', 'CNPJ_FORNECEDOR', 'CNPJFornecedor', 'cnpjFornecedor'
+                    ]);
+                    const nomeFornecedorRaw = getVal(row, [
+                        'nomeFornecedor', 'nome_fornecedor', 'NOME_FORNECEDOR', 'NomeFornecedor', 'nomeFornecedor',
+                        'nome', 'Nome', 'FornecedorNome'
+                    ]);
+
+                    let cnpjFornecedor = normalizarCNPJ(cnpjFornecedorRaw);
+                    let nomeFornecedor = nomeFornecedorRaw || '';
+
+                    // legado: coluna única "fornecedor" (CNPJ - Nome)
+                    if (!cnpjFornecedor || !nomeFornecedor) {
+                        const fornecedorRaw = getVal(row, ['fornecedor', 'Fornecedor']);
+                        const parsed = extrairCnpjNomeFornecedor(fornecedorRaw);
+                        cnpjFornecedor = normalizarCNPJ(parsed.cnpjFornecedor);
+                        nomeFornecedor = parsed.nomeFornecedor;
+                    }
                     const dados = {
                         idContrato: escapeHTML(getVal(row, ['idContrato', 'IdContrato', 'ID', 'id'])),
                         numContrato: escapeHTML(numContrato),
                         situacao: escapeHTML(getVal(row, ['situacao', 'Situacao', 'situação'])),
-                        fornecedor: escapeHTML(getVal(row, ['fornecedor', 'Fornecedor'])),
+                        cnpjFornecedor: escapeHTML(normalizarCNPJ(cnpjFornecedor)),
+                        nomeFornecedor: escapeHTML(nomeFornecedor),
                         nup: escapeHTML(getVal(row, ['nup', 'NUP', 'Nup'])),
                         dataInicio: escapeHTML(getVal(row, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio'])),
                         dataFim: escapeHTML(getVal(row, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim'])),
@@ -163,6 +213,20 @@
             finally { esconderLoading(); e.target.value = ''; }
         });
     }
+
+    // Modelo CSV para importação de Contratos
+    window.downloadModeloContratos = function() {
+        try {
+            var link = document.createElement('a');
+            link.href = 'contratos-modelo-import.csv';
+            link.download = 'contratos-modelo-import.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            alert('Não foi possível baixar o modelo CSV de contratos.');
+        }
+    };
 
     // --- IMPORT FORNECEDORES (chave única: codigoNumerico) ---
     const fileImportFornecedores = document.getElementById('fileImportFornecedores');

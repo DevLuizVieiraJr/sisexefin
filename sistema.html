@@ -412,7 +412,7 @@
                         <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Contrato</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"><span id="ultimoImportContratos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
+                        <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"><a href="#" onclick="downloadModeloContratos(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a><span id="ultimoImportContratos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
                         <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
@@ -425,7 +425,9 @@
                             <tr>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'idContrato')">ID <span class="sort-icon" id="sort-contratos-idContrato"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'numContrato')">Instrumento <span class="sort-icon" id="sort-contratos-numContrato"></span></th>
-                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'fornecedor')">Fornecedor <span class="sort-icon" id="sort-contratos-fornecedor"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'cnpjFornecedor')">CNPJ <span class="sort-icon" id="sort-contratos-cnpjFornecedor"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'nomeFornecedor')">Nome do Fornecedor <span class="sort-icon" id="sort-contratos-nomeFornecedor"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'nup')">NUP <span class="sort-icon" id="sort-contratos-nup"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'dataInicio')">Início <span class="sort-icon" id="sort-contratos-dataInicio"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'dataFim')">Fim <span class="sort-icon" id="sort-contratos-dataFim"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'valorContrato')">Valor Global <span class="sort-icon" id="sort-contratos-valorContrato"></span></th>
@@ -448,10 +450,11 @@
                         <div class="form-row">
                             <div class="form-group flex-1"><label>ID Contrato:</label><input type="text" id="idContrato" placeholder="Ex: 479217"></div>
                             <div class="form-group flex-1"><label>Nº Instrumento:</label><input type="text" id="numContrato" placeholder="Ex: 00006/2025"></div>
-                            <div class="form-group flex-1"><label>Situação:</label><select id="situacaoContrato"><option value="">Selecione</option><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></div>
+                            <div class="form-group flex-1"><label>Situação:</label><select id="situacaoContrato"><option value="">Selecione</option><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option><option value="Rescindido">Rescindido</option><option value="Finalizado">Finalizado</option></select></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-2"><label>Fornecedor (CNPJ - Nome):</label><input type="text" id="fornecedorContrato" placeholder="00.000.000/0000-00 - EMPRESA LTDA" required></div>
+                            <div class="form-group flex-1"><label>CNPJ do Fornecedor:</label><input type="text" id="cnpjFornecedorContrato" placeholder="00.000.000/0000-00" required></div>
+                            <div class="form-group flex-2"><label>Nome do Fornecedor:</label><input type="text" id="nomeFornecedorContrato" placeholder="EMPRESA LTDA" required></div>
                             <div class="form-group flex-1"><label>NUP Processo:</label><input type="text" id="nupContrato"></div>
                         </div>
                         <div class="form-row">

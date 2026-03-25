@@ -45,25 +45,6 @@
         return String(v || '').replace(/\D/g, '').slice(0, 14);
     }
 
-    // Espera entrada tipo: "00.000.000/0000-00 - EMPRESA LTDA"
-    function extrairCnpjNomeFornecedorContrato(valor) {
-        const s = String(valor || '').trim();
-        const dig = s.replace(/\D/g, '');
-        const cnpjFornecedor = dig.length >= 14 ? dig.slice(0, 14) : dig;
-
-        // Nome após o primeiro hífen, caso exista
-        let nomeFornecedor = '';
-        const m = s.match(/-\s*(.+)$/);
-        if (m && m[1]) {
-            nomeFornecedor = m[1].trim();
-        } else {
-            // fallback: remove sequencia numérica e separadores básicos
-            nomeFornecedor = s.replace(/\d+/g, ' ').replace(/[-./\\]/g, ' ').replace(/\s+/g, ' ').trim();
-        }
-
-        return { cnpjFornecedor, nomeFornecedor };
-    }
-
     function labelFornecedorContrato(cnpjFornecedor, nomeFornecedor) {
         const cnpjFmt = cnpjFornecedor ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(cnpjFornecedor) : cnpjFornecedor) : '-';
         const nome = nomeFornecedor ? String(nomeFornecedor).trim() : '';
@@ -106,16 +87,17 @@
         var fim = inicio + parseInt(itensPorPaginaContratos, 10);
         var itensExibidos = baseFiltrada.slice(inicio, fim);
         if (itensExibidos.length === 0) {
-            tabelaContratosBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum contrato encontrado.</td></tr>';
+            tabelaContratosBody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhum contrato encontrado.</td></tr>';
             return;
         }
         itensExibidos.forEach(function(c) {
             var tr = document.createElement('tr');
             var acoesHTML = gerarBotoesAcao(c.id, 'contrato');
-                        var valorExib = c.valorContrato;
+            var cnpjFmt = c.cnpjFornecedor ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(c.cnpjFornecedor) : c.cnpjFornecedor) : '-';
+            var valorExib = c.valorContrato;
             if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
             else if (valorExib == null || valorExib === '') valorExib = '-';
-            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + escapeHTML(labelFornecedorContrato(c.cnpjFornecedor, c.nomeFornecedor)) + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
+            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + escapeHTML(cnpjFmt) + '</td><td>' + (escapeHTML(c.nomeFornecedor) || '-') + '</td><td>' + (escapeHTML(c.nup) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
             tabelaContratosBody.appendChild(tr);
         });
         var total = Math.ceil(baseFiltrada.length / itensPorPaginaContratos) || 1;
@@ -139,7 +121,8 @@
             document.getElementById('idContrato').value = c.idContrato || '';
             document.getElementById('numContrato').value = c.numContrato || '';
             document.getElementById('situacaoContrato').value = c.situacao || '';
-            document.getElementById('fornecedorContrato').value = labelFornecedorContrato(c.cnpjFornecedor, c.nomeFornecedor);
+            document.getElementById('cnpjFornecedorContrato').value = c.cnpjFornecedor ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(c.cnpjFornecedor) : c.cnpjFornecedor) : '';
+            document.getElementById('nomeFornecedorContrato').value = c.nomeFornecedor || '';
             document.getElementById('nupContrato').value = c.nup || '';
             document.getElementById('dataInicio').value = c.dataInicio || '';
             document.getElementById('dataFim').value = c.dataFim || '';
@@ -174,8 +157,8 @@
         mostrarLoading();
         var fbID = document.getElementById('editIndexContrato').value;
         var numVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorContrato').value) : (parseFloat(document.getElementById('valorContrato').value) || 0);
-        const fornecedorContratoRaw = document.getElementById('fornecedorContrato').value;
-        const { cnpjFornecedor, nomeFornecedor } = extrairCnpjNomeFornecedorContrato(fornecedorContratoRaw);
+        const cnpjFornecedor = normalizarCNPJ(document.getElementById('cnpjFornecedorContrato').value);
+        const nomeFornecedor = document.getElementById('nomeFornecedorContrato').value;
         var dados = {
             idContrato: escapeHTML(document.getElementById('idContrato').value),
             numContrato: escapeHTML(document.getElementById('numContrato').value),

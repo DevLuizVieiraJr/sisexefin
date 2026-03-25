@@ -655,7 +655,7 @@ let empenhoTemporarioSelecionado = null;
 // ==========================================
 let estadoOrdenacao = {
     empenhos: { coluna: 'numEmpenho', direcao: 'asc' },
-    contratos: { coluna: 'fornecedor', direcao: 'asc' },
+    contratos: { coluna: 'nomeFornecedor', direcao: 'asc' },
     fornecedores: { coluna: 'nome', direcao: 'asc' },
     deducoesEncargos: { coluna: 'codigo', direcao: 'asc' },
     titulos: { coluna: 'idProc', direcao: 'asc' },
