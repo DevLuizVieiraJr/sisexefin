@@ -1,6 +1,75 @@
 // MÓDULO: CONTRATOS E EMPRESAS
 (function() {
+    // Define o exportador global antes de qualquer "return" antecipado
+    // para evitar "exportarContratos is not defined" caso a seção ainda não esteja no DOM no momento do load.
+    window.exportarContratos = window.exportarContratos || function(formato) {
+        if (typeof XLSX === 'undefined') return alert("Biblioteca XLSX não carregada (SheetJS).");
+        try {
+            const contratos = (typeof baseContratos !== 'undefined' && Array.isArray(baseContratos)) ? baseContratos : [];
+            if (contratos.length === 0) return alert("Nenhum contrato carregado para exportar.");
+
+            const normalizarCNPJ = (v) => String(v || '').replace(/\D/g, '').slice(0, 14);
+            const label = (cnpj, nome) => {
+                const cnpjN = normalizarCNPJ(cnpj);
+                const cnpjFmt = cnpjN ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(cnpjN) : cnpjN) : '-';
+                const n = nome ? String(nome).trim() : '';
+                return n ? `${cnpjFmt} - ${n}` : cnpjFmt;
+            };
+
+            const dados = contratos.map(c => ({
+                'ID': c.idContrato || '',
+                'Instrumento': c.numContrato || c.instrumento || '',
+                'Situação': c.situacao || '',
+                'Fornecedor CNPJ': c.cnpjFornecedor || '',
+                'Fornecedor Nome': c.nomeFornecedor || '',
+                'Fornecedor': label(c.cnpjFornecedor, c.nomeFornecedor),
+                'NUP': c.nup || '',
+                'Data Início': c.dataInicio || '',
+                'Data Fim': c.dataFim || '',
+                'Valor Global': c.valorContrato || '',
+                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Contratos');
+            XLSX.writeFile(wb, 'contratos.' + (formato === 'csv' ? 'csv' : 'xlsx'));
+        } catch (err) {
+            console.error('Erro ao exportar contratos:', err);
+            alert("Erro ao exportar contratos: " + (err && err.message ? err.message : String(err)));
+        }
+    };
+
     if (!document.getElementById('tabelaContratos')) return;
+    function normalizarCNPJ(v) {
+        return String(v || '').replace(/\D/g, '').slice(0, 14);
+    }
+
+    // Espera entrada tipo: "00.000.000/0000-00 - EMPRESA LTDA"
+    function extrairCnpjNomeFornecedorContrato(valor) {
+        const s = String(valor || '').trim();
+        const dig = s.replace(/\D/g, '');
+        const cnpjFornecedor = dig.length >= 14 ? dig.slice(0, 14) : dig;
+
+        // Nome após o primeiro hífen, caso exista
+        let nomeFornecedor = '';
+        const m = s.match(/-\s*(.+)$/);
+        if (m && m[1]) {
+            nomeFornecedor = m[1].trim();
+        } else {
+            // fallback: remove sequencia numérica e separadores básicos
+            nomeFornecedor = s.replace(/\d+/g, ' ').replace(/[-./\\]/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        return { cnpjFornecedor, nomeFornecedor };
+    }
+
+    function labelFornecedorContrato(cnpjFornecedor, nomeFornecedor) {
+        const cnpjFmt = cnpjFornecedor ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(cnpjFornecedor) : cnpjFornecedor) : '-';
+        const nome = nomeFornecedor ? String(nomeFornecedor).trim() : '';
+        return nome ? `${cnpjFmt} - ${nome}` : cnpjFmt;
+    }
+
     const formContrato = document.getElementById('formContrato');
     const tabelaContratosBody = document.querySelector('#tabelaContratos tbody');
     document.getElementById('buscaTabelaContratos').addEventListener('input', debounce(function() {
@@ -23,7 +92,14 @@
         tabelaContratosBody.innerHTML = '';
         var baseFiltrada = baseContratos.map(function(c, index) { return Object.assign({}, c, { indexOriginal: index }); });
         if (termoBuscaContratos.trim() !== "") {
-            baseFiltrada = baseFiltrada.filter(function(c) { return (c.fornecedor && c.fornecedor.toLowerCase().indexOf(termoBuscaContratos) !== -1) || (c.numContrato && c.numContrato.toLowerCase().indexOf(termoBuscaContratos) !== -1); });
+            baseFiltrada = baseFiltrada.filter(function(c) {
+                const termo = termoBuscaContratos;
+                const nome = String(c.nomeFornecedor || '').toLowerCase();
+                const cnpjDig = String(c.cnpjFornecedor || '').toLowerCase();
+                const cnpjFmt = (typeof formatarCNPJ === 'function' && c.cnpjFornecedor) ? String(formatarCNPJ(c.cnpjFornecedor)).toLowerCase() : '';
+                const txtFornecedor = (nome + ' ' + cnpjDig + ' ' + cnpjFmt).toLowerCase();
+                return txtFornecedor.indexOf(termo) !== -1 || (c.numContrato && c.numContrato.toLowerCase().indexOf(termo) !== -1);
+            });
         }
         baseFiltrada = aplicarOrdenacao(baseFiltrada, 'contratos');
         var inicio = (paginaAtualContratos - 1) * itensPorPaginaContratos;
@@ -39,7 +115,7 @@
                         var valorExib = c.valorContrato;
             if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
             else if (valorExib == null || valorExib === '') valorExib = '-';
-            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + (escapeHTML(c.fornecedor) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
+            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + escapeHTML(labelFornecedorContrato(c.cnpjFornecedor, c.nomeFornecedor)) + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
             tabelaContratosBody.appendChild(tr);
         });
         var total = Math.ceil(baseFiltrada.length / itensPorPaginaContratos) || 1;
@@ -63,7 +139,7 @@
             document.getElementById('idContrato').value = c.idContrato || '';
             document.getElementById('numContrato').value = c.numContrato || '';
             document.getElementById('situacaoContrato').value = c.situacao || '';
-            document.getElementById('fornecedorContrato').value = c.fornecedor || '';
+            document.getElementById('fornecedorContrato').value = labelFornecedorContrato(c.cnpjFornecedor, c.nomeFornecedor);
             document.getElementById('nupContrato').value = c.nup || '';
             document.getElementById('dataInicio').value = c.dataInicio || '';
             document.getElementById('dataFim').value = c.dataFim || '';
@@ -98,7 +174,20 @@
         mostrarLoading();
         var fbID = document.getElementById('editIndexContrato').value;
         var numVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorContrato').value) : (parseFloat(document.getElementById('valorContrato').value) || 0);
-        var dados = { idContrato: escapeHTML(document.getElementById('idContrato').value), numContrato: escapeHTML(document.getElementById('numContrato').value), situacao: escapeHTML(document.getElementById('situacaoContrato').value), fornecedor: escapeHTML(document.getElementById('fornecedorContrato').value), nup: escapeHTML(document.getElementById('nupContrato').value), dataInicio: escapeHTML(document.getElementById('dataInicio').value), dataFim: escapeHTML(document.getElementById('dataFim').value), valorContrato: numVal, deducoesPermitidas: deducoesPermitidasContratoAtual };
+        const fornecedorContratoRaw = document.getElementById('fornecedorContrato').value;
+        const { cnpjFornecedor, nomeFornecedor } = extrairCnpjNomeFornecedorContrato(fornecedorContratoRaw);
+        var dados = {
+            idContrato: escapeHTML(document.getElementById('idContrato').value),
+            numContrato: escapeHTML(document.getElementById('numContrato').value),
+            situacao: escapeHTML(document.getElementById('situacaoContrato').value),
+            cnpjFornecedor: escapeHTML(normalizarCNPJ(cnpjFornecedor)),
+            nomeFornecedor: escapeHTML(nomeFornecedor),
+            nup: escapeHTML(document.getElementById('nupContrato').value),
+            dataInicio: escapeHTML(document.getElementById('dataInicio').value),
+            dataFim: escapeHTML(document.getElementById('dataFim').value),
+            valorContrato: numVal,
+            deducoesPermitidas: deducoesPermitidasContratoAtual
+        };
         try {
             if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); }
             else { await db.collection('contratos').doc(fbID).update(dados); }
@@ -171,6 +260,37 @@
     }
     var containerDedEnc = document.getElementById('containerDedEncContrato');
     if (containerDedEnc) containerDedEnc.addEventListener('click', function(e) { if (e.target.classList.contains('btn-rm-dedenc')) { deducoesPermitidasContratoAtual.splice(parseInt(e.target.getAttribute('data-index'), 10), 1); desenharDedEncContrato(); } });
+
+    // Exporta a coleção "contratos" (CSV e Excel) via XLSX.
+    window.exportarContratos = function(formato) {
+        if (typeof XLSX === 'undefined') return alert("Biblioteca XLSX não carregada (SheetJS).");
+        try {
+            const contratos = (typeof baseContratos !== 'undefined' && Array.isArray(baseContratos)) ? baseContratos : [];
+            if (contratos.length === 0) return alert("Nenhum contrato carregado para exportar.");
+
+            const dados = contratos.map(c => ({
+                'ID': c.idContrato || '',
+                'Instrumento': c.numContrato || c.instrumento || '',
+                'Situação': c.situacao || '',
+                'Fornecedor CNPJ': c.cnpjFornecedor || '',
+                'Fornecedor Nome': c.nomeFornecedor || '',
+                'Fornecedor': labelFornecedorContrato(c.cnpjFornecedor, c.nomeFornecedor),
+                'NUP': c.nup || '',
+                'Data Início': c.dataInicio || '',
+                'Data Fim': c.dataFim || '',
+                'Valor Global': c.valorContrato || '',
+                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : ''
+            }));
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Contratos');
+            XLSX.writeFile(wb, 'contratos.' + (formato === 'csv' ? 'csv' : 'xlsx'));
+        } catch (err) {
+            console.error('Erro ao exportar contratos:', err);
+            alert("Erro ao exportar contratos: " + (err && err.message ? err.message : String(err)));
+        }
+    };
+
     window.atualizarTabelaContratos = atualizarTabelaContratos;
     window.abrirFormularioContrato = abrirFormularioContrato;
 })();
