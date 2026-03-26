@@ -206,7 +206,6 @@
         }
         unsubscribers.push(db.collection('contratos').onSnapshot(snap => {
             baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            popularSelectContratosPorFornecedorSelecionado({ resetContrato: false });
             aoReceberSnapshot();
         }, onErr));
         unsubscribers.push(db.collection('empenhos').onSnapshot(snap => {
@@ -1299,60 +1298,6 @@
         return String(v || '').replace(/\D/g, '').slice(0, 14);
     }
 
-    /** Apenas dígitos; aceita número (Firestore) ou string. */
-    function documentoFiscalDigitos(v) {
-        if (v === null || v === undefined) return '';
-        return String(v).replace(/\D/g, '');
-    }
-
-    /**
-     * Compara CPF/CNPJ entre cadastros. CNPJ gravado como número no Firestore perde zeros à esquerda;
-     * alinhamos a 14 dígitos para casar com codigoNumerico do fornecedor.
-     */
-    function documentosFiscaisMesmoTitular(a, b) {
-        const da = documentoFiscalDigitos(a);
-        const db = documentoFiscalDigitos(b);
-        if (!da || !db) return false;
-        if (da === db) return true;
-        const pa = da.length > 14 ? da.slice(0, 14) : da.padStart(14, '0');
-        const pb = db.length > 14 ? db.slice(0, 14) : db.padStart(14, '0');
-        return pa === pb;
-    }
-
-    /** Documento do fornecedor ligado ao contrato (cnpj, cnpjFornecedor, import Excel, legado em texto). */
-    function documentoFornecedorDoContrato(c) {
-        if (!c) return '';
-        const campos = [
-            c.cnpjFornecedor,
-            c.cnpj_fornecedor,
-            c.documentoFornecedor,
-            c.documento_fornecedor,
-            c.cnpj,
-            c.CNPJ,
-            c.Cnpj,
-            c.cpfCnpj,
-            c.cpf_cnpj,
-            c.CPF_CNPJ
-        ];
-        for (let i = 0; i < campos.length; i++) {
-            const d = documentoFiscalDigitos(campos[i]);
-            if (d.length >= 11) return d;
-        }
-        const excluirChave = /nome|razao|empresa|descricao|email|mail|fone|telefone|endereco|observ/i;
-        const keys = Object.keys(c);
-        for (let k = 0; k < keys.length; k++) {
-            const key = keys[k];
-            if (!/(cnpj|cpfcnpj|documento)/i.test(key)) continue;
-            if (excluirChave.test(key) && !/cnpj|cpf/i.test(key)) continue;
-            const d = documentoFiscalDigitos(c[key]);
-            if (d.length >= 11) return d;
-        }
-        const txt = c.fornecedor || c.nomeFornecedor || c.razaoSocial || c.empresa || '';
-        const dTxt = documentoFiscalDigitos(txt);
-        if (dTxt.length >= 11) return dTxt;
-        return '';
-    }
-
     function fornecedorDisplay(f) {
         const cnpj = normalizarCNPJ(f?.codigoNumerico || f?.codigo || '');
         const nome = String(f?.nome || f?.nomeFornecedor || '').trim();
@@ -1363,9 +1308,26 @@
     function obterFornecedorPorCnpj(cnpj) {
         const cnpjN = normalizarCNPJ(cnpj);
         if (!cnpjN) return null;
-        return (baseFornecedores || []).find(f =>
-            documentosFiscaisMesmoTitular(f?.codigoNumerico || f?.codigo || '', cnpjN)
-        ) || null;
+        return (baseFornecedores || []).find(f => normalizarCNPJ(f?.codigoNumerico || f?.codigo || '') === cnpjN) || null;
+    }
+
+    function extrairCnpjDoContrato(c) {
+        if (!c) return '';
+        const candidatos = [
+            c.cnpjFornecedor,
+            c.cnpj_fornecedor,
+            c.cnpj,
+            c.documentoFornecedor,
+            c.documento_fornecedor,
+            c.fornecedor,
+            c.razaoSocial,
+            c.empresa
+        ];
+        for (const cand of candidatos) {
+            const cnpj = normalizarCNPJ(cand);
+            if (cnpj.length === 14) return cnpj;
+        }
+        return '';
     }
 
     function mostrarSugestoesFornecedor() {
@@ -1424,7 +1386,22 @@
         const btn = document.getElementById('limparFornecedorBtn');
         if (btn) btn.style.display = cnpjN ? 'block' : 'none';
 
-        popularSelectContratosPorFornecedorSelecionado({ resetContrato: true });
+        document.getElementById('contratoIdSelecionado').value = '';
+        const sel = document.getElementById('contratoSelecionado');
+        if (sel) {
+            sel.disabled = !cnpjN;
+            sel.innerHTML = '<option value="">Selecione o contrato</option>';
+            if (cnpjN) {
+                const contratosDoFornecedor = (baseContratos || []).filter(c => extrairCnpjDoContrato(c) === cnpjN);
+                contratosDoFornecedor.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.numContrato || c.instrumento || '-';
+                    sel.appendChild(opt);
+                });
+            }
+        }
+        preencherDadosContrato(null);
     }
 
     window.limparFornecedorSelecionado = function() {
@@ -1484,53 +1461,6 @@
             aviso.style.display = (base < dIni || base > dFim) ? 'block' : 'none';
             aviso.textContent = (base < dIni || base > dFim) ? 'Atenção: este TC está fora da vigência do contrato.' : '';
         } else if (aviso) aviso.style.display = 'none';
-    }
-
-    /**
-     * Monta o <select> de contratos conforme #fornecedorValor e baseContratos.
-     * resetContrato: true ao trocar fornecedor. false ao chegar snapshot (mantém contrato se ainda existir).
-     * Também corrige seleção antes de baseContratos estar carregada (corrida de rede).
-     */
-    function popularSelectContratosPorFornecedorSelecionado(opcoes) {
-        const opts = opcoes || {};
-        const resetContrato = opts.resetContrato === true;
-        const sel = document.getElementById('contratoSelecionado');
-        if (!sel) return;
-
-        const formEl = document.getElementById('tela-formulario-titulos');
-        const formAberto = formEl && formEl.style.display !== 'none';
-        if (!formAberto) return;
-
-        const cnpjN = (document.getElementById('fornecedorValor')?.value || '').trim();
-        if (!cnpjN) return;
-
-        if (resetContrato) {
-            document.getElementById('contratoIdSelecionado').value = '';
-        }
-
-        const manterId = resetContrato ? '' : (document.getElementById('contratoIdSelecionado')?.value || sel.value || '').trim();
-
-        sel.disabled = false;
-        sel.innerHTML = '<option value="">Selecione o contrato</option>';
-        const list = (baseContratos || []).filter(c =>
-            documentosFiscaisMesmoTitular(documentoFornecedorDoContrato(c), cnpjN)
-        );
-        list.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.textContent = c.numContrato || c.instrumento || '-';
-            sel.appendChild(opt);
-        });
-
-        if (manterId && list.some(x => x.id === manterId)) {
-            sel.value = manterId;
-            document.getElementById('contratoIdSelecionado').value = manterId;
-            const c = (baseContratos || []).find(x => x.id === manterId);
-            if (c) preencherDadosContrato(c);
-        } else {
-            document.getElementById('contratoIdSelecionado').value = '';
-            preencherDadosContrato(null);
-        }
     }
 
     function configurarSelectContrato() {
@@ -1822,7 +1752,7 @@
         if (fornecedorCnpj) {
             selecionarFornecedorPorCnpj(fornecedorCnpj);
             const contratoLigado = (baseContratos || []).find(c =>
-                documentosFiscaisMesmoTitular(documentoFornecedorDoContrato(c), fornecedorCnpj) &&
+                extrairCnpjDoContrato(c) === fornecedorCnpj &&
                 (c.numContrato || c.instrumento || '') === (t.instrumento || '')
             );
             if (contratoLigado) {
