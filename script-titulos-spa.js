@@ -661,6 +661,7 @@
         if (tituloEl) tituloEl.textContent = 'Entrada de Título de Crédito';
         abaEmEdicao = 0;
         alteracoesPendentesAba = false;
+        atualizarRotuloBotaoSalvarPrincipal();
         atualizarModoEdicaoAbas();
         atualizarBotoesEdicaoPorAba();
         atualizarBotoesFormulario('Rascunho', false);
@@ -742,10 +743,10 @@
 
     function atualizarBotoesEdicaoPorAba() {
         const config = [
-            { tab: 0, acao: 'acoesAbaDadosBasicos', editar: 'btnEditarAbaDadosBasicos', salvar: 'btnSalvarAbaDadosBasicos' },
-            { tab: 1, acao: 'acoesAbaProcessamento', editar: 'btnEditarAbaProcessamento', salvar: 'btnSalvarAbaProcessamento' },
-            { tab: 2, acao: 'acoesAbaLiquidacao', editar: 'btnEditarAbaLiquidacao', salvar: 'btnSalvarAbaLiquidacao' },
-            { tab: 3, acao: 'acoesAbaFinanceiro', editar: 'btnEditarAbaFinanceiro', salvar: 'btnSalvarAbaFinanceiro' }
+            { tab: 0, acao: 'acoesAbaDadosBasicos', editar: 'btnEditarAbaDadosBasicos', salvar: 'btnSalvarAbaDadosBasicos', desistir: 'btnDesistirAbaDadosBasicos' },
+            { tab: 1, acao: 'acoesAbaProcessamento', editar: 'btnEditarAbaProcessamento', salvar: 'btnSalvarAbaProcessamento', desistir: 'btnDesistirAbaProcessamento' },
+            { tab: 2, acao: 'acoesAbaLiquidacao', editar: 'btnEditarAbaLiquidacao', salvar: 'btnSalvarAbaLiquidacao', desistir: 'btnDesistirAbaLiquidacao' },
+            { tab: 3, acao: 'acoesAbaFinanceiro', editar: 'btnEditarAbaFinanceiro', salvar: 'btnSalvarAbaFinanceiro', desistir: 'btnDesistirAbaFinanceiro' }
         ];
         const salvo = tcSalvo();
         const podeEditar = usuarioPodeEditarTC();
@@ -753,13 +754,21 @@
             const acao = document.getElementById(c.acao);
             const btnEditar = document.getElementById(c.editar);
             const btnSalvar = document.getElementById(c.salvar);
-            if (!acao || !btnEditar || !btnSalvar) return;
+            const btnDesistir = document.getElementById(c.desistir);
+            if (!acao || !btnEditar || !btnSalvar || !btnDesistir) return;
             const emEdicaoDestaAba = abaEmEdicao === c.tab;
-            acao.style.display = (salvo && podeEditar) ? 'flex' : 'none';
-            btnEditar.style.display = emEdicaoDestaAba ? 'none' : 'inline-block';
-            btnSalvar.style.display = emEdicaoDestaAba ? 'inline-block' : 'none';
+            const exibirAcoes = (salvo && podeEditar) || (!salvo && c.tab === 0);
+            acao.style.display = exibirAcoes ? 'flex' : 'none';
+            if (!exibirAcoes) return;
+            const mostrarEditar = salvo ? !emEdicaoDestaAba : false;
+            const mostrarSalvar = emEdicaoDestaAba;
+            const mostrarDesistir = emEdicaoDestaAba;
+            btnEditar.style.display = mostrarEditar ? 'inline-block' : 'none';
+            btnSalvar.style.display = mostrarSalvar ? 'inline-block' : 'none';
+            btnDesistir.style.display = mostrarDesistir ? 'inline-block' : 'none';
             btnEditar.classList.add('tc-tab-edit-control');
             btnSalvar.classList.add('tc-tab-edit-control');
+            btnDesistir.classList.add('tc-tab-edit-control');
         });
     }
 
@@ -1226,7 +1235,7 @@
     }
 
     function atualizarBloqueioBotoesPrincipais() {
-        const bloqueado = (abaEmEdicao !== null) || caixaVinculoEmpenhoAberta();
+        const bloqueado = (tcSalvo() && abaEmEdicao !== null) || caixaVinculoEmpenhoAberta();
         ['btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento', 'btnSalvarTitulo', 'btnCancelarTitulo'].forEach(id => {
             const btn = document.getElementById(id);
             if (!btn) return;
@@ -1242,6 +1251,12 @@
         const bloquear = caixaVinculoEmpenhoAberta();
         btnSalvarProc.disabled = bloquear;
         btnSalvarProc.classList.toggle('tc-btn-bloqueado', bloquear);
+    }
+
+    function atualizarRotuloBotaoSalvarPrincipal() {
+        const btn = document.getElementById('btnSalvarTitulo');
+        if (!btn) return;
+        btn.textContent = tcSalvo() ? '💾 Registrar Alterações' : '💾 Registrar TC';
     }
 
     function fecharCaixaVinculoEmpenho() {
@@ -1974,6 +1989,7 @@
         desenharFinanceiro();
         abaEmEdicao = null;
         alteracoesPendentesAba = false;
+        atualizarRotuloBotaoSalvarPrincipal();
         atualizarModoEdicaoAbas();
         atualizarBotoesEdicaoPorAba();
     }
@@ -2295,6 +2311,7 @@
 
             if (eraNovo && novoStatus === 'Rascunho') {
                 document.getElementById('editIndexTitulo').value = docId;
+                atualizarRotuloBotaoSalvarPrincipal();
                 window._modalPrimeiroSalvoDocId = docId;
                 document.getElementById('modalPrimeiroSalvo').style.display = 'flex';
                 return;
@@ -2953,6 +2970,20 @@
         atualizarBotoesEdicaoPorAba();
     }
 
+    function desistirEdicaoAba(tabIndex) {
+        const fbID = document.getElementById('editIndexTitulo')?.value || '-1';
+        if (fbID && fbID !== '-1') {
+            editarTitulo(fbID);
+            ativarTab(tabIndex);
+            return;
+        }
+        abaEmEdicao = null;
+        alteracoesPendentesAba = false;
+        ativarTab(tabIndex);
+        atualizarModoEdicaoAbas();
+        atualizarBotoesEdicaoPorAba();
+    }
+
     function salvarAba(tabIndex) {
         if (tabIndex === 1 && caixaVinculoEmpenhoAberta()) {
             alert('Caixa de vínculo de empenho aberta, salve o vínculo ou cancele antes de salvar Aba de Processamento.');
@@ -2981,6 +3012,22 @@
         document.getElementById(id)?.addEventListener('click', function() {
             if (editar) iniciarEdicaoDaAba(tabIndex);
             else salvarAba(tabIndex);
+        });
+    });
+
+    [
+        ['btnDesistirAbaDadosBasicos', 0],
+        ['btnDesistirAbaProcessamento', 1],
+        ['btnDesistirAbaLiquidacao', 2],
+        ['btnDesistirAbaFinanceiro', 3]
+    ].forEach(([id, tabIndex]) => {
+        document.getElementById(id)?.addEventListener('click', function() {
+            if (abaEmEdicao === tabIndex && alteracoesPendentesAba) {
+                const ok = confirm('Descartar alterações desta aba?');
+                if (!ok) return;
+            }
+            if (tabIndex === 1 && caixaVinculoEmpenhoAberta()) fecharCaixaVinculoEmpenho();
+            desistirEdicaoAba(tabIndex);
         });
     });
 
