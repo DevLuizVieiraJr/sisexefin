@@ -137,6 +137,7 @@
                 </div>
                 <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
                     <strong>Selecionados: <span id="countSelecionados">0</span></strong>
+                    <button type="button" id="btnNovaEntradaBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">↪ Dar nova entrada em Bloco</button>
                     <button type="button" id="btnAvancarNP" class="btn-primary btn-small" style="margin-left: 15px;">Atribuir NP em bloco</button>
                     <button type="button" id="btnAvancarLF" class="btn-primary btn-small">Atribuir LF em bloco</button>
                     <button type="button" id="btnAvancarPF" class="btn-primary btn-small">Atribuir PF em bloco</button>
@@ -458,6 +459,8 @@
                 <ul id="listaResultadosNovaEntradaOI" class="autocomplete-list"></ul>
                 <input type="hidden" id="novaEntradaOIId">
             </div>
+            <div class="form-group"><label>Entregador:</label><input type="text" id="novaEntradaEntregador" placeholder="Nome do entregador"></div>
+            <div class="form-group"><label>Observação:</label><textarea id="novaEntradaObservacao" rows="3" placeholder="Informação complementar da nova entrada"></textarea></div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalNovaEntradaCancelar" class="btn-default">Cancelar</button>
                 <button type="button" id="modalNovaEntradaConfirmar" class="btn-primary">Confirmar</button>

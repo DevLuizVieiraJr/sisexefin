@@ -430,10 +430,11 @@
     function desenharFiltrosStatus() {
         const container = document.getElementById('filtrosStatusTC');
         if (!container) return;
-        const botoes = [...STATUS_ORDEM.filter(s => s !== 'Devolvido'), 'Todos'];
+        const botoes = [...STATUS_ORDEM, 'Todos'];
         container.innerHTML = botoes.map(s => {
             const cls = statusFiltroAtual === s ? 'ativo' : '';
-            return `<button type="button" class="stepper-tc-btn ${cls}" data-status="${s}">${escapeHTML(s)}</button>`;
+            const label = s === 'Devolvido' ? 'Devolvidos' : s;
+            return `<button type="button" class="stepper-tc-btn ${cls}" data-status="${s}">${escapeHTML(label)}</button>`;
         }).join('');
         container.querySelectorAll('.stepper-tc-btn').forEach(btn => {
             btn.addEventListener('click', () => filtrarPorStatus(btn.getAttribute('data-status') || 'Rascunho'));
@@ -566,7 +567,11 @@
 
         tbody.querySelectorAll('.btn-ver-titulo').forEach(btn => btn.addEventListener('click', () => visualizarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-editar-titulo').forEach(btn => btn.addEventListener('click', () => editarTitulo(btn.getAttribute('data-id'))));
-        tbody.querySelectorAll('.btn-nova-entrada-titulo').forEach(btn => btn.addEventListener('click', () => { editarTitulo(btn.getAttribute('data-id')); }));
+        tbody.querySelectorAll('.btn-nova-entrada-titulo').forEach(btn => btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            abrirModalNovaEntrada([id]);
+        }));
         tbody.querySelectorAll('.btn-apagar-titulo').forEach(btn => btn.addEventListener('click', () => apagarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-toggle-ativo-titulo').forEach(btn => btn.addEventListener('click', () => toggleInativoTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-pdf-titulo').forEach(btn => btn.addEventListener('click', () => gerarPDFTitulo(btn.getAttribute('data-id'))));
@@ -588,10 +593,20 @@
     function atualizarUIselecao() {
         const container = document.getElementById('containerSelecaoMultipla');
         const count = document.getElementById('countSelecionados');
+        const btnNovaEntradaBloco = document.getElementById('btnNovaEntradaBloco');
+        const btnNP = document.getElementById('btnAvancarNP');
+        const btnLF = document.getElementById('btnAvancarLF');
+        const btnPF = document.getElementById('btnAvancarPF');
         if (container && count) {
             const n = titulosSelecionados.size;
             container.style.display = n > 0 ? 'block' : 'none';
             count.textContent = n;
+            const selecionados = Array.from(titulosSelecionados).map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+            const todosDevolvidos = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Devolvido');
+            if (btnNovaEntradaBloco) btnNovaEntradaBloco.style.display = (todosDevolvidos && selecionados.length > 1) ? 'inline-block' : 'none';
+            if (btnNP) btnNP.style.display = todosDevolvidos ? 'none' : 'inline-block';
+            if (btnLF) btnLF.style.display = todosDevolvidos ? 'none' : 'inline-block';
+            if (btnPF) btnPF.style.display = todosDevolvidos ? 'none' : 'inline-block';
         }
     }
 
@@ -682,7 +697,12 @@
     }
 
     function usuarioPodeEditarTC() {
-        return typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_editar') : false;
+        const pode = typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_editar') : false;
+        if (!pode) return false;
+        const fbID = document.getElementById('editIndexTitulo')?.value || '';
+        if (!fbID || fbID === '-1') return true;
+        const t = baseTitulos.find(x => x.id === fbID);
+        return (t?.status || 'Rascunho') !== 'Devolvido';
     }
 
     function podeEditarAba(tabIndex) {
@@ -794,7 +814,9 @@
                 tab.style.pointerEvents = '';
                 return;
             }
-            const isBloqueado = (status === 'Devolvido' && i < 4) || (status !== 'Devolvido' && i > idx + 1);
+            const isBloqueado = (status === 'Devolvido')
+                ? !abaTemDados(i)
+                : (i > idx + 1);
             tab.classList.toggle('bloqueado', isBloqueado);
             tab.style.pointerEvents = isBloqueado ? 'none' : '';
         });
@@ -2458,50 +2480,100 @@
         }
     });
 
+    function abrirModalNovaEntrada(idsSelecionados) {
+        if (!Array.isArray(idsSelecionados) || idsSelecionados.length === 0) return;
+        document.getElementById('novaEntradaData').value = new Date().toISOString().slice(0, 10);
+        limparNovaEntradaOI();
+        const entregadorEl = document.getElementById('novaEntradaEntregador');
+        if (entregadorEl) entregadorEl.value = '';
+        const obsEl = document.getElementById('novaEntradaObservacao');
+        if (obsEl) obsEl.value = '';
+        window._novaEntradaTcIds = idsSelecionados;
+        document.getElementById('modalNovaEntrada').style.display = 'flex';
+    }
+
     document.getElementById('btnDarNovaEntrada')?.addEventListener('click', function() {
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1') return;
-        document.getElementById('novaEntradaData').value = new Date().toISOString().slice(0, 10);
-        limparNovaEntradaOI();
-        window._novaEntradaTcId = fbID;
-        document.getElementById('modalNovaEntrada').style.display = 'flex';
+        abrirModalNovaEntrada([fbID]);
     });
 
     document.getElementById('modalNovaEntradaCancelar')?.addEventListener('click', () => {
         document.getElementById('modalNovaEntrada').style.display = 'none';
-        window._novaEntradaTcId = null;
+        window._novaEntradaTcIds = null;
     });
 
     document.getElementById('modalNovaEntradaConfirmar')?.addEventListener('click', async function() {
-        const fbID = window._novaEntradaTcId;
+        const ids = Array.isArray(window._novaEntradaTcIds) ? window._novaEntradaTcIds : [];
         const dataEntrada = (document.getElementById('novaEntradaData').value || '').trim();
         const oiOrigemId = (document.getElementById('novaEntradaOIId').value || '').trim();
+        const entregador = (document.getElementById('novaEntradaEntregador')?.value || '').trim();
+        const observacao = (document.getElementById('novaEntradaObservacao')?.value || '').trim();
         if (!dataEntrada) return alert("Informe a data de entrada.");
         if (!oiOrigemId) return alert("Selecione a OI de Origem.");
+        if (!ids.length) return;
         document.getElementById('modalNovaEntrada').style.display = 'none';
-        window._novaEntradaTcId = null;
+        window._novaEntradaTcIds = null;
         mostrarLoading();
         try {
-            const t = baseTitulos.find(x => x.id === fbID);
-            const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
-            entradaSaida.push({ tipo: 'entrada', data: dataEntrada, oiOrigem: oiOrigemId });
-            const hist = (t?.historicoStatus || []);
-            hist.push({ status: 'Rascunho', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
-            await db.collection('titulos').doc(fbID).update({
-                status: 'Rascunho',
-                dataExefin: dataEntrada,
-                oiEntregou: oiOrigemId,
-                entradaSaida,
-                historicoStatus: hist,
-                editado_em: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            alert("Nova entrada registrada. TC em Rascunho.");
-            editarTitulo(fbID);
+            for (const fbID of ids) {
+                const t = baseTitulos.find(x => x.id === fbID);
+                const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
+                entradaSaida.push({ tipo: 'entrada', data: dataEntrada, oiOrigem: oiOrigemId, entregador: entregador || null, observacao: observacao || null });
+
+                const hist = obterHistorico(t || {});
+                const info = [
+                    'Nova entrada registrada',
+                    `Data: ${dataEntrada}`,
+                    `OI origem: ${oiOrigemId}`,
+                    entregador ? `Entregador: ${entregador}` : '',
+                    observacao ? `Obs: ${observacao}` : ''
+                ].filter(Boolean).join(' | ');
+                const histEntry = construirEntradaHistorico({
+                    status: 'Rascunho',
+                    evento: 'Nova Entrada',
+                    acao: 'Nova entrada registrada por',
+                    info: info,
+                    aba: null
+                });
+                hist.push(histEntry);
+
+                await db.collection('titulos').doc(fbID).update({
+                    status: 'Rascunho',
+                    dataExefin: dataEntrada,
+                    oiEntregou: oiOrigemId,
+                    observacoes: observacao ? observacao : (t?.observacoes || ''),
+                    entradaSaida,
+                    historico: hist,
+                    historicoStatus: hist,
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            alert(ids.length > 1 ? "Nova entrada registrada em bloco." : "Nova entrada registrada. TC em Rascunho.");
+            if (ids.length === 1) {
+                editarTitulo(ids[0]);
+            } else {
+                titulosSelecionados.clear();
+                atualizarTabelaTitulos();
+                atualizarUIselecao();
+            }
         } catch (err) {
             alert("Erro: " + (err.message || err));
         } finally {
             esconderLoading();
         }
+    });
+
+    document.getElementById('btnNovaEntradaBloco')?.addEventListener('click', function() {
+        const ids = Array.from(titulosSelecionados);
+        if (!ids.length) return alert("Selecione ao menos um TC.");
+        const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const ois = Array.from(new Set(titulosSel.map(t => String(t?.oiEntregou || '').trim()).filter(Boolean)));
+        if (ois.length > 1) {
+            const ok = confirm("Há OI diferentes entre os TC selecionados. Deseja continuar?");
+            if (!ok) return;
+        }
+        abrirModalNovaEntrada(ids);
     });
 
     async function apagarTitulo(id) {
