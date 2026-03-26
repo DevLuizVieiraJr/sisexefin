@@ -1305,6 +1305,12 @@
         return String(v || '').replace(/\D/g, '').slice(0, 14);
     }
 
+    function normalizarCNPJ14(v) {
+        const dig = normalizarCNPJ(v);
+        if (!dig) return '';
+        return dig.length < 14 ? dig.padStart(14, '0') : dig;
+    }
+
     function fornecedorDisplay(f) {
         const cnpj = normalizarCNPJ(f?.codigoNumerico || f?.codigo || '');
         const nome = String(f?.nome || f?.nomeFornecedor || '').trim();
@@ -1338,8 +1344,8 @@
     }
 
     function cnpjEquivalente(a, b) {
-        const na = normalizarCNPJ(a);
-        const nb = normalizarCNPJ(b);
+        const na = normalizarCNPJ14(a);
+        const nb = normalizarCNPJ14(b);
         if (!na || !nb) return false;
         if (na === nb) return true;
         const sa = na.replace(/^0+/, '');
@@ -1348,25 +1354,29 @@
     }
 
     async function carregarContratosPorCnpj(cnpjN) {
-        if (!cnpjN) return [];
-        const cnpjFmt = (typeof formatarCNPJ === 'function') ? formatarCNPJ(cnpjN) : cnpjN;
-        const consultas = [
-            db.collection('contratos').where('cnpjFornecedor', '==', cnpjN).get(),
-            db.collection('contratos').where('cnpjFornecedor', '==', cnpjFmt).get(),
-            db.collection('contratos').where('cnpj', '==', cnpjN).get(),
-            db.collection('contratos').where('cnpj', '==', cnpjFmt).get(),
-            db.collection('contratos').where('cnpj_fornecedor', '==', cnpjN).get(),
-            db.collection('contratos').where('cnpj_fornecedor', '==', cnpjFmt).get()
-        ];
-        const snaps = await Promise.allSettled(consultas);
-        const porId = new Map();
-        snaps.forEach((res) => {
-            if (res.status !== 'fulfilled' || !res.value) return;
-            res.value.docs.forEach((doc) => {
-                if (!porId.has(doc.id)) porId.set(doc.id, { id: doc.id, ...doc.data() });
+        const cnpjCanon = normalizarCNPJ14(cnpjN);
+        if (!cnpjCanon) return [];
+        const cnpjSemZeroEsq = cnpjCanon.replace(/^0+/, '');
+        const cnpjFmt = (typeof formatarCNPJ === 'function') ? formatarCNPJ(cnpjCanon) : cnpjCanon;
+        const candidatos = Array.from(new Set([cnpjCanon, cnpjSemZeroEsq, cnpjFmt].filter(Boolean)));
+        const campos = ['cnpjFornecedor', 'cnpj', 'cnpj_fornecedor'];
+
+        try {
+            const consultas = [];
+            campos.forEach((campo) => candidatos.forEach((val) => consultas.push(db.collection('contratos').where(campo, '==', val).get())));
+            const snaps = await Promise.allSettled(consultas);
+            const porId = new Map();
+            snaps.forEach((res) => {
+                if (res.status !== 'fulfilled' || !res.value) return;
+                res.value.docs.forEach((doc) => {
+                    if (!porId.has(doc.id)) porId.set(doc.id, { id: doc.id, ...doc.data() });
+                });
             });
-        });
-        return Array.from(porId.values()).filter(c => cnpjEquivalente(extrairCnpjDoContrato(c), cnpjN));
+            return Array.from(porId.values()).filter(c => cnpjEquivalente(extrairCnpjDoContrato(c), cnpjCanon));
+        } catch (err) {
+            // Fallback para base já carregada em memória quando houver restrição de query/regras.
+            return (baseContratos || []).filter(c => cnpjEquivalente(extrairCnpjDoContrato(c), cnpjCanon));
+        }
     }
 
     function mostrarSugestoesFornecedor() {
@@ -1412,7 +1422,7 @@
     }
 
     async function selecionarFornecedorPorCnpj(cnpjSelecionado) {
-        const cnpjN = normalizarCNPJ(cnpjSelecionado);
+        const cnpjN = normalizarCNPJ14(cnpjSelecionado);
         const fornecedorObj = obterFornecedorPorCnpj(cnpjN);
 
         document.getElementById('fornecedorValor').value = cnpjN || '';
