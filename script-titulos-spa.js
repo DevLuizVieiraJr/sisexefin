@@ -1298,6 +1298,46 @@
         return String(v || '').replace(/\D/g, '').slice(0, 14);
     }
 
+    /** Apenas dígitos; aceita número (Firestore) ou string. */
+    function documentoFiscalDigitos(v) {
+        if (v === null || v === undefined) return '';
+        return String(v).replace(/\D/g, '');
+    }
+
+    /**
+     * Compara CPF/CNPJ entre cadastros. CNPJ gravado como número no Firestore perde zeros à esquerda;
+     * alinhamos a 14 dígitos para casar com codigoNumerico do fornecedor.
+     */
+    function documentosFiscaisMesmoTitular(a, b) {
+        const da = documentoFiscalDigitos(a);
+        const db = documentoFiscalDigitos(b);
+        if (!da || !db) return false;
+        if (da === db) return true;
+        const pa = da.length > 14 ? da.slice(0, 14) : da.padStart(14, '0');
+        const pb = db.length > 14 ? db.slice(0, 14) : db.padStart(14, '0');
+        return pa === pb;
+    }
+
+    /** Documento do fornecedor ligado ao contrato (vários nomes de campo / legado em texto). */
+    function documentoFornecedorDoContrato(c) {
+        if (!c) return '';
+        const campos = [
+            c.cnpjFornecedor,
+            c.cnpj_fornecedor,
+            c.documentoFornecedor,
+            c.documento_fornecedor,
+            c.cnpj
+        ];
+        for (let i = 0; i < campos.length; i++) {
+            const d = documentoFiscalDigitos(campos[i]);
+            if (d.length >= 11) return d;
+        }
+        const txt = c.fornecedor || c.nomeFornecedor || c.razaoSocial || c.empresa || '';
+        const dTxt = documentoFiscalDigitos(txt);
+        if (dTxt.length >= 11) return dTxt;
+        return '';
+    }
+
     function fornecedorDisplay(f) {
         const cnpj = normalizarCNPJ(f?.codigoNumerico || f?.codigo || '');
         const nome = String(f?.nome || f?.nomeFornecedor || '').trim();
@@ -1373,7 +1413,9 @@
             sel.disabled = !cnpjN;
             sel.innerHTML = '<option value="">Selecione o contrato</option>';
             if (cnpjN) {
-                const contratosDoFornecedor = (baseContratos || []).filter(c => normalizarCNPJ(c?.cnpjFornecedor) === cnpjN);
+                const contratosDoFornecedor = (baseContratos || []).filter(c =>
+                    documentosFiscaisMesmoTitular(documentoFornecedorDoContrato(c), cnpjN)
+                );
                 contratosDoFornecedor.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c.id;
@@ -1733,7 +1775,7 @@
         if (fornecedorCnpj) {
             selecionarFornecedorPorCnpj(fornecedorCnpj);
             const contratoLigado = (baseContratos || []).find(c =>
-                normalizarCNPJ(c?.cnpjFornecedor) === fornecedorCnpj &&
+                documentosFiscaisMesmoTitular(documentoFornecedorDoContrato(c), fornecedorCnpj) &&
                 (c.numContrato || c.instrumento || '') === (t.instrumento || '')
             );
             if (contratoLigado) {
