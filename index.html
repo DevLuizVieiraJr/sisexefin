@@ -34,6 +34,13 @@
             color: #2b3d51;
             font-size: 24px;
         }
+        .login-logo {
+            width: 120px;
+            max-width: 40%;
+            height: auto;
+            margin: 0 auto 14px;
+            display: block;
+        }
         .login-box p {
             color: #777;
             margin-bottom: 25px;
@@ -64,6 +71,23 @@
         .btn-login:disabled {
             background-color: #95a5a6;
             cursor: not-allowed;
+        }
+        .btn-recuperar {
+            width: 100%;
+            padding: 10px 12px;
+            margin: -2px 0 14px;
+            border: 1px solid #2a81b8;
+            background: #eef6fc;
+            color: #1e5f8a;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-recuperar:hover {
+            background: #e3f0fa;
+            border-color: #1e5f8a;
         }
         .btn-google {
             width: 100%;
@@ -120,6 +144,7 @@
 
     <div class="login-box">
         <div id="tela-login">
+            <img src="icons/logo-192.png" alt="Logo SisExeFin" class="login-logo">
             <h2>SisExeFin</h2>
             <p>Insira as suas credenciais para logar no sistema</p>
             
@@ -128,6 +153,7 @@
             <form id="form-login" onsubmit="fazerLogin(event)">
                 <input type="email" id="email" class="form-input" placeholder="E-mail" required autocomplete="email">
                 <input type="password" id="senha" class="form-input" placeholder="Palavra-passe" required autocomplete="current-password">
+                <button type="button" class="btn-recuperar" onclick="recuperarSenha()">Esqueci minha senha</button>
                 <button type="submit" id="btn-entrar" class="btn-login">Entrar no Sistema</button>
             </form>
 
@@ -324,6 +350,30 @@
                     btnEntrar.disabled = false;
                     btnEntrar.innerText = 'Entrar no Sistema';
                     console.error('Erro de Autenticação:', error.code);
+                });
+        }
+
+        function recuperarSenha() {
+            const email = (document.getElementById('email').value || '').trim();
+            if (!email) {
+                alert('Informe o e-mail no campo acima para receber o link de redefinição.');
+                document.getElementById('email').focus();
+                return;
+            }
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    alert('Enviamos um link para redefinir sua senha. Verifique seu e-mail.');
+                })
+                .catch((error) => {
+                    if (error && error.code === 'auth/invalid-email') {
+                        alert('E-mail inválido. Verifique e tente novamente.');
+                        return;
+                    }
+                    if (error && error.code === 'auth/user-not-found') {
+                        alert('Usuário não encontrado para este e-mail.');
+                        return;
+                    }
+                    alert('Não foi possível enviar o e-mail de recuperação. Tente novamente.');
                 });
         }
 

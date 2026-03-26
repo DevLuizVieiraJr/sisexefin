@@ -162,14 +162,17 @@
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const numerosExistentes = new Set((typeof baseContratos !== 'undefined' ? baseContratos : []).map(c => String((c.numContrato || '')).toLowerCase().trim()));
-                let inseridos = 0, duplicados = 0, erros = 0;
+                const mapaContratosPorNumero = {};
+                (typeof baseContratos !== 'undefined' ? baseContratos : []).forEach(function(c) {
+                    const chave = String((c.numContrato || '')).toLowerCase().trim();
+                    if (chave && c.id) mapaContratosPorNumero[chave] = c.id;
+                });
+                let inseridos = 0, atualizados = 0, duplicados = 0, erros = 0;
                 for (const row of rows) {
                     if (importAbort.aborted) break;
                     const numContrato = getVal(row, ['numContrato', 'NumContrato', 'Instrumento', 'instrumento', 'numero', 'Numero']);
                     if (!numContrato) { erros++; continue; }
                     const numNorm = numContrato.toLowerCase();
-                    if (numerosExistentes.has(numNorm)) { duplicados++; erros++; continue; }
                     const valorRaw = getVal(row, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
                     const numVal = parseValorMonetarioBR(valorRaw);
                     const cnpjFornecedorRaw = getVal(row, [
@@ -202,12 +205,18 @@
                         valorContrato: numVal,
                         deducoesPermitidas: []
                     };
-                    await db.collection('contratos').add(dados);
-                    numerosExistentes.add(numNorm);
-                    inseridos++;
+                    const docIdExistente = mapaContratosPorNumero[numNorm];
+                    if (docIdExistente) {
+                        await db.collection('contratos').doc(docIdExistente).update(dados);
+                        atualizados++;
+                        duplicados++;
+                    } else {
+                        const ref = await db.collection('contratos').add(dados);
+                        mapaContratosPorNumero[numNorm] = ref.id;
+                        inseridos++;
+                    }
                 }
-                const atualizados = 0;
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Duplicados ' + duplicados + '; Erros ' + erros);
                 await salvarUltimoImport('contratos');
             } catch (err) { alert('Erro ao tentar carregar dados.'); }
             finally { esconderLoading(); e.target.value = ''; }
