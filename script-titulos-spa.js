@@ -30,6 +30,7 @@
     let baseFornecedores = [];
     let contratosFornecedorSelecionado = [];
     let salvandoApenasAba = false;
+    let informacaoHistoricoPendente = '';
     let abaEmEdicao = null;
     let alteracoesPendentesAba = false;
     let acaoPendenteDeSaida = null;
@@ -635,6 +636,7 @@
     }
 
     window.abrirFormularioTitulo = function() {
+        informacaoHistoricoPendente = '';
         document.getElementById('formTitulo')?.reset();
         document.getElementById('editIndexTitulo').value = '-1';
         document.getElementById('idProc').value = '';
@@ -735,11 +737,7 @@
             const deveHabilitar = !salvo ? true : (podeEditar && abaEmEdicao === tab);
             atualizarEstadoControlesAba(tab, deveHabilitar);
         });
-        const bloquearGlobais = salvo && abaEmEdicao !== null;
-        ['btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento'].forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) btn.disabled = bloquearGlobais;
-        });
+        atualizarBloqueioBotoesPrincipais();
     }
 
     function atualizarBotoesEdicaoPorAba() {
@@ -803,6 +801,51 @@
         if (btnDevolver) btnDevolver.style.display = (tcSalvo && status !== 'Devolvido') ? 'inline-block' : 'none';
         if (btnEnviar) btnEnviar.style.display = (tcSalvo && status === 'Rascunho') ? 'inline-block' : 'none';
         if (btnNovaEntrada) btnNovaEntrada.style.display = (status === 'Devolvido') ? 'inline-block' : 'none';
+    }
+
+    function nomeAbaPorIndice(tabIndex) {
+        const mapa = { 0: 'Dados Básicos', 1: 'Processamento', 2: 'Liquidação', 3: 'Financeiro' };
+        return mapa[tabIndex] || 'TC';
+    }
+
+    function obterHistorico(docData) {
+        return (docData?.historico || docData?.historicoStatus || []);
+    }
+
+    function formatarDataHistoricoBr(dataVal) {
+        const d = (dataVal && dataVal.toDate) ? dataVal.toDate() : (dataVal ? new Date(dataVal) : null);
+        if (!d || isNaN(d.getTime())) return '-';
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yy = String(d.getFullYear()).slice(-2);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        return `${dd}/${mm}/${yy} às ${hh}:${mi}`;
+    }
+
+    function construirEntradaHistorico({ status, evento, acao, info, aba }) {
+        return {
+            data: firebase.firestore.Timestamp.now(),
+            status: status || '-',
+            evento: evento || 'Edição',
+            acao: acao || '-',
+            usuario: usuarioLogadoEmail || '',
+            motivoInfo: info || '',
+            aba: (aba != null ? aba : null)
+        };
+    }
+
+    function atualizarResumoHistoricoTC(titulo) {
+        const el = document.getElementById('resumoHistoricoTC');
+        if (!el) return;
+        const statusAtual = titulo?.status || 'Rascunho';
+        let dias = '-';
+        const editado = (titulo?.editado_em && titulo.editado_em.toDate) ? titulo.editado_em.toDate() : null;
+        if (editado) {
+            const diffMs = Date.now() - editado.getTime();
+            dias = String(Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24))));
+        }
+        el.textContent = `Status atual: ${statusAtual}. Dias: ${dias} dias sem edição.`;
     }
 
     function ativarTab(i) {
@@ -1172,10 +1215,57 @@
     }
 
     function atualizarBotaoAdicionarEmpenhoNaNota() {
-        const btn = document.querySelector('#detalhesVinculoEmpenho button[onclick="adicionarEmpenhoNaNota()"]');
+        const btn = document.getElementById('btnAcaoEmpenhoNota');
         if (!btn) return;
-        btn.textContent = (indiceEmpenhoEditando !== null) ? 'Atualizar item' : 'Adicionar à Lista';
+        btn.textContent = (indiceEmpenhoEditando !== null) ? 'Salvar' : 'Adicionar';
     }
+
+    function caixaVinculoEmpenhoAberta() {
+        const box = document.getElementById('detalhesVinculoEmpenho');
+        return !!(box && box.style.display !== 'none');
+    }
+
+    function atualizarBloqueioBotoesPrincipais() {
+        const bloqueado = (abaEmEdicao !== null) || caixaVinculoEmpenhoAberta();
+        ['btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento', 'btnSalvarTitulo', 'btnCancelarTitulo'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            btn.disabled = bloqueado;
+            btn.classList.toggle('tc-btn-bloqueado', bloqueado);
+        });
+        atualizarEstadoSalvarAbaProcessamento();
+    }
+
+    function atualizarEstadoSalvarAbaProcessamento() {
+        const btnSalvarProc = document.getElementById('btnSalvarAbaProcessamento');
+        if (!btnSalvarProc) return;
+        const bloquear = caixaVinculoEmpenhoAberta();
+        btnSalvarProc.disabled = bloquear;
+        btnSalvarProc.classList.toggle('tc-btn-bloqueado', bloquear);
+    }
+
+    function fecharCaixaVinculoEmpenho() {
+        const box = document.getElementById('detalhesVinculoEmpenho');
+        if (box) box.style.display = 'none';
+        indiceEmpenhoEditando = null;
+        empenhoTemporarioSelecionado = null;
+        const nd = document.getElementById('vinculoND');
+        if (nd) nd.value = '';
+        const sub = document.getElementById('vinculoSubelemento');
+        if (sub) sub.value = '';
+        const val = document.getElementById('vinculoValor');
+        if (val) val.value = '';
+        const cc = document.getElementById('vinculoCentroCustos');
+        if (cc) cc.value = '';
+        const ug = document.getElementById('vinculoUG');
+        if (ug) ug.value = '';
+        atualizarBotaoAdicionarEmpenhoNaNota();
+        atualizarBloqueioBotoesPrincipais();
+    }
+
+    window.desistirVinculoEmpenhoNota = function() {
+        fecharCaixaVinculoEmpenho();
+    };
 
     window.desfazerUltimaInclusaoEmpenhoNota = function() {
         if (!podeCancelarUltimaInclusaoEmpenhoNota) return;
@@ -1226,6 +1316,7 @@
         const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
         if (btnUndo) btnUndo.style.display = 'none';
         atualizarBotaoAdicionarEmpenhoNaNota();
+        atualizarBloqueioBotoesPrincipais();
     }
 
     function obterEmpenhoPorNumero(numEmpenho) {
@@ -1699,6 +1790,7 @@
                 const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
                 if (btnUndo) btnUndo.style.display = 'none';
                 atualizarBotaoAdicionarEmpenhoNaNota();
+                atualizarBloqueioBotoesPrincipais();
                 listaEmpenhosT.innerHTML = '';
                 inputBuscaEmpenhoT.value = '';
             });
@@ -1770,7 +1862,7 @@
             const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
             if (btnUndo) btnUndo.style.display = 'none';
             desenharEmpenhosNota();
-            document.getElementById('detalhesVinculoEmpenho').style.display = 'none';
+            fecharCaixaVinculoEmpenho();
             atualizarBotaoAdicionarEmpenhoNaNota();
             return;
         }
@@ -1797,7 +1889,7 @@
         if (btnUndo) btnUndo.style.display = 'inline-block';
         indiceEmpenhoEditando = null;
         desenharEmpenhosNota();
-        document.getElementById('detalhesVinculoEmpenho').style.display = 'none';
+        fecharCaixaVinculoEmpenho();
         atualizarBotaoAdicionarEmpenhoNaNota();
     };
 
@@ -1875,7 +1967,8 @@
         desenharEmpenhosNota();
         desenharDeducoesAplicadas();
         desenharBotoesCalcularDed();
-        desenharAuditoria(t.historicoStatus || []);
+        desenharAuditoria(t);
+        atualizarResumoHistoricoTC(t);
         desenharLiquidacao();
         desenharResumoDeducoesLiquidacao();
         desenharFinanceiro();
@@ -1946,14 +2039,24 @@
         }));
     }
 
-    function desenharAuditoria(historico) {
+    function desenharAuditoria(titulo) {
         const tbody = document.getElementById('tbodyAuditoria');
         if (!tbody) return;
         tbody.innerHTML = '';
+        const historico = (obterHistorico(titulo || {}) || []).slice().sort((a, b) => {
+            const da = (a?.data && a.data.toDate) ? a.data.toDate().getTime() : (a?.data ? new Date(a.data).getTime() : 0);
+            const db = (b?.data && b.data.toDate) ? b.data.toDate().getTime() : (b?.data ? new Date(b.data).getTime() : 0);
+            return db - da;
+        });
         (historico || []).forEach(h => {
             const tr = document.createElement('tr');
-            const data = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : (h.data || '-');
-            tr.innerHTML = `<td>${escapeHTML(data)}</td><td>${escapeHTML(h.status || h.statusNovo || '-')}</td><td>${escapeHTML(h.usuario || '-')}</td><td>${escapeHTML(h.motivoDevolucao || '-')}</td>`;
+            const data = formatarDataHistoricoBr(h.data || h.dataHora);
+            const status = h.status || h.statusNovo || '-';
+            const evento = h.evento || '-';
+            const acao = h.acao || '-';
+            const usuario = h.usuario || '-';
+            const info = h.motivoInfo || h.motivoDevolucao || h.informacao || '-';
+            tr.innerHTML = `<td>${escapeHTML(data)}</td><td>${escapeHTML(status)}</td><td>${escapeHTML(evento)}</td><td>${escapeHTML(acao)}</td><td>${escapeHTML(usuario)}</td><td>${escapeHTML(info)}</td>`;
             tbody.appendChild(tr);
         });
     }
@@ -2105,19 +2208,30 @@
 
         mostrarLoading();
         try {
-            const histEntry = { status: novoStatus, data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' };
             const eraNovo = (fbID === '-1' || !fbID);
+            const evento = eraNovo ? 'Criação' : (salvandoApenasAba ? 'Salvar Aba' : 'Salvar TC');
+            const acao = eraNovo ? 'Criado por' : `${nomeAbaPorIndice(indiceAbaAtiva)}/Editado por`;
+            const infoHistorico = informacaoHistoricoPendente || ((statusAtual !== novoStatus) ? (`Mudança de status: ${statusAtual} -> ${novoStatus}`) : '');
+            const histEntry = construirEntradaHistorico({
+                status: novoStatus,
+                evento: evento,
+                acao: acao,
+                info: infoHistorico,
+                aba: indiceAbaAtiva
+            });
             let docId = fbID;
             if (eraNovo) {
                 dadosSanitizados.status = dadosSanitizados.status || 'Rascunho';
+                dadosSanitizados.historico = [histEntry];
                 dadosSanitizados.historicoStatus = [histEntry];
                 dadosSanitizados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
                 const ref = await db.collection('titulos').add(dadosSanitizados);
                 docId = ref.id;
             } else {
                 const doc = await db.collection('titulos').doc(fbID).get();
-                const hist = (doc.data()?.historicoStatus || []);
+                const hist = obterHistorico(doc.data() || {});
                 hist.push(histEntry);
+                dadosSanitizados.historico = hist;
                 dadosSanitizados.historicoStatus = hist;
                 dadosSanitizados.editado_em = firebase.firestore.FieldValue.serverTimestamp();
                 await db.collection('titulos').doc(fbID).update(dadosSanitizados);
@@ -2136,6 +2250,7 @@
 
             if (salvandoApenasAba) {
                 salvandoApenasAba = false;
+                informacaoHistoricoPendente = '';
                 abaEmEdicao = null;
                 alteracoesPendentesAba = false;
                 atualizarModoEdicaoAbas();
@@ -2839,6 +2954,15 @@
     }
 
     function salvarAba(tabIndex) {
+        if (tabIndex === 1 && caixaVinculoEmpenhoAberta()) {
+            alert('Caixa de vínculo de empenho aberta, salve o vínculo ou cancele antes de salvar Aba de Processamento.');
+            return;
+        }
+        informacaoHistoricoPendente = '';
+        if (alteracoesPendentesAba) {
+            const info = prompt('Deseja adicionar uma informação ao histórico desta alteração? (opcional)');
+            informacaoHistoricoPendente = (info || '').trim();
+        }
         salvandoApenasAba = true;
         ativarTab(tabIndex);
         document.getElementById('formTitulo')?.requestSubmit();

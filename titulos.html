@@ -75,6 +75,14 @@
             color: #337ab7;
             font-weight: 600;
         }
+        .tc-btn-bloqueado,
+        button:disabled.tc-btn-bloqueado {
+            background: #f3f4f6 !important;
+            color: #6b7280 !important;
+            border-color: #d1d5db !important;
+            cursor: not-allowed !important;
+            opacity: 1 !important;
+        }
     </style>
 </head>
 <body style="display: none;" id="corpo-titulos">
@@ -276,7 +284,10 @@
                                     <div class="form-group flex-1"><label>Centro de Custos:</label><select id="vinculoCentroCustos"><option value="">Selecione...</option></select></div>
                                     <div class="form-group flex-1"><label>UG Beneficiária:</label><select id="vinculoUG"><option value="">Selecione...</option></select></div>
                                 </div>
-                                <button type="button" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar à Lista</button>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <button type="button" id="btnAcaoEmpenhoNota" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar</button>
+                                    <button type="button" id="btnDesistirEmpenhoNota" onclick="desistirVinculoEmpenhoNota()" class="btn-default">Desistir</button>
+                                </div>
                             </div>
                             <table class="tabela-gov tabela-ne-inputs">
                                 <thead><tr><th>NE</th><th>ND</th><th>Subel.</th><th>Valor</th><th>Centro Custos</th><th>UG Benef.</th><th></th></tr></thead>
@@ -362,8 +373,9 @@
 
                     <div class="tab-panel-tc" id="panel4">
 <h3>Histórico</h3>
+                            <p id="resumoHistoricoTC" style="margin: 8px 0 12px 0; font-size: 13px; color: #555;"></p>
                             <table class="tabela-gov">
-                            <thead><tr><th>Data</th><th>Status</th><th>Usuário</th><th>Motivo (Devolvido)</th></tr></thead>
+                            <thead><tr><th>Data</th><th>Status</th><th>Evento</th><th>Ação</th><th>Usuário</th><th>Motivo ou Informação</th></tr></thead>
                             <tbody id="tbodyAuditoria"></tbody>
                         </table>
                     </div>
@@ -372,7 +384,7 @@
                         <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;">↩ Devolver TC</button>
                         <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;">↪ Dar nova entrada</button>
                         <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;">Enviar para Processamento</button>
-                        <button type="submit" class="btn-primary" data-permission="titulos_inserir">💾 Salvar</button>
+                        <button type="submit" id="btnSalvarTitulo" class="btn-primary" data-permission="titulos_inserir">💾 Salvar</button>
                         <button type="button" id="btnCancelarTitulo" class="btn-default">Fechar</button>
                     </div>
                 </form>
