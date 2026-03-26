@@ -1337,10 +1337,36 @@
         return '';
     }
 
+    function cnpjEquivalente(a, b) {
+        const na = normalizarCNPJ(a);
+        const nb = normalizarCNPJ(b);
+        if (!na || !nb) return false;
+        if (na === nb) return true;
+        const sa = na.replace(/^0+/, '');
+        const sb = nb.replace(/^0+/, '');
+        return !!sa && !!sb && sa === sb;
+    }
+
     async function carregarContratosPorCnpj(cnpjN) {
         if (!cnpjN) return [];
-        const snap = await db.collection('contratos').where('cnpjFornecedor', '==', cnpjN).get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const cnpjFmt = (typeof formatarCNPJ === 'function') ? formatarCNPJ(cnpjN) : cnpjN;
+        const consultas = [
+            db.collection('contratos').where('cnpjFornecedor', '==', cnpjN).get(),
+            db.collection('contratos').where('cnpjFornecedor', '==', cnpjFmt).get(),
+            db.collection('contratos').where('cnpj', '==', cnpjN).get(),
+            db.collection('contratos').where('cnpj', '==', cnpjFmt).get(),
+            db.collection('contratos').where('cnpj_fornecedor', '==', cnpjN).get(),
+            db.collection('contratos').where('cnpj_fornecedor', '==', cnpjFmt).get()
+        ];
+        const snaps = await Promise.allSettled(consultas);
+        const porId = new Map();
+        snaps.forEach((res) => {
+            if (res.status !== 'fulfilled' || !res.value) return;
+            res.value.docs.forEach((doc) => {
+                if (!porId.has(doc.id)) porId.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+        });
+        return Array.from(porId.values()).filter(c => cnpjEquivalente(extrairCnpjDoContrato(c), cnpjN));
     }
 
     function mostrarSugestoesFornecedor() {
