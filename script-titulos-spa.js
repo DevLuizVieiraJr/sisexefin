@@ -206,6 +206,12 @@
         }
         unsubscribers.push(db.collection('contratos').onSnapshot(snap => {
             baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Se já houver fornecedor selecionado, rehidrata a lista de contratos
+            // para cobrir cenários em que o snapshot de contratos chega depois.
+            try {
+                const cnpjSel = normalizarCNPJ(document.getElementById('fornecedorValor')?.value || '');
+                if (cnpjSel) selecionarFornecedorPorCnpj(cnpjSel);
+            } catch (e) {}
             aoReceberSnapshot();
         }, onErr));
         unsubscribers.push(db.collection('empenhos').onSnapshot(snap => {
@@ -1484,7 +1490,23 @@
         input.dataset.autocompleteBound = '1';
         input.addEventListener('input', debounce(mostrarSugestoesFornecedor, 300));
         input.addEventListener('focus', function() { if (!this.readOnly && (this.value || '').trim().length >= 2) mostrarSugestoesFornecedor(); });
-        input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
+        const aplicarFornecedorDigitado = () => {
+            if (input.readOnly) return;
+            const cnpjDigitado = normalizarCNPJ(input.value || '');
+            if (cnpjDigitado.length === 14) {
+                selecionarFornecedorPorCnpj(cnpjDigitado);
+            }
+        };
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                aplicarFornecedorDigitado();
+            }
+        });
+        input.addEventListener('blur', () => {
+            aplicarFornecedorDigitado();
+            setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200);
+        });
     }
 
     function mostrarSugestoesEmpenho() {
