@@ -28,6 +28,7 @@
     let deducoesAplicadasAtual = [];
     let baseDeducoesEncargos = [];
     let baseFornecedores = [];
+    let contratosFornecedorSelecionado = [];
     let salvandoApenasAba = false;
     let abaEmEdicao = null;
     let alteracoesPendentesAba = false;
@@ -1336,6 +1337,12 @@
         return '';
     }
 
+    async function carregarContratosPorCnpj(cnpjN) {
+        if (!cnpjN) return [];
+        const snap = await db.collection('contratos').where('cnpjFornecedor', '==', cnpjN).get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
     function mostrarSugestoesFornecedor() {
         const input = document.getElementById('buscaFornecedorT');
         const lista = document.getElementById('listaResultadosFornecedorT');
@@ -1378,7 +1385,7 @@
         }
     }
 
-    function selecionarFornecedorPorCnpj(cnpjSelecionado) {
+    async function selecionarFornecedorPorCnpj(cnpjSelecionado) {
         const cnpjN = normalizarCNPJ(cnpjSelecionado);
         const fornecedorObj = obterFornecedorPorCnpj(cnpjN);
 
@@ -1398,8 +1405,17 @@
             sel.disabled = !cnpjN;
             sel.innerHTML = '<option value="">Selecione o contrato</option>';
             if (cnpjN) {
-                const contratosDoFornecedor = (baseContratos || []).filter(c => extrairCnpjDoContrato(c) === cnpjN);
-                contratosDoFornecedor.forEach(c => {
+                sel.innerHTML = '<option value="">Carregando contratos...</option>';
+                try {
+                    contratosFornecedorSelecionado = await carregarContratosPorCnpj(cnpjN);
+                } catch (err) {
+                    contratosFornecedorSelecionado = [];
+                }
+                sel.innerHTML = '<option value="">Selecione o contrato</option>';
+                if (contratosFornecedorSelecionado.length === 0) {
+                    sel.innerHTML = '<option value="">Nenhum contrato encontrado para o CNPJ selecionado</option>';
+                }
+                contratosFornecedorSelecionado.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c.id;
                     opt.textContent = c.numContrato || c.instrumento || '-';
@@ -1417,6 +1433,7 @@
         const btn = document.getElementById('limparFornecedorBtn');
         if (btn) btn.style.display = 'none';
         document.getElementById('contratoIdSelecionado').value = '';
+        contratosFornecedorSelecionado = [];
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
             sel.innerHTML = '<option value="">Selecione o fornecedor (CNPJ) primeiro</option>';
@@ -1476,7 +1493,7 @@
         sel.addEventListener('change', function() {
             const id = this.value;
             document.getElementById('contratoIdSelecionado').value = id || '';
-            const c = id ? baseContratos.find(x => x.id === id) : null;
+            const c = id ? ((contratosFornecedorSelecionado || []).find(x => x.id === id) || baseContratos.find(x => x.id === id)) : null;
             preencherDadosContrato(c);
             if (typeof desenharBotoesCalcularDed === 'function') desenharBotoesCalcularDed();
             if (typeof recalcularDeducoesContratoSubstituindo === 'function') recalcularDeducoesContratoSubstituindo();
@@ -1772,21 +1789,21 @@
         document.getElementById('dataAteste').value = t.dataAteste || '';
         const fornecedorCnpj = t.fornecedorCnpj ? normalizarCNPJ(t.fornecedorCnpj) : '';
         if (fornecedorCnpj) {
-            selecionarFornecedorPorCnpj(fornecedorCnpj);
-            const contratoLigado = (baseContratos || []).find(c =>
-                extrairCnpjDoContrato(c) === fornecedorCnpj &&
-                (c.numContrato || c.instrumento || '') === (t.instrumento || '')
-            );
-            if (contratoLigado) {
-                document.getElementById('contratoIdSelecionado').value = contratoLigado.id;
-                const sel = document.getElementById('contratoSelecionado');
-                if (sel) {
-                    sel.value = contratoLigado.id;
-                    preencherDadosContrato(contratoLigado);
-                    const rcEl = document.getElementById('rcSelecionada');
-                    if (rcEl && t.rc) rcEl.value = t.rc;
+            selecionarFornecedorPorCnpj(fornecedorCnpj).then(() => {
+                const contratoLigado = (contratosFornecedorSelecionado || []).find(c =>
+                    (c.numContrato || c.instrumento || '') === (t.instrumento || '')
+                );
+                if (contratoLigado) {
+                    document.getElementById('contratoIdSelecionado').value = contratoLigado.id;
+                    const sel = document.getElementById('contratoSelecionado');
+                    if (sel) {
+                        sel.value = contratoLigado.id;
+                        preencherDadosContrato(contratoLigado);
+                        const rcEl = document.getElementById('rcSelecionada');
+                        if (rcEl && t.rc) rcEl.value = t.rc;
+                    }
                 }
-            }
+            });
         } else if (t.fornecedor) {
             // legado: tenta extrair CNPJ do texto concatenado "CNPJ - Nome"
             const legadoCnpj = normalizarCNPJ(t.fornecedor);
