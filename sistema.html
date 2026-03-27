@@ -466,7 +466,24 @@
                             <label>Deduções e Encargos permitidas:</label>
                             <input type="text" id="buscaDedEncContrato" placeholder="Buscar por código ou descrição..." autocomplete="off">
                             <ul id="listaResultadosDedEnc" class="autocomplete-list"></ul>
-                            <div id="containerDedEncContrato" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                            <div id="resumoDedEncContrato" style="margin-top:8px; font-size:12px; color:#555;">0 deduções adicionadas | 0 selecionadas</div>
+                            <div style="margin-top:10px; overflow-x:auto;">
+                                <table class="tabela-gov" id="tabelaDedEncContratoCarrinho">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:34px; text-align:center;"><input type="checkbox" id="checkAllDedEncContrato" title="Selecionar todas"></th>
+                                            <th style="width:140px;">Código</th>
+                                            <th style="width:120px;">Tipo</th>
+                                            <th>Descrição</th>
+                                            <th style="width:90px;">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyDedEncContrato"></tbody>
+                                </table>
+                            </div>
+                            <div style="margin-top:8px;">
+                                <button type="button" id="btnLimparDedEncContratoBloco" class="btn-default btn-small">🧹 Limpar em Bloco</button>
+                            </div>
                         </div>
                         <div class="form-acoes">
                             <button type="submit" class="btn-primary">💾 Salvar Contrato</button>

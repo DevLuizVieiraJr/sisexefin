@@ -58,8 +58,15 @@
         paginaAtualContratos = 1;
         atualizarTabelaContratos();
     }));
+    let indicesDedEncSelecionados = new Set();
     function abrirFormularioContrato(isEdit) {
-        if (!isEdit) { formContrato.reset(); document.getElementById('editIndexContrato').value = -1; deducoesPermitidasContratoAtual = []; desenharDedEncContrato(); }
+        if (!isEdit) {
+            formContrato.reset();
+            document.getElementById('editIndexContrato').value = -1;
+            deducoesPermitidasContratoAtual = [];
+            indicesDedEncSelecionados = new Set();
+            desenharDedEncContrato();
+        }
         document.getElementById('tela-lista-contratos').style.display = 'none';
         document.getElementById('tela-formulario-contratos').style.display = 'block';
     }
@@ -133,6 +140,7 @@
             else numVal = parseFloat(valorTratado) || 0;
             document.getElementById('valorContrato').value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(numVal)) : (numVal || '');
             deducoesPermitidasContratoAtual = (c.deducoesPermitidas && Array.isArray(c.deducoesPermitidas)) ? c.deducoesPermitidas.map(function(x) { return { dedEncId: x.dedEncId, tipo: x.tipo, codigo: x.codigo, descricao: x.descricao }; }) : (c.codigosReceita && Array.isArray(c.codigosReceita)) ? c.codigosReceita.map(function(cod) { return { codigo: cod, tipo: 'DDF025' }; }) : [];
+            indicesDedEncSelecionados = new Set();
             desenharDedEncContrato();
         }
     }
@@ -229,20 +237,108 @@
         }));
     }
     function jaIncluida(d) { return deducoesPermitidasContratoAtual.some(function(p) { return p.dedEncId === d.id || (p.codigo === d.codigo && p.tipo === d.tipo); }); }
-    function selecionarDedEncContrato(d) { if (!jaIncluida(d)) { deducoesPermitidasContratoAtual.push({ dedEncId: d.id, tipo: d.tipo, codigo: d.codigo, descricao: d.descricao }); desenharDedEncContrato(); } inputBuscaDedEncContrato.value = ''; listaResultadosDedEnc.innerHTML = ''; }
+    function selecionarDedEncContrato(d) {
+        if (jaIncluida(d)) {
+            alert('Dedução já incluída');
+            inputBuscaDedEncContrato.value = '';
+            listaResultadosDedEnc.innerHTML = '';
+            return;
+        }
+        deducoesPermitidasContratoAtual.push({ dedEncId: d.id, tipo: d.tipo, codigo: d.codigo, descricao: d.descricao });
+        indicesDedEncSelecionados = new Set();
+        desenharDedEncContrato();
+        inputBuscaDedEncContrato.value = '';
+        listaResultadosDedEnc.innerHTML = '';
+    }
+    function resumirDescricaoDedEnc(v) {
+        var txt = String(v || '').trim();
+        if (txt.length <= 30) return txt;
+        return txt.slice(0, 30) + '...';
+    }
+    function atualizarResumoDedEncContrato() {
+        var el = document.getElementById('resumoDedEncContrato');
+        if (!el) return;
+        var total = deducoesPermitidasContratoAtual.length;
+        var sel = indicesDedEncSelecionados.size;
+        var txtTotal = total + ' ' + (total === 1 ? 'dedução adicionada' : 'deduções adicionadas');
+        var txtSel = sel + ' ' + (sel === 1 ? 'selecionada' : 'selecionadas');
+        el.textContent = txtTotal + ' | ' + txtSel;
+    }
     function desenharDedEncContrato() {
-        var container = document.getElementById('containerDedEncContrato');
-        if (!container) return;
-        container.innerHTML = '';
+        var tbody = document.getElementById('tbodyDedEncContrato');
+        var checkAll = document.getElementById('checkAllDedEncContrato');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (checkAll) checkAll.checked = false;
+        if (!deducoesPermitidasContratoAtual.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666;">Nenhuma dedução adicionada.</td></tr>';
+            atualizarResumoDedEncContrato();
+            return;
+        }
         deducoesPermitidasContratoAtual.forEach(function(p, index) {
-            var span = document.createElement('span');
-            span.className = 'badge-tag';
-            span.innerHTML = escapeHTML(p.codigo || p.tipo) + ' <button type="button" data-index="' + index + '" class="btn-rm-dedenc">&times;</button>';
-            container.appendChild(span);
+            var tr = document.createElement('tr');
+            var descCompleta = String(p.descricao || '').trim();
+            var descExib = resumirDescricaoDedEnc(descCompleta);
+            var marcado = indicesDedEncSelecionados.has(index) ? ' checked' : '';
+            tr.innerHTML =
+                '<td style="text-align:center;"><input type="checkbox" class="check-dedenc-contrato" data-index="' + index + '"' + marcado + '></td>' +
+                '<td>' + escapeHTML(p.codigo || '-') + '</td>' +
+                '<td>' + escapeHTML(p.tipo || '-') + '</td>' +
+                '<td title="' + escapeHTML(descCompleta || '-') + '">' + escapeHTML(descExib || '-') + '</td>' +
+                '<td><button type="button" class="btn-icon btn-rm-dedenc-linha" data-index="' + index + '" title="Remover">🗑️</button></td>';
+            tbody.appendChild(tr);
+        });
+        atualizarResumoDedEncContrato();
+    }
+    var tbodyDedEnc = document.getElementById('tbodyDedEncContrato');
+    if (tbodyDedEnc) {
+        tbodyDedEnc.addEventListener('click', function(e) {
+            var btn = e.target.closest('.btn-rm-dedenc-linha');
+            if (!btn) return;
+            var idx = parseInt(btn.getAttribute('data-index'), 10);
+            if (isNaN(idx) || idx < 0 || idx >= deducoesPermitidasContratoAtual.length) return;
+            deducoesPermitidasContratoAtual.splice(idx, 1);
+            indicesDedEncSelecionados = new Set();
+            desenharDedEncContrato();
+        });
+        tbodyDedEnc.addEventListener('change', function(e) {
+            if (!e.target.classList.contains('check-dedenc-contrato')) return;
+            var idx = parseInt(e.target.getAttribute('data-index'), 10);
+            if (isNaN(idx)) return;
+            if (e.target.checked) indicesDedEncSelecionados.add(idx);
+            else indicesDedEncSelecionados.delete(idx);
+            var checkAll = document.getElementById('checkAllDedEncContrato');
+            if (checkAll) checkAll.checked = deducoesPermitidasContratoAtual.length > 0 && indicesDedEncSelecionados.size === deducoesPermitidasContratoAtual.length;
+            atualizarResumoDedEncContrato();
         });
     }
-    var containerDedEnc = document.getElementById('containerDedEncContrato');
-    if (containerDedEnc) containerDedEnc.addEventListener('click', function(e) { if (e.target.classList.contains('btn-rm-dedenc')) { deducoesPermitidasContratoAtual.splice(parseInt(e.target.getAttribute('data-index'), 10), 1); desenharDedEncContrato(); } });
+    var checkAllDedEnc = document.getElementById('checkAllDedEncContrato');
+    if (checkAllDedEnc) {
+        checkAllDedEnc.addEventListener('change', function() {
+            indicesDedEncSelecionados = new Set();
+            if (this.checked) {
+                deducoesPermitidasContratoAtual.forEach(function(_, idx) { indicesDedEncSelecionados.add(idx); });
+            }
+            desenharDedEncContrato();
+            this.checked = deducoesPermitidasContratoAtual.length > 0 && indicesDedEncSelecionados.size === deducoesPermitidasContratoAtual.length;
+        });
+    }
+    var btnLimparBloco = document.getElementById('btnLimparDedEncContratoBloco');
+    if (btnLimparBloco) {
+        btnLimparBloco.addEventListener('click', function() {
+            if (!indicesDedEncSelecionados.size) {
+                alert('Selecione ao menos uma dedução para remover em bloco.');
+                return;
+            }
+            var restantes = [];
+            deducoesPermitidasContratoAtual.forEach(function(item, idx) {
+                if (!indicesDedEncSelecionados.has(idx)) restantes.push(item);
+            });
+            deducoesPermitidasContratoAtual = restantes;
+            indicesDedEncSelecionados = new Set();
+            desenharDedEncContrato();
+        });
+    }
 
     // Exporta a coleção "contratos" (CSV e Excel) via XLSX.
     window.exportarContratos = function(formato) {

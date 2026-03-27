@@ -748,7 +748,7 @@ function escutarColecaoSecao(idSecao) {
         'secao-lf': ['lfpf'],
         'secao-op': ['np'],
         'secao-deducoes-encargos': ['deducoesEncargos'],
-        'secao-contratos': ['contratos'],
+        'secao-contratos': ['contratos', 'deducoesEncargos'],
         'secao-fornecedores': ['fornecedores'],
         'secao-titulos': ['titulos'],
         'secao-centrocustos': ['centroCustos'],
