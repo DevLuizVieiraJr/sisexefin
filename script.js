@@ -293,7 +293,7 @@ function temPermissaoUI(perm) {
     if (permissoesEmCache.includes(perm)) return true;
     // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
     if (permissoesEmCache.includes('acesso_admin')) {
-        if (perm === 'dashboard_ler' || perm === 'backup_ler') return true;
+        if (perm === 'dashboard_ler' || perm === 'backup_ler' || perm === 'tramitarTC') return true;
         const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }

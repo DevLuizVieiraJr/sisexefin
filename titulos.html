@@ -138,9 +138,8 @@
                 <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
                     <strong>Selecionados: <span id="countSelecionados">0</span></strong>
                     <button type="button" id="btnNovaEntradaBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">↪ Dar nova entrada em Bloco</button>
-                    <button type="button" id="btnAvancarNP" class="btn-primary btn-small" style="margin-left: 15px;">Atribuir NP em bloco</button>
-                    <button type="button" id="btnAvancarLF" class="btn-primary btn-small">Atribuir LF em bloco</button>
-                    <button type="button" id="btnAvancarPF" class="btn-primary btn-small">Atribuir PF em bloco</button>
+                    <button type="button" id="btnEncaminharBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">➡️ Encaminhar em Bloco</button>
+                    <button type="button" id="btnDevolverBloco" class="btn-default btn-small" style="display:none; color:#e74c3c;">↩ Devolver em Bloco</button>
                 </div>
                 <table id="tabelaTitulos" class="tabela-gov">
                     <thead>
@@ -386,9 +385,9 @@
                     </div>
 
                     <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
-                        <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;">↩ Devolver TC</button>
+                        <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;" data-permission="tramitarTC">↩ Devolver TC</button>
                         <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;">↪ Dar nova entrada</button>
-                        <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;">Enviar para Processamento</button>
+                        <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;" data-permission="tramitarTC">➡️ Encaminhar</button>
                         <button type="submit" id="btnSalvarTitulo" class="btn-primary" data-permission="titulos_inserir">💾 Registrar TC</button>
                         <button type="button" id="btnCancelarTitulo" class="btn-default">Fechar</button>
                     </div>
@@ -404,7 +403,7 @@
             <p style="margin-bottom:20px; color:#555;">Deseja continuar editando como Rascunho ou enviar para Processamento?</p>
             <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
                 <button type="button" id="modalPrimeiroSalvoContinuar" class="btn-default">Continuar editando</button>
-                <button type="button" id="modalPrimeiroSalvoEnviar" class="btn-primary">Enviar para Processamento</button>
+                <button type="button" id="modalPrimeiroSalvoEnviar" class="btn-primary" data-permission="tramitarTC">Enviar para Processamento</button>
             </div>
         </div>
     </div>
@@ -412,10 +411,11 @@
     <!-- Modal: Devolver TC -->
     <div id="modalDevolver" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="text-align:left; max-width:400px;">
-            <h3 style="margin-bottom:15px; color:#e74c3c;">Devolver TC</h3>
+            <h3 style="margin-bottom:15px; color:#e74c3c;">Devolução de TC</h3>
             <p style="margin-bottom:15px; font-size:13px;">Confirma a devolução? Informe os dados abaixo:</p>
             <div class="form-group"><label>Motivo da devolução (obrigatório):</label><textarea id="devolverMotivo" rows="3" placeholder="Informe o motivo da rejeição/devolução..." required></textarea></div>
             <div class="form-group"><label>Nome do Recebedor (opcional):</label><input type="text" id="devolverNome" placeholder="Nome de quem recebeu"></div>
+            <div class="form-group"><label>Data/hora da devolução:</label><input type="datetime-local" id="devolverDataHora"></div>
             <div class="form-group" style="position:relative;">
                 <label>OI de Destino:</label>
                 <div class="input-com-clear">

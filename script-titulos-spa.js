@@ -34,7 +34,6 @@
     let abaEmEdicao = null;
     let alteracoesPendentesAba = false;
     let acaoPendenteDeSaida = null;
-    let enviandoParaProcessamento = false;
     let paginaAtual = 1;
     let itensPorPagina = 10;
     let termoBusca = '';
@@ -531,6 +530,15 @@
                     if (permissoesEmCache.includes('titulos_pdf')) {
                         acoes += `<button type="button" class="btn-icon btn-pdf-titulo" data-id="${escapeHTML(t.id)}" title="Gerar PDF">📄</button>`;
                     }
+                    const podeTramitar = typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
+                    if (podeTramitar && status === 'Rascunho') {
+                        acoes += `<button type="button" class="btn-icon btn-encaminhar-processamento-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Processamento">➡️</button>`;
+                        acoes += `<button type="button" class="btn-icon btn-devolver-titulo" data-id="${escapeHTML(t.id)}" title="Devolver TC">↩</button>`;
+                    }
+                    if (podeTramitar && status === 'Em Processamento') {
+                        acoes += `<button type="button" class="btn-icon btn-encaminhar-liquidacao-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Liquidação">➡️</button>`;
+                        acoes += `<button type="button" class="btn-icon btn-devolver-titulo" data-id="${escapeHTML(t.id)}" title="Devolver TC">↩</button>`;
+                    }
                     if (status === 'Devolvido') {
                         acoes += `<button type="button" class="btn-icon btn-nova-entrada-titulo" data-id="${escapeHTML(t.id)}" title="Dar nova entrada">↪</button>`;
                     }
@@ -567,6 +575,13 @@
 
         tbody.querySelectorAll('.btn-ver-titulo').forEach(btn => btn.addEventListener('click', () => visualizarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-editar-titulo').forEach(btn => btn.addEventListener('click', () => editarTitulo(btn.getAttribute('data-id'))));
+        tbody.querySelectorAll('.btn-encaminhar-processamento-titulo').forEach(btn => btn.addEventListener('click', () => encaminharTC(btn.getAttribute('data-id'), 'Em Processamento')));
+        tbody.querySelectorAll('.btn-encaminhar-liquidacao-titulo').forEach(btn => btn.addEventListener('click', () => encaminharTC(btn.getAttribute('data-id'), 'Em Liquidação')));
+        tbody.querySelectorAll('.btn-devolver-titulo').forEach(btn => btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            abrirModalDevolucao([id]);
+        }));
         tbody.querySelectorAll('.btn-nova-entrada-titulo').forEach(btn => btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-id');
             if (!id) return;
@@ -594,19 +609,23 @@
         const container = document.getElementById('containerSelecaoMultipla');
         const count = document.getElementById('countSelecionados');
         const btnNovaEntradaBloco = document.getElementById('btnNovaEntradaBloco');
-        const btnNP = document.getElementById('btnAvancarNP');
-        const btnLF = document.getElementById('btnAvancarLF');
-        const btnPF = document.getElementById('btnAvancarPF');
+        const btnEncaminharBloco = document.getElementById('btnEncaminharBloco');
+        const btnDevolverBloco = document.getElementById('btnDevolverBloco');
         if (container && count) {
             const n = titulosSelecionados.size;
             container.style.display = n > 0 ? 'block' : 'none';
             count.textContent = n;
             const selecionados = Array.from(titulosSelecionados).map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
             const todosDevolvidos = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Devolvido');
+            const todosRascunho = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Rascunho');
+            const todosEmProcessamento = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Em Processamento');
+            const podeTramitar = usuarioPodeTramitarTC();
             if (btnNovaEntradaBloco) btnNovaEntradaBloco.style.display = (todosDevolvidos && selecionados.length > 1) ? 'inline-block' : 'none';
-            if (btnNP) btnNP.style.display = todosDevolvidos ? 'none' : 'inline-block';
-            if (btnLF) btnLF.style.display = todosDevolvidos ? 'none' : 'inline-block';
-            if (btnPF) btnPF.style.display = todosDevolvidos ? 'none' : 'inline-block';
+            if (btnEncaminharBloco) {
+                btnEncaminharBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento)) ? 'inline-block' : 'none';
+                btnEncaminharBloco.textContent = todosRascunho ? '➡️ Encaminhar para Processamento em Bloco' : '➡️ Enviar para Liquidação em Bloco';
+            }
+            if (btnDevolverBloco) btnDevolverBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento)) ? 'inline-block' : 'none';
         }
     }
 
@@ -703,6 +722,57 @@
         if (!fbID || fbID === '-1') return true;
         const t = baseTitulos.find(x => x.id === fbID);
         return (t?.status || 'Rascunho') !== 'Devolvido';
+    }
+
+    function usuarioPodeTramitarTC() {
+        return typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
+    }
+
+    function dadosBasicosCompletos(t) {
+        const tc = t || {};
+        return !!(
+            String(tc.tipoTC || '').trim() &&
+            String(tc.dataExefin || '').trim() &&
+            String(tc.numTC || '').trim() &&
+            String(tc.fornecedorCnpj || '').trim() &&
+            String(tc.fornecedorNome || tc.fornecedor || '').trim() &&
+            String(tc.instrumento || '').trim() &&
+            Number(tc.valorNotaFiscal || 0) > 0 &&
+            String(tc.dataEmissao || '').trim() &&
+            String(tc.dataAteste || '').trim()
+        );
+    }
+
+    async function encaminharTC(id, destino, emBloco = false) {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        const t = baseTitulos.find(x => x.id === id);
+        if (!t) return;
+        const statusAtual = t.status || 'Rascunho';
+        if (destino === 'Em Processamento' && statusAtual !== 'Rascunho') return;
+        if (destino === 'Em Liquidação' && statusAtual !== 'Em Processamento') return;
+        if (destino === 'Em Processamento' && !dadosBasicosCompletos(t)) {
+            return alert('Dados Básicos incompletos. Complete a aba Dados Básicos antes de encaminhar para Processamento.');
+        }
+        if (destino === 'Em Liquidação' && (!Array.isArray(t.empenhosVinculados) || t.empenhosVinculados.length < 1)) {
+            return alert('Para enviar à Liquidação, vincule ao menos 1 NE na aba Processamento.');
+        }
+        const acaoTxt = destino === 'Em Processamento' ? 'Enc. p/ Processamento' : 'Enc. p/ Liquidação';
+        const eventoTxt = destino === 'Em Processamento' ? 'Enc. p/ Processamento' : 'Enc. p/ Liquidação';
+        const info = emBloco ? 'Operação em bloco' : '';
+        const hist = obterHistorico(t || {});
+        hist.push(construirEntradaHistorico({
+            status: destino,
+            evento: eventoTxt,
+            acao: `${acaoTxt} por`,
+            info,
+            aba: null
+        }));
+        await db.collection('titulos').doc(id).update({
+            status: destino,
+            historico: hist,
+            historicoStatus: hist,
+            editado_em: firebase.firestore.FieldValue.serverTimestamp()
+        });
     }
 
     function podeEditarAba(tabIndex) {
@@ -829,8 +899,12 @@
         const btnDevolver = document.getElementById('btnDevolver');
         const btnEnviar = document.getElementById('btnEnviarProcessamento');
         const btnNovaEntrada = document.getElementById('btnDarNovaEntrada');
-        if (btnDevolver) btnDevolver.style.display = (tcSalvo && status !== 'Devolvido') ? 'inline-block' : 'none';
-        if (btnEnviar) btnEnviar.style.display = (tcSalvo && status === 'Rascunho') ? 'inline-block' : 'none';
+        const podeTramitar = usuarioPodeTramitarTC();
+        if (btnDevolver) btnDevolver.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento')) ? 'inline-block' : 'none';
+        if (btnEnviar) {
+            btnEnviar.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento')) ? 'inline-block' : 'none';
+            btnEnviar.textContent = status === 'Em Processamento' ? '➡️ Encaminhar para Liquidação' : '➡️ Encaminhar para Processamento';
+        }
         if (btnNovaEntrada) btnNovaEntrada.style.display = (status === 'Devolvido') ? 'inline-block' : 'none';
     }
 
@@ -2287,6 +2361,15 @@
             esconderLoading();
 
             if (salvandoApenasAba) {
+                // No primeiro "Salvar Aba", o documento já é criado no BD.
+                // Atualiza o formulário com o docId para evitar criar outro TC ao clicar em "Registrar TC".
+                if (eraNovo && docId) {
+                    document.getElementById('editIndexTitulo').value = docId;
+                    if (!document.getElementById('idProc').value) {
+                        document.getElementById('idProc').value = dadosSanitizados.idProc || '';
+                    }
+                    atualizarRotuloBotaoSalvarPrincipal();
+                }
                 salvandoApenasAba = false;
                 informacaoHistoricoPendente = '';
                 abaEmEdicao = null;
@@ -2307,27 +2390,6 @@
                     return;
                 }
                 alert("Dados da aba salvos com sucesso.");
-                return;
-            }
-
-            if (typeof enviandoParaProcessamento !== 'undefined' && enviandoParaProcessamento) {
-                enviandoParaProcessamento = false;
-                try {
-                    recalcularDeducoesContratoSubstituindo();
-                    const doc = await db.collection('titulos').doc(docId).get();
-                    const hist = (doc.data()?.historicoStatus || []);
-                    hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
-                    await db.collection('titulos').doc(docId).update({
-                        status: 'Em Processamento',
-                        deducoesAplicadas: deducoesAplicadasAtual,
-                        historicoStatus: hist,
-                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    alert("TC enviado para Processamento.");
-                    voltarParaListaTitulos();
-                } catch (err) {
-                    alert("Erro ao enviar: " + (err.message || err));
-                }
                 return;
             }
 
@@ -2357,25 +2419,11 @@
         document.getElementById('modalPrimeiroSalvo').style.display = 'none';
         window._modalPrimeiroSalvoDocId = null;
         if (!docId) return;
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         mostrarLoading();
         try {
-            recalcularDeducoesContratoSubstituindo();
-            const doc = await db.collection('titulos').doc(docId).get();
-            const hist = (doc.data()?.historicoStatus || []);
-            hist.push({ status: 'Em Processamento', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' });
-            // Garanta consistência do modelo interno antes de persistir.
-            normalizarEmpenhosDaNotaAtualSubelemento();
-            const empenhosSanitizados = normalizarParaFirestore(empenhosDaNotaAtual);
-            const deducoesSanitizadas = normalizarParaFirestore(deducoesAplicadasAtual);
-            await db.collection('titulos').doc(docId).update({
-                status: 'Em Processamento',
-                empenhosVinculados: empenhosSanitizados,
-                deducoesAplicadas: deducoesSanitizadas,
-                historicoStatus: hist,
-                editado_em: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            baseTitulos = baseTitulos.map(t => t.id === docId ? { ...t, status: 'Em Processamento' } : t);
-            alert("TC enviado para Processamento.");
+            await encaminharTC(docId, 'Em Processamento', false);
+            alert("TC encaminhado para Processamento.");
             voltarParaListaTitulos();
         } catch (err) {
             alert("Erro ao enviar: " + (err.message || err));
@@ -2384,12 +2432,26 @@
         }
     });
 
-    document.getElementById('btnEnviarProcessamento')?.addEventListener('click', function() {
+    document.getElementById('btnEnviarProcessamento')?.addEventListener('click', async function() {
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1' || !fbID) return alert("Salve o TC primeiro.");
-        if (!confirm("Salvar alterações da aba Dados Básicos e enviar para Processamento?")) return;
-        enviandoParaProcessamento = true;
-        document.getElementById('formTitulo').requestSubmit();
+        const t = baseTitulos.find(x => x.id === fbID);
+        const statusAtual = t?.status || 'Rascunho';
+        const destino = statusAtual === 'Em Processamento' ? 'Em Liquidação' : 'Em Processamento';
+        const pergunta = destino === 'Em Liquidação'
+            ? 'Confirmar envio para Liquidação?'
+            : 'Confirmar encaminhamento para Processamento?';
+        if (!confirm(pergunta)) return;
+        mostrarLoading();
+        try {
+            await encaminharTC(fbID, destino, false);
+            alert(destino === 'Em Liquidação' ? 'TC enviado para Liquidação.' : 'TC encaminhado para Processamento.');
+            voltarParaListaTitulos();
+        } catch (err) {
+            alert("Erro ao encaminhar: " + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
     });
 
     document.getElementById('btnCancelarTitulo')?.addEventListener('click', function() {
@@ -2410,14 +2472,22 @@
         }
     });
 
+    function abrirModalDevolucao(idsSelecionados) {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        if (!Array.isArray(idsSelecionados) || idsSelecionados.length === 0) return;
+        document.getElementById('devolverMotivo').value = '';
+        document.getElementById('devolverNome').value = '';
+        const dataHoraEl = document.getElementById('devolverDataHora');
+        if (dataHoraEl) dataHoraEl.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        limparOIDestino();
+        window._devolverTcIds = idsSelecionados;
+        document.getElementById('modalDevolver').style.display = 'flex';
+    }
+
     document.getElementById('btnDevolver')?.addEventListener('click', function() {
         const fbID = document.getElementById('editIndexTitulo').value;
         if (fbID === '-1') return alert("Salve o TC primeiro.");
-        document.getElementById('devolverMotivo').value = '';
-        document.getElementById('devolverNome').value = '';
-        limparOIDestino();
-        window._devolverTcId = fbID;
-        document.getElementById('modalDevolver').style.display = 'flex';
+        abrirModalDevolucao([fbID]);
     });
 
     window.limparOIDestino = function() {
@@ -2438,41 +2508,61 @@
 
     document.getElementById('modalDevolverCancelar')?.addEventListener('click', () => {
         document.getElementById('modalDevolver').style.display = 'none';
-        window._devolverTcId = null;
+        window._devolverTcIds = null;
     });
 
     document.getElementById('modalDevolverConfirmar')?.addEventListener('click', async function() {
-        const fbID = window._devolverTcId;
+        const ids = Array.isArray(window._devolverTcIds) ? window._devolverTcIds : [];
         const motivo = (document.getElementById('devolverMotivo').value || '').trim();
         const nome = (document.getElementById('devolverNome').value || '').trim();
+        const dataHoraDev = (document.getElementById('devolverDataHora')?.value || '').trim();
         const oiDestinoId = (document.getElementById('oiDestinoId').value || '').trim();
         if (!motivo) return alert("Informe o motivo da devolução (obrigatório).");
+        if (!dataHoraDev) return alert("Informe a data/hora da devolução.");
         if (!oiDestinoId) return alert("Selecione a OI de Destino.");
+        if (!ids.length) return;
         document.getElementById('modalDevolver').style.display = 'none';
-        window._devolverTcId = null;
-        const dataDev = new Date().toISOString().slice(0, 10);
+        window._devolverTcIds = null;
+        const dataDev = dataHoraDev.slice(0, 10);
         mostrarLoading();
         try {
-            const t = baseTitulos.find(x => x.id === fbID);
-            const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
-            entradaSaida.push({ tipo: 'saida', nome: nome || null, oiDestino: oiDestinoId, dataDevolucao: dataDev });
-            const hist = (t?.historicoStatus || []);
-            hist.push({
-                status: 'Devolvido',
-                statusAnterior: t?.status,
-                data: firebase.firestore.Timestamp.now(),
-                usuario: usuarioLogadoEmail || '',
-                motivoDevolucao: motivo,
-                dataDevolucao: dataDev
-            });
-            await db.collection('titulos').doc(fbID).update({
-                status: 'Devolvido',
-                entradaSaida,
-                historicoStatus: hist,
-                editado_em: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            alert("TC devolvido.");
-            voltarParaListaTitulos();
+            for (const fbID of ids) {
+                const t = baseTitulos.find(x => x.id === fbID);
+                if (!t) continue;
+                const statusAtual = t.status || 'Rascunho';
+                if (!(statusAtual === 'Rascunho' || statusAtual === 'Em Processamento')) continue;
+                const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
+                entradaSaida.push({ tipo: 'saida', nome: nome || null, oiDestino: oiDestinoId, dataDevolucao: dataDev, dataHoraDevolucao: dataHoraDev });
+                const hist = obterHistorico(t || {});
+                const info = [
+                    `Motivo: ${motivo}`,
+                    nome ? `Recebedor: ${nome}` : '',
+                    `OI destino: ${oiDestinoId}`,
+                    `Data/Hora: ${dataHoraDev}`,
+                    ids.length > 1 ? 'Operação em bloco' : ''
+                ].filter(Boolean).join(' | ');
+                hist.push(construirEntradaHistorico({
+                    status: 'Devolvido',
+                    evento: 'Devolução de TC',
+                    acao: 'Devolvido por',
+                    info,
+                    aba: null
+                }));
+                await db.collection('titulos').doc(fbID).update({
+                    status: 'Devolvido',
+                    entradaSaida,
+                    historico: hist,
+                    historicoStatus: hist,
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            alert(ids.length > 1 ? "TCs devolvidos em bloco." : "TC devolvido.");
+            if (ids.length === 1) voltarParaListaTitulos();
+            else {
+                titulosSelecionados.clear();
+                atualizarTabelaTitulos();
+                atualizarUIselecao();
+            }
         } catch (err) {
             alert("Erro: " + (err.message || err));
         } finally {
@@ -2937,33 +3027,28 @@
         }
     });
 
-    document.getElementById('btnAvancarNP')?.addEventListener('click', async function() {
+    document.getElementById('btnEncaminharBloco')?.addEventListener('click', async function() {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
         if (ids.length === 0) return alert("Selecione ao menos um TC.");
-        const np = prompt("NP (Nota de Pagamento):");
-        if (!np) return;
-        const dataLiq = prompt("Data Liquidação (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+        const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const todosRascunho = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Rascunho');
+        const todosEmProcessamento = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Processamento');
+        if (!todosRascunho && !todosEmProcessamento) return alert('Selecione TCs do mesmo status (Rascunho ou Em Processamento).');
+        const destino = todosRascunho ? 'Em Processamento' : 'Em Liquidação';
+        const pergunta = destino === 'Em Processamento'
+            ? 'Confirmar encaminhamento em bloco para Processamento?'
+            : 'Confirmar envio em bloco para Liquidação?';
+        if (!confirm(pergunta)) return;
         mostrarLoading();
         try {
             for (const id of ids) {
-                const t = baseTitulos.find(x => x.id === id);
-                if (t && t.status === 'Em Liquidação') {
-                    await db.collection('titulos').doc(id).update({
-                        np, dataLiquidacao: dataLiq || '', status: 'Liquidado',
-                        historicoStatus: firebase.firestore.FieldValue.arrayUnion({ status: 'Liquidado', data: firebase.firestore.Timestamp.now(), usuario: usuarioLogadoEmail || '' }),
-                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    try {
-                        await vincularTituloNaNP(id, np, dataLiq || '');
-                    } catch (err) {
-                        console.warn('Falha ao vincular NP em bloco:', err);
-                    }
-                }
+                await encaminharTC(id, destino, true);
             }
             titulosSelecionados.clear();
             atualizarUIselecao();
             atualizarTabelaTitulos();
-            alert("NP atribuída em bloco.");
+            alert(destino === 'Em Processamento' ? 'TCs encaminhados em bloco para Processamento.' : 'TCs enviados em bloco para Liquidação.');
         } catch (err) {
             alert("Erro: " + (err.message || err));
         } finally {
@@ -2971,67 +3056,15 @@
         }
     });
 
-    document.getElementById('btnAvancarLF')?.addEventListener('click', async function() {
+    document.getElementById('btnDevolverBloco')?.addEventListener('click', function() {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
-        if (ids.length === 0) return alert("Selecione ao menos um TC.");
-        const lf = prompt("LF (Liquidação Financeira):");
-        if (!lf) return;
-        mostrarLoading();
-        try {
-            for (const id of ids) {
-                const t = baseTitulos.find(x => x.id === id);
-                if (!t || !t.empenhosVinculados) continue;
-                const emps = t.empenhosVinculados.map(v => ({ ...v, lf }));
-                const todosLF = emps.every(v => !!(v.lf || '').trim());
-                const todosPF = emps.every(v => !!(v.pf || '').trim());
-                let novoStatus = t.status;
-                if (todosLF && todosPF) novoStatus = 'Para Pagamento';
-                else if (todosLF) novoStatus = 'Aguardando Financeiro';
-                await db.collection('titulos').doc(id).update({
-                    empenhosVinculados: emps,
-                    status: novoStatus,
-                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-            titulosSelecionados.clear();
-            atualizarUIselecao();
-            atualizarTabelaTitulos();
-            alert("LF atribuída em bloco.");
-        } catch (err) {
-            alert("Erro: " + (err.message || err));
-        } finally {
-            esconderLoading();
-        }
-    });
-
-    document.getElementById('btnAvancarPF')?.addEventListener('click', async function() {
-        const ids = Array.from(titulosSelecionados);
-        if (ids.length === 0) return alert("Selecione ao menos um TC.");
-        const pf = prompt("PF:");
-        if (!pf) return;
-        mostrarLoading();
-        try {
-            for (const id of ids) {
-                const t = baseTitulos.find(x => x.id === id);
-                if (!t || !t.empenhosVinculados) continue;
-                const emps = t.empenhosVinculados.map(v => ({ ...v, pf }));
-                const todosPF = emps.every(v => !!(v.pf || '').trim());
-                const novoStatus = todosPF ? 'Para Pagamento' : t.status;
-                await db.collection('titulos').doc(id).update({
-                    empenhosVinculados: emps,
-                    status: novoStatus,
-                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-            titulosSelecionados.clear();
-            atualizarUIselecao();
-            atualizarTabelaTitulos();
-            alert("PF atribuída em bloco.");
-        } catch (err) {
-            alert("Erro: " + (err.message || err));
-        } finally {
-            esconderLoading();
-        }
+        if (!ids.length) return alert("Selecione ao menos um TC.");
+        const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const todosRascunho = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Rascunho');
+        const todosEmProcessamento = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Processamento');
+        if (!todosRascunho && !todosEmProcessamento) return alert('Para devolução em bloco, selecione apenas TCs em Rascunho ou apenas em Em Processamento.');
+        abrirModalDevolucao(ids);
     });
 
     function iniciarEdicaoDaAba(tabIndex) {
