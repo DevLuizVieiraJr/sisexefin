@@ -527,7 +527,9 @@
                         const title = estaInativo ? 'Ativar TC' : 'Inativar TC';
                         acoes += `<button type="button" class="btn-icon btn-toggle-ativo-titulo" data-id="${escapeHTML(t.id)}" title="${title}">${icon}</button>`;
                     }
-                    if (permissoesEmCache.includes('titulos_pdf')) {
+                    const podeGerarPdf = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
+                        (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+                    if (podeGerarPdf) {
                         acoes += `<button type="button" class="btn-icon btn-pdf-titulo" data-id="${escapeHTML(t.id)}" title="Gerar PDF">📄</button>`;
                     }
                     const podeTramitar = typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
@@ -2726,80 +2728,122 @@
         }
         const { jsPDF } = window.jspdf;
         const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
-        const linha = (txt, x, y) => { docPDF.text(String(txt || ''), x, y); };
-        let y = 15;
-
-        // Cabeçalho
-        docPDF.setFontSize(14);
-        linha('SisExeFin - Título de Crédito', 10, y); y += 8;
-        docPDF.setFontSize(10);
-        linha(`ID-PROC: ${t.idProc || '-'}`, 10, y); y += 6;
-        linha(`Nº TC: ${t.numTC || '-'}`, 10, y); y += 6;
-        linha(`Status atual: ${t.status || 'Rascunho'}${t.inativo ? ' (INATIVO)' : ''}`, 10, y); y += 6;
-        const agora = new Date().toLocaleString('pt-BR');
-        linha(`Exportado em: ${agora}`, 10, y); y += 6;
-        linha(`Gerado por: ${usuarioLogadoEmail || '-'}`, 10, y); y += 10;
-
-        const addTituloSecao = (titulo) => {
-            docPDF.setFontSize(11);
-            docPDF.text(titulo, 10, y);
-            y += 6;
-            docPDF.setFontSize(9);
+        const M = { l: 10, r: 10, t: 12, b: 12 };
+        const W = 210 - M.l - M.r;
+        let y = M.t;
+        const now = new Date().toLocaleString('pt-BR');
+        const moeda = (n) => 'R$ ' + (Number(n || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const dataHist = (v) => (v && v.toDate) ? v.toDate().toLocaleString('pt-BR') : (v || '-');
+        const garantirEspaco = (h) => { if (y + h > 297 - M.b) { docPDF.addPage(); y = M.t; } };
+        const textoMulti = (txt, x, yy, maxW, fs = 8.5) => {
+            docPDF.setFontSize(fs);
+            const linhas = docPDF.splitTextToSize(String(txt || '-'), maxW);
+            docPDF.text(linhas, x, yy);
+            return linhas.length;
         };
 
-        // Bloco Dados Básicos
-        addTituloSecao('Dados Básicos');
-        linha(`Data EXEFIN: ${t.dataExefin || '-'}`, 10, y); y += 5;
-        linha(`OI de Origem: ${t.oiEntregou || '-'}`, 10, y); y += 5;
-        const fornCnpjFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
-        const fornNome = t.fornecedorNome || '';
-        linha(`Contrato/Empresa: ${t.instrumento || '-'} | ${fornCnpjFmt}${fornNome ? ' - ' + fornNome : ''}`, 10, y); y += 5;
-        linha(`RC: ${t.rc || '-'}`, 10, y); y += 5;
-        linha(`Valor do TC: R$ ${(t.valorNotaFiscal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 10, y); y += 5;
-        linha(`Data Emissão: ${t.dataEmissao || '-'}`, 10, y); y += 5;
-        if (t.observacoes) {
-            linha(`Observações: ${t.observacoes}`, 10, y); y += 5;
+        function cabecalhoPagina() {
+            docPDF.setDrawColor(120);
+            docPDF.rect(M.l, y, W, 12);
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(11);
+            docPDF.text('SIS EXE FIN - TITULO DE CREDITO', M.l + 3, y + 5);
+            docPDF.setFont('helvetica', 'normal');
+            docPDF.setFontSize(8.5);
+            docPDF.text(`Gerado em: ${now}`, M.l + 3, y + 10);
+            docPDF.text(`Usuario: ${usuarioLogadoEmail || '-'}`, M.l + 75, y + 10);
+            y += 15;
         }
-        y += 3;
 
-        // Bloco Processamento
-        addTituloSecao('Processamento - Empenhos');
-        (t.empenhosVinculados || []).forEach(v => {
-            linha(`NE: ${v.numEmpenho || '-'} | Valor: R$ ${(v.valorVinculado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | LF: ${v.lf || '-'} | PF: ${v.pf || '-'}`, 10, y);
-            y += 5;
-            if (y > 270) { docPDF.addPage(); y = 15; }
-        });
-        y += 3;
-        addTituloSecao('Processamento - Deduções e Encargos');
-        const deducoes = t.deducoesAplicadas || t.tributacoes || [];
-        deducoes.forEach(tri => {
-            const tipo = tri.tipo || '-';
-            const valor = tri.valorCalculado != null ? tri.valorCalculado : tri.valor;
-            linha(`Tipo: ${tipo} | Base: R$ ${(tri.baseCalculo || 0).toFixed(2)} | Alíq: ${tri.aliquota || 0}% | Valor: R$ ${(valor || 0).toFixed(2)}`, 10, y);
-            y += 5;
-            if (y > 270) { docPDF.addPage(); y = 15; }
-        });
-        y += 3;
+        function bloco(titulo, linhas) {
+            const headerH = 6;
+            let corpoH = 4;
+            linhas.forEach(l => {
+                const label = String(l.label || '-');
+                const value = String(l.value || '-');
+                const linhasTxt = Math.max(
+                    docPDF.splitTextToSize(label, 42).length,
+                    docPDF.splitTextToSize(value, W - 52).length
+                );
+                corpoH += Math.max(4.5, linhasTxt * 3.8);
+            });
+            const totalH = headerH + corpoH + 2;
+            garantirEspaco(totalH + 2);
 
-        // Bloco Liquidação / Financeiro
-        addTituloSecao('Liquidação / Financeiro');
-        linha(`NP: ${t.np || '-'}`, 10, y); y += 5;
-        linha(`Data Liquidação: ${t.dataLiquidacao || '-'}`, 10, y); y += 5;
-        linha(`OP: ${t.op || '-'}`, 10, y); y += 5;
-        y += 3;
+            docPDF.setDrawColor(120);
+            docPDF.rect(M.l, y, W, totalH);
+            docPDF.setFillColor(238, 242, 247);
+            docPDF.rect(M.l, y, W, headerH, 'F');
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(9);
+            docPDF.text(titulo.toUpperCase(), M.l + 2, y + 4.2);
+            y += headerH + 2;
 
-        // Bloco Histórico
-        addTituloSecao('Histórico');
-        (t.historicoStatus || []).forEach(h => {
-            const dataHist = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : (h.data || '-');
-            linha(`Data: ${dataHist} | Status: ${h.status || h.statusNovo || '-'} | Usuário: ${h.usuario || '-'}`, 10, y);
-            y += 5;
-            if (h.motivoDevolucao) {
-                linha(`Motivo: ${h.motivoDevolucao}`, 12, y);
-                y += 5;
-            }
-            if (y > 270) { docPDF.addPage(); y = 15; }
+            linhas.forEach(l => {
+                const labelX = M.l + 2;
+                const valueX = M.l + 44;
+                docPDF.setFont('helvetica', 'bold');
+                const nLab = textoMulti(l.label, labelX, y + 3.2, 40, 8.2);
+                docPDF.setFont('helvetica', 'normal');
+                const nVal = textoMulti(l.value, valueX, y + 3.2, W - 48, 8.4);
+                const salto = Math.max(nLab, nVal) * 3.8 + 1.2;
+                y += salto;
+            });
+            y += 2;
+        }
+
+        cabecalhoPagina();
+        const fornecedorFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
+        const fornecedorNome = t.fornecedorNome || '-';
+        bloco('Identificacao do TC', [
+            { label: 'ID-PROC', value: t.idProc || '-' },
+            { label: 'Numero TC', value: t.numTC || '-' },
+            { label: 'Status', value: (t.status || 'Rascunho') + (t.inativo ? ' (INATIVO)' : '') },
+            { label: 'Data EXEFIN', value: t.dataExefin || '-' },
+            { label: 'OI de Origem', value: t.oiEntregou || '-' }
+        ]);
+
+        bloco('Dados do fornecedor e contrato', [
+            { label: 'Fornecedor', value: `${fornecedorFmt} - ${fornecedorNome}` },
+            { label: 'Contrato', value: t.instrumento || '-' },
+            { label: 'RC', value: t.rc || '-' },
+            { label: 'Valor TC', value: moeda(t.valorNotaFiscal) },
+            { label: 'Data Emissao', value: t.dataEmissao || '-' },
+            { label: 'Data Ateste', value: t.dataAteste || '-' },
+            { label: 'Observacoes', value: t.observacoes || '-' }
+        ]);
+
+        const empTxt = (t.empenhosVinculados || []).length
+            ? (t.empenhosVinculados || []).map((v, i) =>
+                `${i + 1}. NE ${v.numEmpenho || '-'} | ND ${v.nd || '-'} | Subel ${v.subelemento || '-'} | ${moeda(v.valorVinculado)} | LF ${v.lf || '-'} | PF ${v.pf || '-'}`
+            ).join('\n')
+            : 'Nenhum empenho vinculado.';
+        bloco('Processamento - Empenhos', [{ label: 'Lista', value: empTxt }]);
+
+        const deds = t.deducoesAplicadas || t.tributacoes || [];
+        const dedTxt = deds.length
+            ? deds.map((d, i) => {
+                const val = d.valorCalculado != null ? d.valorCalculado : d.valor;
+                return `${i + 1}. ${d.tipo || '-'} | Base ${moeda(d.baseCalculo)} | Aliq ${d.aliquota || 0}% | Valor ${moeda(val)}`;
+            }).join('\n')
+            : 'Nenhuma deducao/encargo aplicado.';
+        bloco('Processamento - Deducoes e encargos', [{ label: 'Lista', value: dedTxt }]);
+
+        bloco('Liquidacao e financeiro', [
+            { label: 'NP', value: t.np || '-' },
+            { label: 'Data Liquidacao', value: t.dataLiquidacao || '-' },
+            { label: 'OP', value: t.op || '-' }
+        ]);
+
+        const hist = (t.historicoStatus || []).slice().sort((a, b) => {
+            const da = a?.data?.toDate ? a.data.toDate().getTime() : new Date(a?.data || 0).getTime();
+            const db = b?.data?.toDate ? b.data.toDate().getTime() : new Date(b?.data || 0).getTime();
+            return db - da;
         });
+        const histTxt = hist.length
+            ? hist.map((h, i) => `${i + 1}. ${dataHist(h.data)} | ${h.status || h.statusNovo || '-'} | ${h.evento || '-'} | ${h.usuario || '-'}${h.motivoInfo ? ' | ' + h.motivoInfo : ''}${h.motivoDevolucao ? ' | ' + h.motivoDevolucao : ''}`).join('\n')
+            : 'Sem historico.';
+        bloco('Historico', [{ label: 'Eventos', value: histTxt }]);
 
         // Número de páginas no rodapé simples
         const totalPages = docPDF.getNumberOfPages();
