@@ -2835,6 +2835,27 @@
         const PAGE_H = 297;
         let y = M.t;
         const moeda = (n) => 'R$ ' + (Number(n || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const labelOI = (id) => {
+            const chave = String(id || '').trim();
+            if (!chave) return '-';
+            const oi = (listaOI || []).find(x => String(x.id || '').trim() === chave);
+            if (!oi) return chave;
+            return `${oi.numeroOI || '-'} - ${oi.nomeOI || ''}`.trim();
+        };
+        const labelCC = (id) => {
+            const chave = String(id || '').trim();
+            if (!chave) return '-';
+            const cc = (listaCentroCustos || []).find(x => String(x.id || '').trim() === chave);
+            if (!cc) return chave;
+            return `${cc.codigo || '-'} - ${cc.descricao || cc.aplicacao || ''}`.trim();
+        };
+        const labelUGPdf = (id) => {
+            const chave = String(id || '').trim();
+            if (!chave) return '-';
+            const ug = (listaUG || []).find(x => String(x.id || '').trim() === chave);
+            if (!ug) return chave;
+            return `${ug.codigo || '-'} - ${ug.nome || ''}`.trim();
+        };
         const toDateBr = (v) => {
             if (!v) return '-';
             if (v.toDate) {
@@ -2896,8 +2917,9 @@
             const hRow = 5.4;
             garantirEspaco(hCab + hRow + 2);
             let x = M.l;
-            docPDF.setFillColor(242, 245, 250);
-            docPDF.setDrawColor(140);
+            docPDF.setFillColor(248, 249, 251);
+            docPDF.setDrawColor(185, 185, 185);
+            docPDF.setTextColor(20, 20, 20);
             headers.forEach((h, i) => {
                 docPDF.rect(x, y, larguras[i], hCab, 'FD');
                 docPDF.setFont('helvetica', 'bold');
@@ -2944,7 +2966,7 @@
         linhaCampos([
             { label: 'Data Emissao', valor: toDateBr(t.dataEmissao) },
             { label: 'Data Ateste', valor: toDateBr(t.dataAteste) },
-            { label: 'OI de Origem', valor: t.oiEntregou || '-' },
+            { label: 'OI de Origem', valor: labelOI(t.oiEntregou) },
             { label: 'Valor TC', valor: moeda(t.valorNotaFiscal) }
         ]);
 
@@ -2970,8 +2992,8 @@
                     v.nd || '-',
                     v.subelemento || '-',
                     moeda(v.valorVinculado || 0),
-                    v.centroCustosId || '-',
-                    v.ugId || '-',
+                    labelCC(v.centroCustosId),
+                    labelUGPdf(v.ugId),
                     v.lf || '-',
                     v.pf || '-'
                 ]),
