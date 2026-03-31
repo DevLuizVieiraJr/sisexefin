@@ -2840,21 +2840,21 @@
             if (!chave) return '-';
             const oi = (listaOI || []).find(x => String(x.id || '').trim() === chave);
             if (!oi) return chave;
-            return `${oi.numeroOI || '-'} - ${oi.nomeOI || ''}`.trim();
+            return `${oi.numeroOI || '-'}`.trim();
         };
         const labelCC = (id) => {
             const chave = String(id || '').trim();
             if (!chave) return '-';
             const cc = (listaCentroCustos || []).find(x => String(x.id || '').trim() === chave);
             if (!cc) return chave;
-            return `${cc.codigo || '-'} - ${cc.descricao || cc.aplicacao || ''}`.trim();
+            return `${cc.codigo || '-'}`.trim();
         };
         const labelUGPdf = (id) => {
             const chave = String(id || '').trim();
             if (!chave) return '-';
             const ug = (listaUG || []).find(x => String(x.id || '').trim() === chave);
             if (!ug) return chave;
-            return `${ug.codigo || '-'} - ${ug.nome || ''}`.trim();
+            return `${ug.codigo || '-'}`.trim();
         };
         const toDateBr = (v) => {
             if (!v) return '-';
@@ -2917,7 +2917,7 @@
             const hRow = 5.4;
             garantirEspaco(hCab + hRow + 2);
             let x = M.l;
-            docPDF.setFillColor(248, 249, 251);
+            docPDF.setFillColor(232, 232, 232);
             docPDF.setDrawColor(185, 185, 185);
             docPDF.setTextColor(20, 20, 20);
             headers.forEach((h, i) => {
