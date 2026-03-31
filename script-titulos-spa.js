@@ -2916,28 +2916,34 @@
             const hCab = 6;
             const hRow = 5.4;
             garantirEspaco(hCab + hRow + 2);
+            // Garante que a tabela ocupe 100% da largura útil da página.
+            const totalLarg = (larguras || []).reduce((s, n) => s + Number(n || 0), 0) || 1;
+            const fator = W / totalLarg;
+            const largurasEsc = (larguras || []).map(n => Number(n || 0) * fator);
             let x = M.l;
-            docPDF.setFillColor(232, 232, 232);
+            // Cabeçalho com fundo cinza claro e texto preto.
+            docPDF.setFillColor(245, 245, 245);
             docPDF.setDrawColor(185, 185, 185);
-            docPDF.setTextColor(20, 20, 20);
+            docPDF.setTextColor(0, 0, 0);
             headers.forEach((h, i) => {
-                docPDF.rect(x, y, larguras[i], hCab, 'FD');
+                docPDF.rect(x, y, largurasEsc[i], hCab, 'FD');
                 docPDF.setFont('helvetica', 'bold');
                 docPDF.setFontSize(7.2);
                 docPDF.text(String(h), x + 1.2, y + 4);
-                x += larguras[i];
+                x += largurasEsc[i];
             });
             y += hCab;
             rows.forEach(r => {
                 garantirEspaco(hRow + 1);
                 x = M.l;
                 r.forEach((cell, i) => {
-                    docPDF.rect(x, y, larguras[i], hRow);
+                    docPDF.rect(x, y, largurasEsc[i], hRow);
                     docPDF.setFont('helvetica', 'normal');
                     docPDF.setFontSize(7.1);
-                    const txt = docPDF.splitTextToSize(String(cell ?? '-'), larguras[i] - 2.2);
+                    docPDF.setTextColor(0, 0, 0);
+                    const txt = docPDF.splitTextToSize(String(cell ?? '-'), largurasEsc[i] - 2.2);
                     docPDF.text(txt.slice(0, 1), x + 1.1, y + 3.8);
-                    x += larguras[i];
+                    x += largurasEsc[i];
                 });
                 y += hRow;
             });
