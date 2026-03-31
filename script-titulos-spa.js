@@ -1128,6 +1128,28 @@
     }
 
     let deducaoModalContexto = null;
+    function truncar2(n) {
+        const v = Number(n || 0);
+        if (!isFinite(v) || v <= 0) return 0;
+        return Math.floor(v * 100) / 100;
+    }
+    function calcularComponentesDarf(baseCalculo, aliquotaTotal) {
+        const base = Number(baseCalculo || 0);
+        const aliqTotal = Number(aliquotaTotal || 0);
+        const pesos = { ir: 1.5, cofins: 3.0, csll: 1.0, pis: 0.65 };
+        const somaPesos = pesos.ir + pesos.cofins + pesos.csll + pesos.pis; // 5.65
+        const fator = somaPesos > 0 ? (aliqTotal / somaPesos) : 0;
+        const aliqIR = pesos.ir * fator;
+        const aliqCOFINS = pesos.cofins * fator;
+        const aliqCSLL = pesos.csll * fator;
+        const aliqPIS = pesos.pis * fator;
+        const valorIR = truncar2(base * (aliqIR / 100));
+        const valorCOFINS = truncar2(base * (aliqCOFINS / 100));
+        const valorCSLL = truncar2(base * (aliqCSLL / 100));
+        const valorPISPASEP = truncar2(base * (aliqPIS / 100));
+        const total = truncar2(valorIR + valorCOFINS + valorCSLL + valorPISPASEP);
+        return { aliqIR, aliqCOFINS, aliqCSLL, aliqPIS, valorIR, valorCOFINS, valorCSLL, valorPISPASEP, total };
+    }
     function abrirModalCalcularDeducao(permitida, editIndex = null) {
         if (!podeEditarAba(1)) {
             alert('Clique em "Editar Processamento" para alterar deduções.');
@@ -1159,21 +1181,46 @@
             else if (tipo === 'DDR001') aliquota = Math.min(Number(dedEnc.aliquotaPadrao) || 5, Number(dedEnc.aliquotaMaxima) || 5);
         }
         const dataApuracao = edicao?.dataApuracao || ((tipo === 'DDF021' || tipo === 'DDR001') ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0,10)) : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0,10)));
-        const valorCalc = Math.round(baseTC * (aliquota / 100) * 100) / 100;
+        const valorCalc = truncar2(baseTC * (aliquota / 100));
+        const compsDarf = tipo === 'DDF025'
+            ? calcularComponentesDarf(baseTC, aliquota)
+            : null;
         campos.innerHTML = `
             <div class="form-group"><label>Base de cálculo (R$):</label><input type="text" id="dedModalBase" value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(baseTC) : baseTC.toFixed(2)}" data-moeda></div>
             <div class="form-group"><label>Alíquota (%):</label><input type="number" id="dedModalAliquota" step="0.01" value="${aliquota}" ${tipo === 'DDF025' ? 'readonly' : ''}></div>
             <div class="form-group"><label>Valor calculado (R$):</label><input type="text" id="dedModalValor" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorCalc) : valorCalc.toFixed(2)}"></div>
             <div class="form-group"><label>Data apuração:</label><input type="date" id="dedModalDataApuracao" value="${dataApuracao}" ${tipo === 'DDF021' || tipo === 'DDR001' ? 'readonly' : ''}></div>
+            ${tipo === 'DDF025' ? `
+                <fieldset class="gov-fieldset" style="margin-top:8px;">
+                    <legend>Composição DARF (somente leitura)</legend>
+                    <div class="form-row">
+                        <div class="form-group flex-1"><label>IR (R$):</label><input type="text" id="dedModalIR" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(compsDarf?.valorIR || 0) : (compsDarf?.valorIR || 0).toFixed(2)}"></div>
+                        <div class="form-group flex-1"><label>COFINS (R$):</label><input type="text" id="dedModalCOFINS" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(compsDarf?.valorCOFINS || 0) : (compsDarf?.valorCOFINS || 0).toFixed(2)}"></div>
+                        <div class="form-group flex-1"><label>CSLL (R$):</label><input type="text" id="dedModalCSLL" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(compsDarf?.valorCSLL || 0) : (compsDarf?.valorCSLL || 0).toFixed(2)}"></div>
+                        <div class="form-group flex-1"><label>PIS/PASEP (R$):</label><input type="text" id="dedModalPISPASEP" readonly value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(compsDarf?.valorPISPASEP || 0) : (compsDarf?.valorPISPASEP || 0).toFixed(2)}"></div>
+                    </div>
+                </fieldset>
+            ` : ''}
         `;
         const baseInp = document.getElementById('dedModalBase');
         const aliqInp = document.getElementById('dedModalAliquota');
         const recalc = () => {
             const b = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(baseInp?.value || 0) : parseFloat(String(baseInp?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
             const a = parseFloat(aliqInp?.value || 0) || 0;
-            const v = Math.round(b * (a / 100) * 100) / 100;
+            const v = truncar2(b * (a / 100));
             const valEl = document.getElementById('dedModalValor');
             if (valEl) valEl.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v) : v.toFixed(2);
+            if (tipo === 'DDF025') {
+                const c = calcularComponentesDarf(b, a);
+                const elIr = document.getElementById('dedModalIR');
+                const elCof = document.getElementById('dedModalCOFINS');
+                const elCsll = document.getElementById('dedModalCSLL');
+                const elPis = document.getElementById('dedModalPISPASEP');
+                if (elIr) elIr.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorIR) : c.valorIR.toFixed(2);
+                if (elCof) elCof.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorCOFINS) : c.valorCOFINS.toFixed(2);
+                if (elCsll) elCsll.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorCSLL) : c.valorCSLL.toFixed(2);
+                if (elPis) elPis.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorPISPASEP) : c.valorPISPASEP.toFixed(2);
+            }
         };
         if (baseInp) baseInp.addEventListener('input', recalc);
         if (aliqInp) aliqInp.addEventListener('input', recalc);
@@ -1187,7 +1234,8 @@
         const { permitida, dedEnc, tipo, editIndex } = deducaoModalContexto;
         const baseVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('dedModalBase')?.value || 0) : parseFloat(String(document.getElementById('dedModalBase')?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
         const aliquotaVal = parseFloat(document.getElementById('dedModalAliquota')?.value || 0) || 0;
-        const valorCalc = Math.round(baseVal * (aliquotaVal / 100) * 100) / 100;
+        const valorCalc = truncar2(baseVal * (aliquotaVal / 100));
+        const compsDarf = tipo === 'DDF025' ? calcularComponentesDarf(baseVal, aliquotaVal) : null;
         const dataApuracao = document.getElementById('dedModalDataApuracao')?.value || '';
         const jaExiste = (tipo === 'DDF021' || tipo === 'DDR001') && deducoesAplicadasAtual.some((d, idx) => d.tipo === tipo && idx !== editIndex);
         if (jaExiste) { alert('Já existe uma dedução ' + (tipo === 'DDF021' ? 'INSS' : 'ISS') + ' neste TC. Remova-a antes de adicionar outra.'); return; }
@@ -1195,7 +1243,11 @@
             dedEncId: permitida.dedEncId || dedEnc?.id,
             tipo, codigo: permitida.codigo || dedEnc?.codigo, descricao: permitida.descricao || dedEnc?.descricao,
             baseCalculo: baseVal, aliquota: aliquotaVal, valorCalculado: valorCalc, dataApuracao,
-            natRendimento: dedEnc?.natRendimento, codReceita: dedEnc?.codReceita
+            natRendimento: dedEnc?.natRendimento, codReceita: dedEnc?.codReceita,
+            valorIR: compsDarf?.valorIR || 0,
+            valorCOFINS: compsDarf?.valorCOFINS || 0,
+            valorCSLL: compsDarf?.valorCSLL || 0,
+            valorPISPASEP: compsDarf?.valorPISPASEP || 0
         };
         if (editIndex !== null && editIndex >= 0 && deducoesAplicadasAtual[editIndex]) deducoesAplicadasAtual[editIndex] = { ...deducoesAplicadasAtual[editIndex], ...item };
         else deducoesAplicadasAtual.push(item);
@@ -1685,6 +1737,41 @@
     function preencherDadosContrato(contrato) {
         const fmtMoeda = (v) => typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v || 0) : String(v || '');
         const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+        const normalizarStatusRc = (status) => {
+            const s = String(status || 'Ativo').trim().toLowerCase();
+            return s === 'inativo' ? 'Inativo' : 'Ativo';
+        };
+        const normalizarTipoRc = (tipo) => {
+            const t = String(tipo || '').trim();
+            return (t === 'Material' || t === 'Serviço' || t === 'Locação') ? t : '';
+        };
+        const extrairOpcaoRc = (rc, idx) => {
+            if (!rc) return null;
+            if (typeof rc === 'string') {
+                const txt = String(rc).trim();
+                const m = txt.match(/^(\d+)\s*\/\s*(\d{4})\s*-\s*(Material|Serviço|Locação)$/i);
+                if (!m) return null;
+                const tipo = m[3].toLowerCase() === 'serviço' ? 'Serviço' : (m[3].toLowerCase() === 'locação' ? 'Locação' : 'Material');
+                return {
+                    ano: m[2],
+                    numero: m[1],
+                    tipo: tipo,
+                    status: 'Ativo',
+                    createdAt: idx
+                };
+            }
+            const ano = String(rc.ano || rc.anoRC || '').replace(/\D/g, '').slice(0, 4);
+            const numero = String(rc.numero || rc.numRC || rc.numeroRC || '').replace(/\D/g, '');
+            const tipo = normalizarTipoRc(rc.tipo || rc.tipoRC || '');
+            const status = normalizarStatusRc(rc.status || rc.statusRC || 'Ativo');
+            if (!ano || !numero || !tipo) return null;
+            let createdAt = rc.createdAt || rc.criadoEm || idx;
+            if (typeof createdAt !== 'number') {
+                const parsed = new Date(createdAt).getTime();
+                createdAt = Number.isNaN(parsed) ? idx : parsed;
+            }
+            return { ano, numero, tipo, status, createdAt };
+        };
         if (!contrato) {
             set('valorContrato', '');
             const rcS = document.getElementById('rcSelecionada');
@@ -1701,7 +1788,22 @@
         const rcs = Array.isArray(contrato.rcs) ? contrato.rcs : [];
         const rcS = document.getElementById('rcSelecionada');
         if (rcS) {
-            rcS.innerHTML = rcs.length ? rcs.map(r => '<option value="' + escapeHTML(r) + '">' + escapeHTML(r) + '</option>').join('') : '<option value="">Sem RC</option>';
+            const anoAtual = String(new Date().getFullYear());
+            const opcoes = rcs
+                .map((rc, idx) => extrairOpcaoRc(rc, idx))
+                .filter(Boolean)
+                .filter(rc => rc.status === 'Ativo' && rc.ano === anoAtual)
+                .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+                .map(rc => {
+                    const label = rc.numero + '/' + rc.ano + ' - ' + rc.tipo;
+                    return '<option value="' + escapeHTML(label) + '">' + escapeHTML(label) + '</option>';
+                });
+            if (opcoes.length) {
+                rcS.innerHTML = opcoes.join('');
+                rcS.selectedIndex = opcoes.length - 1;
+            } else {
+                rcS.innerHTML = '<option value="">Nenhuma cadastrada para esse ano</option>';
+            }
         }
         const toYYYYMMDD = (d) => {
             if (!d) return '';
@@ -2728,122 +2830,250 @@
         }
         const { jsPDF } = window.jspdf;
         const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
-        const M = { l: 10, r: 10, t: 12, b: 12 };
+        const M = { l: 10, r: 10, t: 10, b: 12 };
         const W = 210 - M.l - M.r;
+        const PAGE_H = 297;
         let y = M.t;
-        const now = new Date().toLocaleString('pt-BR');
         const moeda = (n) => 'R$ ' + (Number(n || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const dataHist = (v) => (v && v.toDate) ? v.toDate().toLocaleString('pt-BR') : (v || '-');
-        const garantirEspaco = (h) => { if (y + h > 297 - M.b) { docPDF.addPage(); y = M.t; } };
-        const textoMulti = (txt, x, yy, maxW, fs = 8.5) => {
-            docPDF.setFontSize(fs);
-            const linhas = docPDF.splitTextToSize(String(txt || '-'), maxW);
-            docPDF.text(linhas, x, yy);
-            return linhas.length;
+        const toDateBr = (v) => {
+            if (!v) return '-';
+            if (v.toDate) {
+                const d = v.toDate();
+                return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            }
+            if (typeof v === 'string') {
+                if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+                    const p = v.slice(0, 10).split('-');
+                    return `${p[2]}/${p[1]}/${p[0]}`;
+                }
+                const d = new Date(v);
+                if (!isNaN(d.getTime())) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                return v;
+            }
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return '-';
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         };
-
-        function cabecalhoPagina() {
+        const garantirEspaco = (h) => {
+            if (y + h > PAGE_H - M.b) {
+                docPDF.addPage();
+                y = M.t;
+            }
+        };
+        const tituloSecao = (txt) => {
+            garantirEspaco(9);
+            docPDF.setFillColor(235, 240, 247);
+            docPDF.rect(M.l, y, W, 6, 'F');
             docPDF.setDrawColor(120);
-            docPDF.rect(M.l, y, W, 12);
-            docPDF.setFont('helvetica', 'bold');
-            docPDF.setFontSize(11);
-            docPDF.text('SIS EXE FIN - TITULO DE CREDITO', M.l + 3, y + 5);
-            docPDF.setFont('helvetica', 'normal');
-            docPDF.setFontSize(8.5);
-            docPDF.text(`Gerado em: ${now}`, M.l + 3, y + 10);
-            docPDF.text(`Usuario: ${usuarioLogadoEmail || '-'}`, M.l + 75, y + 10);
-            y += 15;
-        }
-
-        function bloco(titulo, linhas) {
-            const headerH = 6;
-            let corpoH = 4;
-            linhas.forEach(l => {
-                const label = String(l.label || '-');
-                const value = String(l.value || '-');
-                const linhasTxt = Math.max(
-                    docPDF.splitTextToSize(label, 42).length,
-                    docPDF.splitTextToSize(value, W - 52).length
-                );
-                corpoH += Math.max(4.5, linhasTxt * 3.8);
-            });
-            const totalH = headerH + corpoH + 2;
-            garantirEspaco(totalH + 2);
-
-            docPDF.setDrawColor(120);
-            docPDF.rect(M.l, y, W, totalH);
-            docPDF.setFillColor(238, 242, 247);
-            docPDF.rect(M.l, y, W, headerH, 'F');
+            docPDF.rect(M.l, y, W, 6);
             docPDF.setFont('helvetica', 'bold');
             docPDF.setFontSize(9);
-            docPDF.text(titulo.toUpperCase(), M.l + 2, y + 4.2);
-            y += headerH + 2;
-
-            linhas.forEach(l => {
-                const labelX = M.l + 2;
-                const valueX = M.l + 44;
+            docPDF.text(String(txt || '').toUpperCase(), M.l + 2, y + 4.2);
+            y += 7;
+        };
+        const campoAbaixo = (label, valor, x, largura) => {
+            const h = 12;
+            garantirEspaco(h + 1);
+            docPDF.setDrawColor(150);
+            docPDF.rect(x, y, largura, h);
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(7.4);
+            docPDF.text(String(label || '-'), x + 1.5, y + 3.5);
+            docPDF.setFont('helvetica', 'normal');
+            docPDF.setFontSize(8.2);
+            const linhas = docPDF.splitTextToSize(String(valor || '-'), largura - 3);
+            docPDF.text(linhas, x + 1.5, y + 8);
+        };
+        const linhaCampos = (campos) => {
+            const gap = 2;
+            const largura = (W - gap * (campos.length - 1)) / campos.length;
+            campos.forEach((c, i) => campoAbaixo(c.label, c.valor, M.l + i * (largura + gap), largura));
+            y += 13;
+        };
+        const tabela = (headers, rows, larguras) => {
+            if (!rows || rows.length === 0) return;
+            const hCab = 6;
+            const hRow = 5.4;
+            garantirEspaco(hCab + hRow + 2);
+            let x = M.l;
+            docPDF.setFillColor(242, 245, 250);
+            docPDF.setDrawColor(140);
+            headers.forEach((h, i) => {
+                docPDF.rect(x, y, larguras[i], hCab, 'FD');
                 docPDF.setFont('helvetica', 'bold');
-                const nLab = textoMulti(l.label, labelX, y + 3.2, 40, 8.2);
-                docPDF.setFont('helvetica', 'normal');
-                const nVal = textoMulti(l.value, valueX, y + 3.2, W - 48, 8.4);
-                const salto = Math.max(nLab, nVal) * 3.8 + 1.2;
-                y += salto;
+                docPDF.setFontSize(7.2);
+                docPDF.text(String(h), x + 1.2, y + 4);
+                x += larguras[i];
+            });
+            y += hCab;
+            rows.forEach(r => {
+                garantirEspaco(hRow + 1);
+                x = M.l;
+                r.forEach((cell, i) => {
+                    docPDF.rect(x, y, larguras[i], hRow);
+                    docPDF.setFont('helvetica', 'normal');
+                    docPDF.setFontSize(7.1);
+                    const txt = docPDF.splitTextToSize(String(cell ?? '-'), larguras[i] - 2.2);
+                    docPDF.text(txt.slice(0, 1), x + 1.1, y + 3.8);
+                    x += larguras[i];
+                });
+                y += hRow;
             });
             y += 2;
+        };
+
+        // Cabeçalho
+        docPDF.setDrawColor(90);
+        docPDF.rect(M.l, y, W, 11);
+        docPDF.setFont('helvetica', 'bold');
+        docPDF.setFontSize(10.5);
+        docPDF.text('SIS EXE FIN - TITULO DE CREDITO', M.l + 2, y + 4.2);
+        docPDF.setFont('helvetica', 'normal');
+        docPDF.setFontSize(7.6);
+        docPDF.text(`Gerado em ${toDateBr(new Date())} | Usuario: ${usuarioLogadoEmail || '-'}`, M.l + 2, y + 8.4);
+        y += 13;
+
+        const fornecedorFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
+        tituloSecao('Identificacao do TC');
+        linhaCampos([
+            { label: 'ID-PROC', valor: t.idProc || '-' },
+            { label: 'Numero TC', valor: t.numTC || '-' },
+            { label: 'Status', valor: (t.status || 'Rascunho') + (t.inativo ? ' (INATIVO)' : '') },
+            { label: 'Data EXEFIN', valor: toDateBr(t.dataExefin) }
+        ]);
+        linhaCampos([
+            { label: 'Data Emissao', valor: toDateBr(t.dataEmissao) },
+            { label: 'Data Ateste', valor: toDateBr(t.dataAteste) },
+            { label: 'OI de Origem', valor: t.oiEntregou || '-' },
+            { label: 'Valor TC', valor: moeda(t.valorNotaFiscal) }
+        ]);
+
+        tituloSecao('Fornecedor e contrato');
+        linhaCampos([
+            { label: 'Fornecedor (CNPJ)', valor: fornecedorFmt || '-' },
+            { label: 'Nome do Fornecedor', valor: t.fornecedorNome || '-' }
+        ]);
+        linhaCampos([
+            { label: 'Contrato (Instrumento)', valor: t.instrumento || '-' },
+            { label: 'RC', valor: t.rc || '-' }
+        ]);
+        linhaCampos([{ label: 'Observacoes', valor: t.observacoes || '-' }]);
+
+        // Tabela Empenhos
+        const empenhos = t.empenhosVinculados || [];
+        if (empenhos.length) {
+            tituloSecao('Empenhos vinculados');
+            tabela(
+                ['NE', 'ND', 'Subel', 'Valor', 'Centro de Custos', 'UG', 'LF', 'PF'],
+                empenhos.map(v => [
+                    v.numEmpenho || '-',
+                    v.nd || '-',
+                    v.subelemento || '-',
+                    moeda(v.valorVinculado || 0),
+                    v.centroCustosId || '-',
+                    v.ugId || '-',
+                    v.lf || '-',
+                    v.pf || '-'
+                ]),
+                [24, 16, 14, 20, 38, 24, 22, 22]
+            );
         }
 
-        cabecalhoPagina();
-        const fornecedorFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
-        const fornecedorNome = t.fornecedorNome || '-';
-        bloco('Identificacao do TC', [
-            { label: 'ID-PROC', value: t.idProc || '-' },
-            { label: 'Numero TC', value: t.numTC || '-' },
-            { label: 'Status', value: (t.status || 'Rascunho') + (t.inativo ? ' (INATIVO)' : '') },
-            { label: 'Data EXEFIN', value: t.dataExefin || '-' },
-            { label: 'OI de Origem', value: t.oiEntregou || '-' }
+        // Deduções por tipo (somente se houver)
+        const deds = (t.deducoesAplicadas || t.tributacoes || []).map(d => ({ ...d, valorCalculado: Number(d.valorCalculado != null ? d.valorCalculado : d.valor || 0) }));
+        const grupos = [
+            { tipo: 'DDF021', nome: 'INSS' },
+            { tipo: 'DDR001', nome: 'ISS' },
+            { tipo: 'DDF025', nome: 'DARF' }
+        ];
+        grupos.forEach(g => {
+            const itens = deds.filter(d => d.tipo === g.tipo);
+            if (!itens.length) return;
+            tituloSecao(`Deducoes - ${g.nome}`);
+            if (g.tipo !== 'DDF025') {
+                tabela(
+                    ['Codigo', 'Base', 'Aliquota', 'Valor', 'Data Apuracao'],
+                    itens.map(d => [
+                        d.codReceita || d.codigo || '-',
+                        moeda(d.baseCalculo || 0),
+                        `${Number(d.aliquota || 0).toFixed(2)}%`,
+                        moeda(truncar2(d.valorCalculado || 0)),
+                        toDateBr(d.dataApuracao)
+                    ]),
+                    [28, 34, 28, 30, 40]
+                );
+            } else {
+                const rowsDarF = itens.map(d => {
+                    const base = Number(d.baseCalculo || t.valorNotaFiscal || 0);
+                    const aliq = Number(d.aliquota || 0);
+                    const comps = (d.valorIR != null || d.valorCOFINS != null || d.valorCSLL != null || d.valorPISPASEP != null)
+                        ? {
+                            valorIR: truncar2(d.valorIR || 0),
+                            valorCOFINS: truncar2(d.valorCOFINS || 0),
+                            valorCSLL: truncar2(d.valorCSLL || 0),
+                            valorPISPASEP: truncar2(d.valorPISPASEP || 0),
+                            total: truncar2((d.valorIR || 0) + (d.valorCOFINS || 0) + (d.valorCSLL || 0) + (d.valorPISPASEP || 0))
+                        }
+                        : calcularComponentesDarf(base, aliq);
+                    return [
+                        d.codReceita || d.codigo || '-',
+                        moeda(base),
+                        `${aliq.toFixed(2)}%`,
+                        moeda(comps.valorIR),
+                        moeda(comps.valorCOFINS),
+                        moeda(comps.valorCSLL),
+                        moeda(comps.valorPISPASEP),
+                        moeda(comps.total)
+                    ];
+                });
+                tabela(
+                    ['Cod.', 'Base', 'Aliq', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total DARF'],
+                    rowsDarF,
+                    [14, 24, 14, 20, 20, 20, 24, 24]
+                );
+            }
+        });
+
+        // Liquidação / financeiro com fechamento OB
+        const totalDed = truncar2(deds.reduce((s, d) => s + truncar2(d.valorCalculado || 0), 0));
+        const valorTC = Number(t.valorNotaFiscal || 0);
+        const obBase = Math.max(0, valorTC - totalDed);
+        let valorOB = Math.ceil(obBase * 100) / 100;
+        if (truncar2(totalDed + valorOB) > truncar2(valorTC)) {
+            valorOB = truncar2(obBase);
+        }
+        tituloSecao('Liquidacao e financeiro');
+        linhaCampos([
+            { label: 'NP', valor: t.np || '-' },
+            { label: 'Data Liquidacao', valor: toDateBr(t.dataLiquidacao) },
+            { label: 'OP', valor: t.op || '-' }
+        ]);
+        linhaCampos([
+            { label: 'Total de Deducoes', valor: moeda(totalDed) },
+            { label: 'OB (valor liquido)', valor: moeda(valorOB) },
+            { label: 'Conferencia (Ded + OB)', valor: moeda(truncar2(totalDed + valorOB)) }
         ]);
 
-        bloco('Dados do fornecedor e contrato', [
-            { label: 'Fornecedor', value: `${fornecedorFmt} - ${fornecedorNome}` },
-            { label: 'Contrato', value: t.instrumento || '-' },
-            { label: 'RC', value: t.rc || '-' },
-            { label: 'Valor TC', value: moeda(t.valorNotaFiscal) },
-            { label: 'Data Emissao', value: t.dataEmissao || '-' },
-            { label: 'Data Ateste', value: t.dataAteste || '-' },
-            { label: 'Observacoes', value: t.observacoes || '-' }
-        ]);
-
-        const empTxt = (t.empenhosVinculados || []).length
-            ? (t.empenhosVinculados || []).map((v, i) =>
-                `${i + 1}. NE ${v.numEmpenho || '-'} | ND ${v.nd || '-'} | Subel ${v.subelemento || '-'} | ${moeda(v.valorVinculado)} | LF ${v.lf || '-'} | PF ${v.pf || '-'}`
-            ).join('\n')
-            : 'Nenhum empenho vinculado.';
-        bloco('Processamento - Empenhos', [{ label: 'Lista', value: empTxt }]);
-
-        const deds = t.deducoesAplicadas || t.tributacoes || [];
-        const dedTxt = deds.length
-            ? deds.map((d, i) => {
-                const val = d.valorCalculado != null ? d.valorCalculado : d.valor;
-                return `${i + 1}. ${d.tipo || '-'} | Base ${moeda(d.baseCalculo)} | Aliq ${d.aliquota || 0}% | Valor ${moeda(val)}`;
-            }).join('\n')
-            : 'Nenhuma deducao/encargo aplicado.';
-        bloco('Processamento - Deducoes e encargos', [{ label: 'Lista', value: dedTxt }]);
-
-        bloco('Liquidacao e financeiro', [
-            { label: 'NP', value: t.np || '-' },
-            { label: 'Data Liquidacao', value: t.dataLiquidacao || '-' },
-            { label: 'OP', value: t.op || '-' }
-        ]);
-
+        // Histórico
         const hist = (t.historicoStatus || []).slice().sort((a, b) => {
             const da = a?.data?.toDate ? a.data.toDate().getTime() : new Date(a?.data || 0).getTime();
             const db = b?.data?.toDate ? b.data.toDate().getTime() : new Date(b?.data || 0).getTime();
             return db - da;
         });
-        const histTxt = hist.length
-            ? hist.map((h, i) => `${i + 1}. ${dataHist(h.data)} | ${h.status || h.statusNovo || '-'} | ${h.evento || '-'} | ${h.usuario || '-'}${h.motivoInfo ? ' | ' + h.motivoInfo : ''}${h.motivoDevolucao ? ' | ' + h.motivoDevolucao : ''}`).join('\n')
-            : 'Sem historico.';
-        bloco('Historico', [{ label: 'Eventos', value: histTxt }]);
+        if (hist.length) {
+            tituloSecao('Historico');
+            tabela(
+                ['Data', 'Status', 'Evento', 'Usuario', 'Informacao'],
+                hist.map(h => [
+                    toDateBr(h.data),
+                    h.status || h.statusNovo || '-',
+                    h.evento || '-',
+                    h.usuario || '-',
+                    h.motivoInfo || h.motivoDevolucao || '-'
+                ]),
+                [24, 26, 36, 38, 66]
+            );
+        }
 
         // Número de páginas no rodapé simples
         const totalPages = docPDF.getNumberOfPages();

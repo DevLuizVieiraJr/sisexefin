@@ -59,6 +59,8 @@
         atualizarTabelaContratos();
     }));
     let indicesDedEncSelecionados = new Set();
+    let rcsContratoAtual = [];
+    let editIndexRcContrato = -1;
     function abrirFormularioContrato(isEdit) {
         if (!isEdit) {
             formContrato.reset();
@@ -66,6 +68,10 @@
             deducoesPermitidasContratoAtual = [];
             indicesDedEncSelecionados = new Set();
             desenharDedEncContrato();
+            rcsContratoAtual = [];
+            editIndexRcContrato = -1;
+            limparCamposRcContrato();
+            desenharRcContrato();
         }
         document.getElementById('tela-lista-contratos').style.display = 'none';
         document.getElementById('tela-formulario-contratos').style.display = 'block';
@@ -142,6 +148,10 @@
             deducoesPermitidasContratoAtual = (c.deducoesPermitidas && Array.isArray(c.deducoesPermitidas)) ? c.deducoesPermitidas.map(function(x) { return { dedEncId: x.dedEncId, tipo: x.tipo, codigo: x.codigo, descricao: x.descricao }; }) : (c.codigosReceita && Array.isArray(c.codigosReceita)) ? c.codigosReceita.map(function(cod) { return { codigo: cod, tipo: 'DDF025' }; }) : [];
             indicesDedEncSelecionados = new Set();
             desenharDedEncContrato();
+            rcsContratoAtual = normalizarListaRcContrato(c.rcs);
+            editIndexRcContrato = -1;
+            limparCamposRcContrato();
+            desenharRcContrato();
         }
     }
     async function apagarContrato(id) {
@@ -177,7 +187,8 @@
             dataInicio: escapeHTML(document.getElementById('dataInicio').value),
             dataFim: escapeHTML(document.getElementById('dataFim').value),
             valorContrato: numVal,
-            deducoesPermitidas: deducoesPermitidasContratoAtual
+            deducoesPermitidas: deducoesPermitidasContratoAtual,
+            rcs: rcsContratoAtual
         };
         try {
             if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); }
@@ -339,6 +350,224 @@
             desenharDedEncContrato();
         });
     }
+
+    function anoAtualRC() {
+        return String(new Date().getFullYear());
+    }
+
+    function gerarLabelRC(rc) {
+        const numero = String(rc.numero || '').trim();
+        const ano = String(rc.ano || '').trim();
+        const tipo = String(rc.tipo || '').trim();
+        if (!numero || !ano || !tipo) return '';
+        return numero + '/' + ano + ' - ' + tipo;
+    }
+
+    function normalizarRcItem(item, idx) {
+        if (!item) return null;
+        if (typeof item === 'string') {
+            const txt = String(item).trim();
+            const m = txt.match(/^(\d+)\s*\/\s*(\d{4})\s*-\s*(Material|Serviço|Locação)$/i);
+            if (!m) return null;
+            const tipoNormalizado = (m[3].toLowerCase() === 'serviço') ? 'Serviço' : (m[3].toLowerCase() === 'locação' ? 'Locação' : 'Material');
+            return {
+                ano: m[2],
+                numero: m[1],
+                valor: 0,
+                tipo: tipoNormalizado,
+                status: 'Ativo',
+                createdAt: Date.now() + idx
+            };
+        }
+        const ano = String(item.ano || item.anoRC || '').replace(/\D/g, '').slice(0, 4);
+        const numero = String(item.numero || item.numRC || item.numeroRC || '').replace(/\D/g, '');
+        const tipoRaw = String(item.tipo || item.tipoRC || '').trim();
+        const tipo = (tipoRaw === 'Material' || tipoRaw === 'Serviço' || tipoRaw === 'Locação') ? tipoRaw : '';
+        const statusRaw = String(item.status || item.statusRC || '').toLowerCase();
+        const status = statusRaw === 'inativo' ? 'Inativo' : 'Ativo';
+        const valor = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(item.valor || item.valorRC || 0) : (parseFloat(item.valor || item.valorRC || 0) || 0);
+        if (!ano || !numero || !tipo) return null;
+        return {
+            ano: ano,
+            numero: numero,
+            valor: valor,
+            tipo: tipo,
+            status: status,
+            createdAt: item.createdAt || item.criadoEm || (Date.now() + idx)
+        };
+    }
+
+    function normalizarListaRcContrato(lista) {
+        if (!Array.isArray(lista)) return [];
+        return lista.map(function(rc, idx) { return normalizarRcItem(rc, idx); }).filter(Boolean);
+    }
+
+    function limparCamposRcContrato() {
+        const anoEl = document.getElementById('rcAnoContrato');
+        const numEl = document.getElementById('rcNumeroContrato');
+        const valorEl = document.getElementById('rcValorContrato');
+        const tipoEl = document.getElementById('rcTipoContrato');
+        const statusEl = document.getElementById('rcStatusContrato');
+        if (anoEl) anoEl.value = anoAtualRC();
+        if (numEl) numEl.value = '';
+        if (valorEl) valorEl.value = '';
+        if (tipoEl) tipoEl.value = '';
+        if (statusEl) statusEl.value = 'Ativo';
+        const btnAdd = document.getElementById('btnAdicionarRcContrato');
+        const btnCancel = document.getElementById('btnCancelarEdicaoRcContrato');
+        if (btnAdd) btnAdd.textContent = '+ Adicionar RC';
+        if (btnCancel) btnCancel.style.display = 'none';
+    }
+
+    function desenharRcContrato() {
+        const tbody = document.getElementById('tbodyRcContrato');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!rcsContratoAtual.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666;">Nenhuma RC adicionada.</td></tr>';
+            return;
+        }
+        rcsContratoAtual.forEach(function(rc, idx) {
+            const valorFmt = (typeof formatarMoedaBR === 'function') ? ('R$ ' + formatarMoedaBR(rc.valor || 0)) : String(rc.valor || '0');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + escapeHTML(rc.ano || '-') + '</td>' +
+                '<td>' + escapeHTML(rc.numero || '-') + '</td>' +
+                '<td>' + escapeHTML(valorFmt) + '</td>' +
+                '<td>' + escapeHTML(rc.tipo || '-') + '</td>' +
+                '<td>' + escapeHTML(rc.status || '-') + '</td>' +
+                '<td>' +
+                    '<button type="button" class="btn-default btn-small btn-editar-rc-contrato" data-index="' + idx + '">Editar</button> ' +
+                    '<button type="button" class="btn-default btn-small btn-remover-rc-contrato" data-index="' + idx + '" style="color:#e74c3c;">Remover</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function preencherCamposRcContrato(rc, idx) {
+        const anoEl = document.getElementById('rcAnoContrato');
+        const numEl = document.getElementById('rcNumeroContrato');
+        const valorEl = document.getElementById('rcValorContrato');
+        const tipoEl = document.getElementById('rcTipoContrato');
+        const statusEl = document.getElementById('rcStatusContrato');
+        if (anoEl) anoEl.value = rc.ano || '';
+        if (numEl) numEl.value = rc.numero || '';
+        if (valorEl) valorEl.value = (typeof formatarMoedaBR === 'function') ? ('R$ ' + formatarMoedaBR(rc.valor || 0)) : String(rc.valor || '');
+        if (tipoEl) tipoEl.value = rc.tipo || '';
+        if (statusEl) statusEl.value = rc.status || 'Ativo';
+        editIndexRcContrato = idx;
+        const btnAdd = document.getElementById('btnAdicionarRcContrato');
+        const btnCancel = document.getElementById('btnCancelarEdicaoRcContrato');
+        if (btnAdd) btnAdd.textContent = 'Salvar edição RC';
+        if (btnCancel) btnCancel.style.display = 'inline-block';
+    }
+
+    function obterInstrumentosDoContratoEmEdicao() {
+        const instrumentos = new Set();
+        const atual = String(document.getElementById('numContrato')?.value || '').trim();
+        if (atual) instrumentos.add(atual);
+        const fbID = String(document.getElementById('editIndexContrato')?.value || '').trim();
+        if (fbID && fbID !== '-1') {
+            const contratoBase = (baseContratos || []).find(function(c) { return c.id === fbID; });
+            const antigo = String(contratoBase?.numContrato || contratoBase?.instrumento || '').trim();
+            if (antigo) instrumentos.add(antigo);
+        }
+        return Array.from(instrumentos);
+    }
+
+    function rcEstaEmUso(rc) {
+        if (typeof baseTitulos === 'undefined' || !Array.isArray(baseTitulos) || !baseTitulos.length) return false;
+        const label = gerarLabelRC(rc);
+        if (!label) return false;
+        const instrumentos = obterInstrumentosDoContratoEmEdicao();
+        if (!instrumentos.length) return baseTitulos.some(function(t) { return String(t.rc || '').trim() === label; });
+        return baseTitulos.some(function(t) {
+            const rcMatch = String(t.rc || '').trim() === label;
+            const instrumento = String(t.instrumento || '').trim();
+            return rcMatch && instrumentos.indexOf(instrumento) !== -1;
+        });
+    }
+
+    function adicionarOuAtualizarRcContrato() {
+        const ano = String(document.getElementById('rcAnoContrato')?.value || '').replace(/\D/g, '').slice(0, 4);
+        const numero = String(document.getElementById('rcNumeroContrato')?.value || '').replace(/\D/g, '');
+        const tipo = String(document.getElementById('rcTipoContrato')?.value || '').trim();
+        const status = String(document.getElementById('rcStatusContrato')?.value || 'Ativo').trim();
+        const valorRaw = document.getElementById('rcValorContrato')?.value || '';
+        const valor = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorRaw) : (parseFloat(valorRaw) || 0);
+
+        if (!ano || ano.length !== 4) return alert('Informe o ano da RC com 4 dígitos.');
+        if (!numero) return alert('Informe o número da RC (apenas numérico).');
+        if (!tipo || ['Material', 'Serviço', 'Locação'].indexOf(tipo) === -1) return alert('Selecione um tipo de RC válido.');
+        if (['Ativo', 'Inativo'].indexOf(status) === -1) return alert('Selecione um status de RC válido.');
+
+        const idxDuplicado = rcsContratoAtual.findIndex(function(rc, idx) {
+            if (editIndexRcContrato === idx) return false;
+            return String(rc.ano) === ano && String(rc.numero) === numero;
+        });
+        if (idxDuplicado !== -1) return alert('Já existe RC com esse Ano + Número neste contrato.');
+
+        const base = {
+            ano: ano,
+            numero: numero,
+            valor: valor,
+            tipo: tipo,
+            status: status
+        };
+        if (editIndexRcContrato >= 0 && editIndexRcContrato < rcsContratoAtual.length) {
+            const atual = rcsContratoAtual[editIndexRcContrato];
+            rcsContratoAtual[editIndexRcContrato] = Object.assign({}, atual, base);
+        } else {
+            rcsContratoAtual.push(Object.assign({}, base, { createdAt: Date.now() }));
+        }
+        editIndexRcContrato = -1;
+        limparCamposRcContrato();
+        desenharRcContrato();
+    }
+
+    function removerRcContrato(idx) {
+        if (isNaN(idx) || idx < 0 || idx >= rcsContratoAtual.length) return;
+        const rc = rcsContratoAtual[idx];
+        if (rcEstaEmUso(rc)) {
+            alert('Não é possível remover esta RC: há TC vinculado utilizando esta RC.');
+            return;
+        }
+        rcsContratoAtual.splice(idx, 1);
+        if (editIndexRcContrato === idx) {
+            editIndexRcContrato = -1;
+            limparCamposRcContrato();
+        }
+        desenharRcContrato();
+    }
+
+    const btnAddRc = document.getElementById('btnAdicionarRcContrato');
+    if (btnAddRc) btnAddRc.addEventListener('click', adicionarOuAtualizarRcContrato);
+    const btnCancelRc = document.getElementById('btnCancelarEdicaoRcContrato');
+    if (btnCancelRc) {
+        btnCancelRc.addEventListener('click', function() {
+            editIndexRcContrato = -1;
+            limparCamposRcContrato();
+        });
+    }
+    const tbodyRc = document.getElementById('tbodyRcContrato');
+    if (tbodyRc) {
+        tbodyRc.addEventListener('click', function(e) {
+            const btnEd = e.target.closest('.btn-editar-rc-contrato');
+            if (btnEd) {
+                const idx = parseInt(btnEd.getAttribute('data-index'), 10);
+                if (isNaN(idx) || idx < 0 || idx >= rcsContratoAtual.length) return;
+                preencherCamposRcContrato(rcsContratoAtual[idx], idx);
+                return;
+            }
+            const btnRm = e.target.closest('.btn-remover-rc-contrato');
+            if (btnRm) {
+                const idx = parseInt(btnRm.getAttribute('data-index'), 10);
+                removerRcContrato(idx);
+            }
+        });
+    }
+    limparCamposRcContrato();
+    desenharRcContrato();
 
     // Exporta a coleção "contratos" (CSV e Excel) via XLSX.
     window.exportarContratos = function(formato) {
