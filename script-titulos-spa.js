@@ -2976,7 +2976,7 @@
         const logoData = await carregarLogoDataUrl('icons/logo-192.png');
         const topoY = y;
         if (logoData) {
-            try { docPDF.addImage(logoData, 'PNG', M.l + (W / 2) - 10, topoY, 20, 20); } catch (_) {}
+            try { docPDF.addImage(logoData, 'PNG', M.l, topoY, 20, 20); } catch (_) {}
         }
         docPDF.setFont('helvetica', 'bold');
         docPDF.setFontSize(12);
