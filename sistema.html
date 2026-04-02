@@ -492,6 +492,16 @@
                                 <div class="form-group flex-1"><label>Número RC:</label><input type="text" id="rcNumeroContrato" maxlength="10" placeholder="10"></div>
                                 <div class="form-group flex-1"><label>Valor RC (R$):</label><input type="text" id="rcValorContrato" inputmode="numeric" placeholder="0,00" data-moeda></div>
                                 <div class="form-group flex-1">
+                                    <label>Conta de Contrato:</label>
+                                    <select id="rcContaContrato">
+                                        <option value="">Selecione</option>
+                                        <option value="8.1.2.3.1.01.01">8.1.2.3.1.01.01 (CONTRATOS DE SEGUROS EM EXECUÇÃO)</option>
+                                        <option value="8.1.2.3.1.02.01">8.1.2.3.1.02.01 (CONTRATOS DE SERVICOS EM EXECUÇÃO)</option>
+                                        <option value="8.1.2.3.1.03.01">8.1.2.3.1.03.01 (CONTRATOS DE ALUGUEIS EM EXECUÇÃO)</option>
+                                        <option value="8.1.2.3.1.04.01">8.1.2.3.1.04.01 (CONTRATOS DE FORNECIMENTO DE BENS EM EXECUÇÃO)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1">
                                     <label>Tipo:</label>
                                     <select id="rcTipoContrato">
                                         <option value="">Selecione</option>
@@ -519,6 +529,7 @@
                                             <th style="width:100px;">Ano</th>
                                             <th style="width:110px;">Número</th>
                                             <th style="width:130px;">Valor (R$)</th>
+                                            <th style="width:180px;">Conta de Contrato</th>
                                             <th style="width:130px;">Tipo</th>
                                             <th style="width:110px;">Status</th>
                                             <th style="width:130px;">Ações</th>

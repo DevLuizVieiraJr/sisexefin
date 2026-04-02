@@ -1,5 +1,12 @@
 // MÓDULO: CONTRATOS E EMPRESAS
 (function() {
+    const CONTAS_CONTRATO_VALIDAS = [
+        '8.1.2.3.1.01.01',
+        '8.1.2.3.1.02.01',
+        '8.1.2.3.1.03.01',
+        '8.1.2.3.1.04.01'
+    ];
+
     // Define o exportador global antes de qualquer "return" antecipado
     // para evitar "exportarContratos is not defined" caso a seção ainda não esteja no DOM no momento do load.
     window.exportarContratos = window.exportarContratos || function(formato) {
@@ -27,7 +34,13 @@
                 'Data Início': c.dataInicio || '',
                 'Data Fim': c.dataFim || '',
                 'Valor Global': c.valorContrato || '',
-                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : ''
+                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : '',
+                'RCs Conta de Contrato': Array.isArray(c.rcs)
+                    ? c.rcs
+                        .map(function(rc) { return String((rc && rc.contaContrato) || '').trim(); })
+                        .filter(Boolean)
+                        .join('; ')
+                    : ''
             }));
 
             const ws = XLSX.utils.json_to_sheet(dados);
@@ -374,6 +387,7 @@
                 ano: m[2],
                 numero: m[1],
                 valor: 0,
+                contaContrato: '',
                 tipo: tipoNormalizado,
                 status: 'Ativo',
                 createdAt: Date.now() + idx
@@ -383,6 +397,7 @@
         const numero = String(item.numero || item.numRC || item.numeroRC || '').replace(/\D/g, '');
         const tipoRaw = String(item.tipo || item.tipoRC || '').trim();
         const tipo = (tipoRaw === 'Material' || tipoRaw === 'Serviço' || tipoRaw === 'Locação') ? tipoRaw : '';
+        const contaContrato = String(item.contaContrato || '').trim();
         const statusRaw = String(item.status || item.statusRC || '').toLowerCase();
         const status = statusRaw === 'inativo' ? 'Inativo' : 'Ativo';
         const valor = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(item.valor || item.valorRC || 0) : (parseFloat(item.valor || item.valorRC || 0) || 0);
@@ -391,6 +406,7 @@
             ano: ano,
             numero: numero,
             valor: valor,
+            contaContrato: CONTAS_CONTRATO_VALIDAS.indexOf(contaContrato) !== -1 ? contaContrato : '',
             tipo: tipo,
             status: status,
             createdAt: item.createdAt || item.criadoEm || (Date.now() + idx)
@@ -406,11 +422,13 @@
         const anoEl = document.getElementById('rcAnoContrato');
         const numEl = document.getElementById('rcNumeroContrato');
         const valorEl = document.getElementById('rcValorContrato');
+        const contaEl = document.getElementById('rcContaContrato');
         const tipoEl = document.getElementById('rcTipoContrato');
         const statusEl = document.getElementById('rcStatusContrato');
         if (anoEl) anoEl.value = anoAtualRC();
         if (numEl) numEl.value = '';
         if (valorEl) valorEl.value = '';
+        if (contaEl) contaEl.value = '';
         if (tipoEl) tipoEl.value = '';
         if (statusEl) statusEl.value = 'Ativo';
         const btnAdd = document.getElementById('btnAdicionarRcContrato');
@@ -424,7 +442,7 @@
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!rcsContratoAtual.length) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666;">Nenhuma RC adicionada.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#666;">Nenhuma RC adicionada.</td></tr>';
             return;
         }
         rcsContratoAtual.forEach(function(rc, idx) {
@@ -434,6 +452,7 @@
                 '<td>' + escapeHTML(rc.ano || '-') + '</td>' +
                 '<td>' + escapeHTML(rc.numero || '-') + '</td>' +
                 '<td>' + escapeHTML(valorFmt) + '</td>' +
+                '<td>' + escapeHTML(rc.contaContrato || '-') + '</td>' +
                 '<td>' + escapeHTML(rc.tipo || '-') + '</td>' +
                 '<td>' + escapeHTML(rc.status || '-') + '</td>' +
                 '<td>' +
@@ -448,11 +467,13 @@
         const anoEl = document.getElementById('rcAnoContrato');
         const numEl = document.getElementById('rcNumeroContrato');
         const valorEl = document.getElementById('rcValorContrato');
+        const contaEl = document.getElementById('rcContaContrato');
         const tipoEl = document.getElementById('rcTipoContrato');
         const statusEl = document.getElementById('rcStatusContrato');
         if (anoEl) anoEl.value = rc.ano || '';
         if (numEl) numEl.value = rc.numero || '';
         if (valorEl) valorEl.value = (typeof formatarMoedaBR === 'function') ? ('R$ ' + formatarMoedaBR(rc.valor || 0)) : String(rc.valor || '');
+        if (contaEl) contaEl.value = rc.contaContrato || '';
         if (tipoEl) tipoEl.value = rc.tipo || '';
         if (statusEl) statusEl.value = rc.status || 'Ativo';
         editIndexRcContrato = idx;
@@ -492,12 +513,14 @@
         const ano = String(document.getElementById('rcAnoContrato')?.value || '').replace(/\D/g, '').slice(0, 4);
         const numero = String(document.getElementById('rcNumeroContrato')?.value || '').replace(/\D/g, '');
         const tipo = String(document.getElementById('rcTipoContrato')?.value || '').trim();
+        const contaContrato = String(document.getElementById('rcContaContrato')?.value || '').trim();
         const status = String(document.getElementById('rcStatusContrato')?.value || 'Ativo').trim();
         const valorRaw = document.getElementById('rcValorContrato')?.value || '';
         const valor = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorRaw) : (parseFloat(valorRaw) || 0);
 
         if (!ano || ano.length !== 4) return alert('Informe o ano da RC com 4 dígitos.');
         if (!numero) return alert('Informe o número da RC (apenas numérico).');
+        if (!contaContrato || CONTAS_CONTRATO_VALIDAS.indexOf(contaContrato) === -1) return alert('Selecione uma Conta de Contrato válida.');
         if (!tipo || ['Material', 'Serviço', 'Locação'].indexOf(tipo) === -1) return alert('Selecione um tipo de RC válido.');
         if (['Ativo', 'Inativo'].indexOf(status) === -1) return alert('Selecione um status de RC válido.');
 
@@ -511,6 +534,7 @@
             ano: ano,
             numero: numero,
             valor: valor,
+            contaContrato: contaContrato,
             tipo: tipo,
             status: status
         };
@@ -587,7 +611,13 @@
                 'Data Início': c.dataInicio || '',
                 'Data Fim': c.dataFim || '',
                 'Valor Global': c.valorContrato || '',
-                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : ''
+                'Deduções Permitidas': Array.isArray(c.deducoesPermitidas) ? JSON.stringify(c.deducoesPermitidas) : '',
+                'RCs Conta de Contrato': Array.isArray(c.rcs)
+                    ? c.rcs
+                        .map(function(rc) { return String((rc && rc.contaContrato) || '').trim(); })
+                        .filter(Boolean)
+                        .join('; ')
+                    : ''
             }));
             const ws = XLSX.utils.json_to_sheet(dados);
             const wb = XLSX.utils.book_new();

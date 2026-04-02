@@ -372,7 +372,9 @@
                         var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
                         rowNorm[kNorm] = row[k];
                     });
-                    var numEmpenho = getVal(rowNorm, ['NE', 'numEmpenho', 'NumEmpenho', 'ne', 'numeroEmpenho', 'NumeroEmpenho']);
+                    // Aceita cabeçalhos em maiúsculas/minúsculas e variações comuns
+                    // Ex.: modelo do usuário pode vir com "ne" e "data" (minúsculos)
+                    var numEmpenho = getVal(rowNorm, ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho']);
                     if (!numEmpenho) { erros++; continue; }
                     if (modoCompleto) {
                         const completo = completarNumEmpenho(numEmpenho);
@@ -393,10 +395,12 @@
                         }
                         continue;
                     }
+                    // Valor pode vir como "9138,72" ou "1.234,56" ou "R$ 1.234,56"
+                    var valorRaw = getVal(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']);
                     var dados = {
                         numEmpenho: escapeHTML(numEmpenho),
-                        dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'dataEmissao', 'DataEmissao', 'data', 'Data'])),
-                        valorGlobal: parseFloat((getVal(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']) || '0').replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
+                        dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'data', 'Data', 'dataEmissao', 'DataEmissao'])),
+                        valorGlobal: parseValorMonetarioBR(valorRaw),
                         nd: escapeHTML(getVal(rowNorm, ['ND', 'nd'])),
                         subitem: escapeHTML(getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento'])),
                         ptres: escapeHTML(getVal(rowNorm, ['PTRES', 'ptres'])),
