@@ -294,6 +294,7 @@ function temPermissaoUI(perm) {
     // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
     if (permissoesEmCache.includes('acesso_admin')) {
         if (perm === 'dashboard_ler' || perm === 'backup_ler' || perm === 'tramitarTC') return true;
+        if (perm.startsWith('preliquidacao_')) return true;
         const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
@@ -403,6 +404,7 @@ auth.onAuthStateChanged(async (user) => {
         const corpoSistema = document.getElementById('corpo-sistema');
         const corpoAdmin = document.getElementById('corpo-admin');
         const corpoTitulos = document.getElementById('corpo-titulos');
+        const corpoPreLiquidacao = document.getElementById('corpo-preliquidacao');
         const corpoDashboard = document.getElementById('corpo-dashboard');
 
         // Lógica de Rota: Estamos no Admin?
@@ -425,6 +427,18 @@ auth.onAuthStateChanged(async (user) => {
             atualizarSeletorPerfil();
             corpoTitulos.style.display = 'flex';
             if (typeof inicializarTitulosSPA === 'function') inicializarTitulosSPA();
+        }
+        else if (corpoPreLiquidacao) {
+            if (!permissoesEmCache.includes('preliquidacao_ler') && !permissoesEmCache.includes('acesso_admin')) {
+                alert('Acesso negado ao módulo Pré-Liquidação.');
+                window.location.replace('dashboard.html');
+                return;
+            }
+            aplicarPermissoesUI();
+            atualizarSeletorPerfil();
+            corpoPreLiquidacao.style.display = 'flex';
+            if (typeof inicializarPreLiquidacaoSPA === 'function') inicializarPreLiquidacaoSPA();
+            if (typeof esconderLoading === 'function') esconderLoading();
         }
         // Lógica de Rota: Estamos no Sistema (Tabelas de Apoio)?
         else if (corpoSistema) {

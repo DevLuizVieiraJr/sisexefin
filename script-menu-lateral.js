@@ -38,6 +38,12 @@
                 <p>Títulos de Crédito</p>
             </a>
         </li>
+        <li class="nav-item" data-permission="preliquidacao_ler">
+            <a href="preliquidacao.html" class="nav-link" data-menu-ativo="preliquidacao" title="Pré-Liquidação">
+                <i class="nav-icon fas fa-layer-group"></i>
+                <p>Pré-Liquidação</p>
+            </a>
+        </li>
         <li class="nav-item has-treeview" data-tree="tabelas">
             <a href="#" class="nav-link" data-toggle="tree">
                 <i class="nav-icon fas fa-table"></i>
@@ -151,6 +157,7 @@
         const search = window.location.search || '';
         if (path.includes('admin.html')) return 'admin';
         if (path.includes('titulos.html')) return 'titulos';
+        if (path.includes('preliquidacao.html')) return 'preliquidacao';
         if (path.includes('sistema.html')) {
             const secao = new URLSearchParams(search).get('secao');
             return secao || 'sistema';

@@ -1,0 +1,14 @@
+A liquidação propriamente dita, acontece no sistema SIAFI (Sistema Integrado de Administração Financeira).
+O usuário utiliza as informações existentes nos Títulos de Crédito (TC) para inserir os dados no SIAFI e realizar a liquidação.
+O SIAFI permiti realizar a liquidação de uma ou N TC por vez, ou seja, como uma lista de TC.
+O SIAFI gera um Documento Hábil (DH) chamado NP (Nota de Pagamento), após o usuário inserir as informações corretas do(s) TC.
+No dia seguinte, o sistema SIPLAD (Sistema de Acompamento do Plano Diretor) gera um documento chamado Liquidação Financeira (LF) para cada Nota de Empenho (NE) informada na NP do SIAFI.
+O usuário, diariamente, importa um arquivo chamado LFxPF, com as LF geradas pelo SIPLAD através do módulo LFxPF.
+O sistema ler o arquivo identifica as LF já cadastradas e realiza possiveis atualizações. O sistema importa as novas LF.
+AS LF são nada mais que uma informação para que a Diretoria de Finanças da Marinha (DFM), identifique a Liquidação e envie posteiormente o Financeiro para pagamento da Referida NP. A lista de LF, contem uma coluna PF, que pode ser atualizada nas importações diarias do usuário.
+
+No dia seguinte da Liquidação no SIAFI e depois de Importar as LFxPF, o usuário associa as LF para cada NE. Isso permitirá o usuário saber se a LF foi atendida por uma PF, assim que a coluna PF for atualizada nas Importações diarias.
+
+Para que esse roteiro ocorra perfeitamente, o SISEXEFIN deve possibilitar que o usuário monte uma lista de TC para auxiliar a Liquidação no SIAFI.
+A montagem dessa lista deverá ser no novo Módulo Pré-Liquidação, que irá poderá gerar o arquivo DAuLiq.
+As regras de como funcionará a utilização do modulo Pre-Liquidação está no arquivo Regra de Negócios - PreLiquidação.md e as informações do DAuLiq estará no arquivo regras de negócio - Documento auxiliar de liquidação..txt.

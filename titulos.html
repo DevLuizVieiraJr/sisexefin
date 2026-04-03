@@ -339,6 +339,13 @@
                             <div class="form-group flex-1"><label>NP (Nota de Pagamento) <span style="color:#e74c3c;">*</span>:</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
                             <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="date" id="dataLiquidacao"></div>
                         </div>
+                        <div id="plRastroWrap" class="form-row" style="display:none;">
+                            <div class="form-group flex-1">
+                                <label>Pré-Liquidação:</label>
+                                <span id="plRastroTexto" style="font-weight:600;"></span>
+                                <a id="plRastroLink" href="preliquidacao.html" class="btn-modelo-csv" style="margin-left:10px;">Abrir no módulo</a>
+                            </div>
+                        </div>
                         <table class="tabela-gov tabela-ne-inputs" id="tabelaLiquidacao" style="margin-top:15px;">
                             <thead><tr><th>NE</th><th>ND</th><th>Valor</th><th>Centro Custos</th><th>UG</th><th>LF (LFxPF)</th><th>PF</th></tr></thead>
                             <tbody id="tbodyLiquidacao"></tbody>

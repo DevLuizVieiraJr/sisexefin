@@ -2170,6 +2170,23 @@
         document.getElementById('np').value = t.np || '';
         document.getElementById('dataLiquidacao').value = t.dataLiquidacao || '';
         document.getElementById('op').value = t.op || '';
+        const plW = document.getElementById('plRastroWrap');
+        const plTx = document.getElementById('plRastroTexto');
+        const plLk = document.getElementById('plRastroLink');
+        if (plW && plTx && plLk) {
+            if (t.preLiquidacaoCodigo || t.preLiquidacaoId) {
+                plW.style.display = 'flex';
+                plTx.textContent = t.preLiquidacaoCodigo || t.preLiquidacaoId || '';
+                if (t.preLiquidacaoId) {
+                    plLk.href = 'preliquidacao.html?pl=' + encodeURIComponent(t.preLiquidacaoId);
+                    plLk.style.display = 'inline';
+                } else {
+                    plLk.style.display = 'none';
+                }
+            } else {
+                plW.style.display = 'none';
+            }
+        }
         empenhosDaNotaAtual = (t.empenhosVinculados || []).map(x => ({ ...x }));
         normalizarEmpenhosDaNotaAtualSubelemento();
         deducoesAplicadasAtual = (t.deducoesAplicadas || []).map(x => ({ ...x }));

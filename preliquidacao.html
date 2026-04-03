@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a2f4a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
+    <title>SisExeFin - Pré-Liquidação</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .loading-overlay.hide { display: none; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .pl-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
+        @media (max-width: 960px) { .pl-grid { grid-template-columns: 1fr; } }
+        .pl-cart { position: sticky; top: 12px; max-height: calc(100vh - 100px); overflow: auto; }
+        .badge-pl-rascunho { background: #95a5a6; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pl-fechado { background: #27ae60; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pl-cancel { background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pl-inativo { background: #bdc3c7; color: #333; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+        .autocomplete-list { max-height: 200px; }
+    </style>
+</head>
+<body style="display: none; flex-direction: column;" id="corpo-preliquidacao">
+    <div id="loadingApp" class="loading-overlay" style="display:none;">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Pré-Liquidação</div>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
+            </div>
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'">⬅ Voltar</span>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul></ul>
+            </nav>
+        </nav>
+
+        <main class="content">
+            <div class="card" id="tela-lista-pl">
+                <div class="header-lista" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+                    <h2 style="margin:0;">Pré-Liquidações</h2>
+                    <button type="button" id="btnNovaPL" class="btn-primary" data-permission="preliquidacao_inserir">+ Nova pré-liquidação</button>
+                </div>
+                <p style="color:#666; font-size:13px; margin:12px 0;">Monte lotes de TC do mesmo fornecedor, gere o DAuLiq (PDF) e registe a NP após o SIAFI.</p>
+                <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+                    <input type="checkbox" id="filtroPLInativas">
+                    Mostrar pré-liquidações inativas (admin)
+                </label>
+                <table class="tabela-gov">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Estado</th>
+                            <th>Fornecedor</th>
+                            <th>TCs</th>
+                            <th>NP</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyListaPL"></tbody>
+                </table>
+            </div>
+
+            <div class="card" id="tela-editor-pl" style="display:none;">
+                <div class="header-lista" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+                    <h2 style="margin:0;" id="tituloEditorPL">Pré-Liquidação</h2>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <button type="button" id="btnVoltarListaPL" class="btn-default">← Lista</button>
+                    </div>
+                </div>
+                <p id="resumoEditorPL" style="color:#555; font-size:13px; margin:10px 0;"></p>
+
+                <div class="pl-grid">
+                    <div>
+                        <fieldset class="gov-fieldset">
+                            <legend>Fornecedor e TCs elegíveis</legend>
+                            <div class="form-row">
+                                <div class="form-group flex-1" style="position:relative;">
+                                    <label>Filtrar fornecedor (CNPJ ou nome):</label>
+                                    <input type="text" id="plBuscaFornecedor" placeholder="Digite para buscar..." autocomplete="off">
+                                    <ul id="plListaFornecedores" class="autocomplete-list"></ul>
+                                </div>
+                            </div>
+                            <p id="plFornecedorSelecionado" style="font-weight:600; color:#333; margin-bottom:8px;"></p>
+                            <div class="controles-tabela">
+                                <div class="search-box"><input type="text" id="plBuscaTC" placeholder="Filtrar por PROC ou NE..."></div>
+                            </div>
+                            <table class="tabela-gov">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>PROC</th>
+                                        <th>TC</th>
+                                        <th>Valor</th>
+                                        <th>Em outra PL?</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyPLDisponiveis"></tbody>
+                            </table>
+                        </fieldset>
+                    </div>
+                    <div class="pl-cart gov-fieldset" style="margin:0; padding:12px;">
+                        <legend style="font-weight:600;">Carrinho</legend>
+                        <p style="font-size:12px; color:#666;">Mesmo credor apenas. Status <strong>Em Liquidação</strong> e sem NP.</p>
+                        <ul id="plListaCarrinho" style="list-style:none; padding:0; margin:10px 0; font-size:13px;"></ul>
+                        <p id="plCarrinhoVazio" style="color:#999; font-size:13px;">Nenhum TC no carrinho.</p>
+                        <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+                            <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Guardar pré-liquidação</button>
+                            <button type="button" id="btnPLPdf" class="btn-default" data-permission="preliquidacao_gerar_pdf">Gerar DAuLiq (PDF)</button>
+                            <button type="button" id="btnPLFecharNP" class="btn-primary" data-permission="preliquidacao_fechar_np" style="display:none;">Informar NP e data</button>
+                            <button type="button" id="btnPLCorrigirNP" class="btn-default" data-permission="preliquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
+                            <button type="button" id="btnPLCancelar" class="btn-default" style="color:#c0392b;" data-permission="preliquidacao_cancelar">Cancelar pré-liquidação</button>
+                            <button type="button" id="btnPLInativar" class="btn-default" data-permission="preliquidacao_status" style="display:none;">Inativar / Reativar (admin)</button>
+                            <button type="button" id="btnPLExcluir" class="btn-default" data-permission="preliquidacao_excluir" style="display:none; color:#e74c3c;">Excluir permanentemente (admin)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <fieldset class="gov-fieldset" style="margin-top:16px;">
+                    <legend>Auditoria desta pré-liquidação</legend>
+                    <table class="tabela-gov">
+                        <thead><tr><th>Data</th><th>Tipo</th><th>Utilizador</th><th>Detalhe</th></tr></thead>
+                        <tbody id="tbodyPLHistorico"></tbody>
+                    </table>
+                </fieldset>
+            </div>
+        </main>
+    </div>
+
+    <div id="overlayPLFecharNP" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:420px;">
+            <h3 id="modalPLFecharNPTitulo" style="margin-bottom:12px;">Informar NP (SIAFI)</h3>
+            <div class="form-group"><label>NP:</label><input type="text" id="modalPLnp" placeholder="Ex.: 741000000012026NP000001"></div>
+            <div class="form-group"><label>Data de liquidação:</label><input type="date" id="modalPLdataLiq"></div>
+            <div class="form-group" id="grpModalPLmotivoNP" style="display:none;"><label>Motivo (correção):</label><textarea id="modalPLmotivoNP" rows="2"></textarea></div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="modalPLFecharNPCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalPLFecharNPConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalPLMotivo" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:400px;">
+            <h3 id="modalPLMotivoTitulo" style="margin-bottom:12px;">Motivo</h3>
+            <textarea id="modalPLMotivoTexto" rows="4" placeholder="Obrigatório..." style="width:100%; box-sizing:border-box;"></textarea>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="modalPLMotivoCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalPLMotivoConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
+    <script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script-preliquidacao.js"></script>
+    <script src="script-menu-toggle.js"></script>
+    <script src="pwa-register.js"></script>
+</body>
+</html>

@@ -119,10 +119,35 @@ service cloud.firestore {
 
     // Nota de Pagamento (NP) - coleção para vincular Títulos e documentos (OP/OB)
     match /np/{docId} {
-      allow read: if logado() && (temPermissao('op_ler') || temPermissao('acesso_admin'));
-      allow create: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('acesso_admin'));
-      allow update: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('acesso_admin'));
+      allow read: if logado() && (temPermissao('op_ler') || temPermissao('titulos_ler') || temPermissao('preliquidacao_ler') || temPermissao('acesso_admin'));
+      allow create: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('preliquidacao_fechar_np') || temPermissao('acesso_admin'));
+      allow update: if logado() && (temPermissao('titulos_inserir') || temPermissao('titulos_editar') || temPermissao('preliquidacao_fechar_np') || temPermissao('preliquidacao_cancelar') || temPermissao('acesso_admin'));
       allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    // Contador atómico para código PL-#####/AAAA (transação na app)
+    match /contadores/{docId} {
+      allow read: if logado() && (temPermissao('preliquidacao_ler') || temPermissao('preliquidacao_inserir') || temPermissao('acesso_admin'));
+      allow create, update: if logado() && (temPermissao('preliquidacao_inserir') || temPermissao('acesso_admin'));
+      allow delete: if logado() && temPermissao('acesso_admin');
+    }
+
+    // Pré-Liquidação (lotes / DAuLiq)
+    match /preLiquidacoes/{docId} {
+      allow read: if logado() && (
+        temPermissao('acesso_admin')
+        || (temPermissao('preliquidacao_ler')
+          && (resource.data.get('ativo', true) == true || temPermissao('preliquidacao_status')))
+      );
+      allow create: if logado() && (temPermissao('preliquidacao_inserir') || temPermissao('acesso_admin'));
+      allow update: if logado() && (
+        temPermissao('preliquidacao_editar')
+        || temPermissao('preliquidacao_cancelar')
+        || temPermissao('preliquidacao_fechar_np')
+        || temPermissao('preliquidacao_status')
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && (temPermissao('preliquidacao_excluir') || temPermissao('acesso_admin'));
     }
 
     match /config/{docId} {
