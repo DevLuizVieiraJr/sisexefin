@@ -280,16 +280,71 @@
                 if ((d.tipo || '') !== tipo) return;
                 rows.push({
                     tituloIdProc: t.idProc || t.id,
+                    dataEmissaoTitulo: t.dataEmissao || '',
                     recolhedor: normalizarDigitos(t.fornecedorCnpj || ''),
                     base: Number(d.baseCalculo) || 0,
                     aliq: Number(d.aliquota) || 0,
                     valor: Number(d.valorCalculado != null ? d.valorCalculado : d.valor) || 0,
                     codReceita: d.codReceita || d.codigo || '',
-                    natRend: d.natRendimento || ''
+                    natRend: d.natRendimento || '',
+                    dataApuracao: d.dataApuracao || '',
+                    raw: d
                 });
             });
         });
         return rows;
+    }
+
+    function truncar2Pdf(n) {
+        const v = Number(n || 0);
+        if (!isFinite(v) || v <= 0) return 0;
+        return Math.floor(v * 100) / 100;
+    }
+
+    function calcularComponentesDarfPdf(baseCalculo, aliquotaTotal) {
+        const base = Number(baseCalculo || 0);
+        const aliqTotal = Number(aliquotaTotal || 0);
+        const pesos = { ir: 1.5, cofins: 3.0, csll: 1.0, pis: 0.65 };
+        const somaPesos = pesos.ir + pesos.cofins + pesos.csll + pesos.pis;
+        const fator = somaPesos > 0 ? (aliqTotal / somaPesos) : 0;
+        const valorIR = truncar2Pdf(base * ((pesos.ir * fator) / 100));
+        const valorCOFINS = truncar2Pdf(base * ((pesos.cofins * fator) / 100));
+        const valorCSLL = truncar2Pdf(base * ((pesos.csll * fator) / 100));
+        const valorPISPASEP = truncar2Pdf(base * ((pesos.pis * fator) / 100));
+        const total = truncar2Pdf(valorIR + valorCOFINS + valorCSLL + valorPISPASEP);
+        return { valorIR, valorCOFINS, valorCSLL, valorPISPASEP, total };
+    }
+
+    function linhasEmpenhoConsolidadoPdtc(titulos) {
+        const deta = consolidarDetaCustos(titulos);
+        return deta.map(row => {
+            let neFull = row.ne12;
+            let nd = '-';
+            for (const t of titulos || []) {
+                const hit = (t.empenhosVinculados || []).find(v =>
+                    ne12(v.numEmpenho) === row.ne12 && subel2(v.subelemento) === row.subelemento
+                    && labelCC(v.centroCustosId) === row.centroCustos && labelUG(v.ugId) === row.ug
+                );
+                if (hit) {
+                    neFull = hit.numEmpenho || row.ne12;
+                    nd = hit.nd || '-';
+                    break;
+                }
+            }
+            if (neFull === row.ne12) {
+                for (const t of titulos || []) {
+                    const hit = (t.empenhosVinculados || []).find(v =>
+                        ne12(v.numEmpenho) === row.ne12 && subel2(v.subelemento) === row.subelemento
+                    );
+                    if (hit) {
+                        neFull = hit.numEmpenho || row.ne12;
+                        nd = hit.nd || '-';
+                        break;
+                    }
+                }
+            }
+            return [neFull, nd, row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
+        });
     }
 
     function agrupaDedDDF025(rows) {
@@ -313,13 +368,33 @@
         const W = 210 - M.l - M.r;
         const PAGE_H = 297;
         let y = M.t;
-        const toBr = (d) => {
-            if (!d) return '-';
-            if (d instanceof Date && !isNaN(d.getTime())) {
+
+        const toDateBr = (v) => {
+            if (!v) return '-';
+            if (v.toDate) {
+                const d = v.toDate();
                 return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
             }
-            return String(d);
+            if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+                const p = v.slice(0, 10).split('-');
+                return `${p[2]}/${p[1]}/${p[0]}`;
+            }
+            if (v instanceof Date && !isNaN(v.getTime())) {
+                return `${String(v.getDate()).padStart(2, '0')}/${String(v.getMonth() + 1).padStart(2, '0')}/${v.getFullYear()}`;
+            }
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return String(v);
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         };
+        const toDateTimeBr = (v) => {
+            if (!v) return '-';
+            const d = v.toDate ? v.toDate() : new Date(v);
+            if (isNaN(d.getTime())) return '-';
+            const data = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            return `${data} às ${hora}`;
+        };
+
         const garantirEspaco = (h) => {
             if (y + h > PAGE_H - M.b) { docPDF.addPage(); y = M.t; }
         };
@@ -327,11 +402,98 @@
             garantirEspaco(8);
             docPDF.setFont('helvetica', 'bold');
             docPDF.setFontSize(9.5);
+            docPDF.setTextColor(0, 0, 0);
             docPDF.text(String(txt || ''), M.l, y + 4.8);
             docPDF.setDrawColor(155, 155, 155);
             docPDF.line(M.l, y + 5.8, M.l + W, y + 5.8);
             y += 8;
         };
+        const campoAbaixo = (label, valor, x, largura) => {
+            const h = 12;
+            garantirEspaco(h + 1);
+            docPDF.setDrawColor(170, 170, 170);
+            docPDF.rect(x, y, largura, h);
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(7.3);
+            docPDF.setTextColor(0, 0, 0);
+            docPDF.text(String(label || '-'), x + 1.5, y + 3.4);
+            docPDF.setFont('helvetica', 'normal');
+            docPDF.setFontSize(8.1);
+            const linhas = docPDF.splitTextToSize(String(valor || '-'), largura - 3);
+            docPDF.text(linhas, x + 1.5, y + 8);
+        };
+        const linhaCampos = (campos) => {
+            const gap = 2;
+            const largura = (W - gap * (campos.length - 1)) / campos.length;
+            campos.forEach((c, i) => campoAbaixo(c.label, c.valor, M.l + i * (largura + gap), largura));
+            y += 13;
+        };
+        const tabela = (headers, rows, larguras) => {
+            if (!rows || rows.length === 0) return;
+            const hCab = 6;
+            const hRow = 5.4;
+            garantirEspaco(hCab + hRow + 2);
+            const totalLarg = (larguras || []).reduce((s, n) => s + Number(n || 0), 0) || 1;
+            const fator = W / totalLarg;
+            const largurasEsc = (larguras || []).map(n => Number(n || 0) * fator);
+            let x = M.l;
+            docPDF.setDrawColor(175, 175, 175);
+            docPDF.setTextColor(0, 0, 0);
+            headers.forEach((h, i) => {
+                docPDF.rect(x, y, largurasEsc[i], hCab);
+                docPDF.setFont('helvetica', 'bold');
+                docPDF.setFontSize(7.1);
+                docPDF.text(String(h), x + 1.2, y + 4);
+                x += largurasEsc[i];
+            });
+            y += hCab;
+            rows.forEach(r => {
+                garantirEspaco(hRow + 1);
+                x = M.l;
+                r.forEach((cell, i) => {
+                    docPDF.rect(x, y, largurasEsc[i], hRow);
+                    docPDF.setFont('helvetica', 'normal');
+                    docPDF.setFontSize(7.0);
+                    const txt = docPDF.splitTextToSize(String(cell ?? '-'), largurasEsc[i] - 2.2);
+                    docPDF.text(txt.slice(0, 1), x + 1.1, y + 3.8);
+                    x += largurasEsc[i];
+                });
+                y += hRow;
+            });
+            y += 2;
+        };
+        const linhaTotalDireita = (label, valor) => {
+            garantirEspaco(6);
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(8.2);
+            docPDF.text(`${label}: ${valor}`, M.l + W, y + 4, { align: 'right' });
+            y += 6;
+        };
+
+        const blocoTextoMultilinha = (titulo, linhasTexto) => {
+            const texto = (linhasTexto || []).join('\n');
+            if (!texto.trim()) return;
+            const lineH = 3.6;
+            const pad = 2;
+            const split = docPDF.splitTextToSize(texto, W - 4);
+            const boxH = Math.max(14, split.length * lineH + pad * 2 + 5);
+            garantirEspaco(boxH + 4);
+            docPDF.setDrawColor(170, 170, 170);
+            docPDF.rect(M.l, y, W, boxH);
+            docPDF.setFont('helvetica', 'bold');
+            docPDF.setFontSize(7.3);
+            docPDF.text(String(titulo || ''), M.l + 1.5, y + 3.8);
+            docPDF.setFont('helvetica', 'normal');
+            docPDF.setFontSize(7.0);
+            let yy = y + 7.5;
+            split.forEach(ln => {
+                if (yy > y + boxH - 2) return;
+                docPDF.text(ln, M.l + 1.5, yy);
+                yy += lineH;
+            });
+            y += boxH + 2;
+        };
+
         let logoData = null;
         try {
             const resp = await fetch('icons/logo-192.png');
@@ -345,149 +507,233 @@
                 });
             }
         } catch (_) {}
+
+        const topoY = y;
         if (logoData) {
-            try { docPDF.addImage(logoData, 'PNG', M.l, y, 18, 18); } catch (_) {}
+            try { docPDF.addImage(logoData, 'PNG', M.l, topoY, 20, 20); } catch (_) {}
         }
         docPDF.setFont('helvetica', 'bold');
         docPDF.setFontSize(12);
-        docPDF.text('Documento Auxiliar de Liquidação', M.l + (logoData ? 22 : 0), y + 8);
+        docPDF.text('Documento Auxiliar de Liquidação (DAuLiq)', M.l + W / 2, topoY + 24, { align: 'center' });
         docPDF.setFont('helvetica', 'normal');
-        docPDF.setFontSize(8.5);
-        const agora = new Date();
-        docPDF.text('Impresso em: ' + agora.toLocaleString('pt-BR'), M.l + W, y + 5, { align: 'right' });
-        docPDF.text('Gerado por: ' + (typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '-'), M.l + W, y + 10, { align: 'right' });
-        y += 22;
+        docPDF.setFontSize(8);
+        docPDF.text(`Impressão: ${toDateTimeBr(new Date())}`, M.l + W, topoY + 6, { align: 'right' });
+        docPDF.text(`Usuário: ${typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '-'}`, M.l + W, topoY + 11, { align: 'right' });
+        y = topoY + 29;
 
         const cnpjCred = normalizarDigitos(titulos[0]?.fornecedorCnpj || '');
         const nomeCred = titulos[0]?.fornecedorNome || titulos[0]?.fornecedor || '-';
         const venc = dataVencimento30(titulos);
         const ateste = dataAtesteMaisAntiga(titulos);
         const valorDoc = titulos.reduce((s, t) => s + (Number(t.valorNotaFiscal) || 0), 0);
-        const totalDed = titulos.reduce((s, t) => {
-            const deds = t.deducoesAplicadas || t.tributacoes || [];
-            return s + deds.reduce((a, d) => a + (Number(d.valorCalculado != null ? d.valorCalculado : d.valor) || 0), 0);
-        }, 0);
+        const dedsFlat = (titulos || []).flatMap(t =>
+            (t.deducoesAplicadas || t.tributacoes || []).map(d => ({
+                ...d,
+                valorCalculado: truncar2Pdf(Number(d.valorCalculado != null ? d.valorCalculado : d.valor) || 0)
+            }))
+        );
+        const totalDed = truncar2Pdf(dedsFlat.reduce((s, d) => s + truncar2Pdf(d.valorCalculado || 0), 0));
+        const valorTCNum = valorDoc;
+        const obBase = Math.max(0, valorTCNum - totalDed);
+        let valorOB = Math.ceil(obBase * 100) / 100;
+        if (truncar2Pdf(totalDed + valorOB) > truncar2Pdf(valorTCNum)) valorOB = truncar2Pdf(obBase);
 
-        tituloSecao('2. Dados básicos');
-        docPDF.setFontSize(8);
-        docPDF.text('Data do ateste (bloco): ' + toBr(ateste), M.l, y); y += 5;
-        docPDF.text('Data de vencimento (ateste + 30): ' + toBr(venc), M.l, y); y += 5;
-        docPDF.text('Valor do documento: ' + moeda(valorDoc), M.l, y); y += 5;
-        docPDF.text('Código do credor: ' + (cnpjCred || '-'), M.l, y); y += 5;
-        docPDF.text('Nome do credor: ' + nomeCred, M.l, y); y += 7;
-        docPDF.setFont('helvetica', 'bold');
-        docPDF.text('Documentos de origem', M.l, y); y += 5;
-        docPDF.setFont('helvetica', 'normal');
-        titulos.forEach(t => {
-            garantirEspaco(6);
-            const linha = `${normalizarDigitos(t.fornecedorCnpj || '')} | Emissão: ${t.dataEmissao || '-'} | ${t.tipoTC || ''}-${t.numTC || ''} | ${moeda(t.valorNotaFiscal)}`;
-            docPDF.text(linha.slice(0, 120), M.l, y);
-            y += 5;
-        });
-        y += 3;
-        docPDF.setFont('helvetica', 'bold');
-        docPDF.text('Observações (concatenadas)', M.l, y); y += 5;
-        docPDF.setFont('helvetica', 'normal');
-        observacoesLinhas(titulos).forEach(line => {
-            garantirEspaco(5);
-            docPDF.splitTextToSize(line, W).forEach(ln => { docPDF.text(ln, M.l, y); y += 4; });
-        });
-        y += 3;
+        const hojeStr = toDateBr(new Date());
+        const vencStr = toDateBr(venc);
+        const atesteStr = toDateBr(ateste);
 
-        tituloSecao('3. Principal com orçamento');
-        docPDF.setFontSize(8);
-        docPDF.text('Favorecido (credor): ' + cnpjCred, M.l, y); y += 5;
-        docPDF.text('Conta de contrato (RC): ' + (titulos[0]?.rc || '-'), M.l, y); y += 6;
-        const emps = consolidarEmpenhosPrincipal(titulos);
-        docPDF.setFont('helvetica', 'bold');
-        docPDF.text('NE (12 últ.)', M.l, y);
-        docPDF.text('Subel.', M.l + 35, y);
-        docPDF.text('Valor', M.l + 55, y);
-        y += 5;
-        docPDF.setFont('helvetica', 'normal');
-        emps.forEach(e => {
-            garantirEspaco(5);
-            docPDF.text(e.ne12 || '-', M.l, y);
-            docPDF.text(e.subelemento || '-', M.l + 35, y);
-            docPDF.text(moeda(e.valor), M.l + 55, y);
-            y += 5;
-        });
-        y += 4;
+        tituloSecao('IDENTIFICAÇÃO DA PRÉ-LIQUIDAÇÃO');
+        linhaCampos([
+            { label: 'Código PL', valor: pl.codigo || '-' },
+            { label: 'Estado', valor: pl.estado || '-' },
+            { label: 'NP (se informada)', valor: pl.np || '-' },
+            { label: 'Data liquidação (PL)', valor: toDateBr(pl.dataLiquidacao) }
+        ]);
 
-        tituloSecao('4. Deduções');
-        const hoje = toBr(new Date());
-        const d025 = deducoesPorTipo(titulos, 'DDF025');
-        const d021 = deducoesPorTipo(titulos, 'DDF021');
-        const dddr = deducoesPorTipo(titulos, 'DDR001');
-        function blocoDedSec(titSec, rows, comTotal) {
-            if (!rows.length) return;
-            tituloSecao(titSec);
-            docPDF.setFontSize(7.5);
-            docPDF.text('Data vencimento (bloco): ' + toBr(venc) + '  |  Data pagamento: ' + hoje, M.l, y); y += 5;
-            let tb = 0;
-            let tv = 0;
-            rows.forEach(r => {
-                garantirEspaco(5);
-                docPDF.text(`${r.tituloIdProc} | Rec: ${r.recolhedor} | Base ${moeda(r.base)} | Alíq ${r.aliq}% | Val ${moeda(r.valor)}`, M.l, y);
-                y += 4;
-                tb += r.base;
-                tv += r.valor;
-            });
-            if (comTotal) {
-                docPDF.setFont('helvetica', 'bold');
-                docPDF.text('Base total: ' + moeda(tb) + '   |   Valor total dedução: ' + moeda(tv), M.l, y);
-                y += 5;
-                docPDF.setFont('helvetica', 'normal');
-            }
-            y += 2;
+        tituloSecao('DADOS BÁSICOS');
+        linhaCampos([
+            { label: 'Data do ateste (bloco)', valor: atesteStr },
+            { label: 'Data de vencimento (+30)', valor: vencStr },
+            { label: 'Valor do documento', valor: moeda(valorDoc) },
+            { label: 'Código do credor', valor: cnpjCred || '-' },
+            { label: 'Nome do credor', valor: nomeCred }
+        ]);
+
+        tituloSecao('DOCUMENTOS DE ORIGEM');
+        tabela(
+            ['ID-PROC', 'Emitente (CNPJ)', 'Emissão TC', 'Documento (tipo-nº)', 'Valor R$'],
+            titulos.map(t => [
+                t.idProc || '-',
+                normalizarDigitos(t.fornecedorCnpj || ''),
+                toDateBr(t.dataEmissao),
+                `${t.tipoTC || ''}-${t.numTC || ''}`,
+                moeda(t.valorNotaFiscal)
+            ]),
+            [22, 28, 22, 42, 20]
+        );
+
+        tituloSecao('OBSERVAÇÕES (CONCATENADAS)');
+        blocoTextoMultilinha('Uma linha por combinação (padrão auxiliar)', observacoesLinhas(titulos));
+
+        tituloSecao('FORNECEDOR / FAVORECIDO E CONTRATO');
+        const instrumentos = [...new Set(titulos.map(t => String(t.instrumento || '').trim()).filter(Boolean))].join('; ') || '-';
+        linhaCampos([
+            { label: 'Favorecido (CNPJ)', valor: cnpjCred || '-' },
+            { label: 'Nome', valor: nomeCred },
+            { label: 'RC / Conta contrato', valor: titulos[0]?.rc || '-' },
+            { label: 'Contrato(s)', valor: instrumentos.length > 80 ? instrumentos.slice(0, 77) + '…' : instrumentos }
+        ]);
+        linhaCampos([{ label: 'Quantidade de TCs no lote', valor: String(titulos.length) }]);
+
+        const rowsEmp = linhasEmpenhoConsolidadoPdtc(titulos);
+        if (rowsEmp.length) {
+            tituloSecao('PRINCIPAL COM ORÇAMENTO — EMPENHOS (CONSOLIDADO)');
+            linhaCampos([
+                { label: 'Data vencimento (ref. deduções)', valor: vencStr },
+                { label: 'Data pagamento (ref.)', valor: hojeStr }
+            ]);
+            tabela(
+                ['Nota de Empenho', 'Nat. de Despesa', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
+                rowsEmp,
+                [34, 24, 12, 20, 44, 28]
+            );
+            const totalNE = consolidarEmpenhosPrincipal(titulos).reduce((s, e) => s + (Number(e.valor) || 0), 0);
+            if (totalNE > 0) linhaTotalDireita('Valor total das NE (consolidado)', moeda(totalNE));
         }
-        agrupaDedDDF025(d025).forEach(grupo => {
-            tituloSecao('4.1 DDF025 — Receita ' + (grupo.codReceita || '-'));
-            docPDF.setFontSize(7.5);
-            docPDF.text('Natureza rend.: ' + (grupo.natRend || '-') + '  |  Venc.: ' + toBr(venc) + '  |  Pag.: ' + hoje, M.l, y); y += 5;
-            let tb = 0;
-            let tv = 0;
-            grupo.linhas.forEach(r => {
-                garantirEspaco(5);
-                docPDF.text(`${r.tituloIdProc} | Base ${moeda(r.base)} | Alíq ${r.aliq}% | ${moeda(r.valor)}`, M.l, y);
-                y += 4;
-                tb += r.base;
-                tv += r.valor;
+
+        const itensISS = deducoesPorTipo(titulos, 'DDR001');
+        const itensINSS = deducoesPorTipo(titulos, 'DDF021');
+        const itensDARF = deducoesPorTipo(titulos, 'DDF025');
+
+        if (itensISS.length) {
+            tituloSecao('DEDUÇÕES — ISS');
+            linhaCampos([
+                { label: 'Data vencimento (bloco)', valor: vencStr },
+                { label: 'Data pagamento (ref.)', valor: hojeStr }
+            ]);
+            tabela(
+                ['ID-PROC', 'Cod. Receita', 'Base de Cálculo', 'Alíquota', 'Valor a deduzir', 'Data apuração'],
+                itensISS.map(d => [
+                    d.tituloIdProc,
+                    d.codReceita || '-',
+                    moeda(d.base),
+                    `${Number(d.aliq || 0).toFixed(2)}%`,
+                    moeda(truncar2Pdf(d.valor)),
+                    toDateBr(d.dataApuracao)
+                ]),
+                [18, 22, 28, 18, 28, 22]
+            );
+            if (itensISS.length > 1) {
+                const sumIss = itensISS.reduce((s, d) => s + truncar2Pdf(Number(d.valor) || 0), 0);
+                linhaTotalDireita('Valor total ISS', moeda(sumIss));
+            }
+        }
+        if (itensINSS.length) {
+            tituloSecao('DEDUÇÕES — INSS');
+            linhaCampos([
+                { label: 'Data vencimento (bloco)', valor: vencStr },
+                { label: 'Data pagamento (ref.)', valor: hojeStr }
+            ]);
+            tabela(
+                ['ID-PROC', 'Cod. Receita', 'Base de Cálculo', 'Alíquota', 'Valor a deduzir', 'Data (emissão TC)'],
+                itensINSS.map(d => [
+                    d.tituloIdProc,
+                    d.codReceita || '-',
+                    moeda(d.base),
+                    `${Number(d.aliq || 0).toFixed(2)}%`,
+                    moeda(truncar2Pdf(d.valor)),
+                    toDateBr(d.dataEmissaoTitulo)
+                ]),
+                [18, 22, 28, 18, 28, 22]
+            );
+            if (itensINSS.length > 1) {
+                const sumInss = itensINSS.reduce((s, d) => s + truncar2Pdf(Number(d.valor) || 0), 0);
+                linhaTotalDireita('Valor total INSS', moeda(sumInss));
+            }
+        }
+        if (itensDARF.length) {
+            tituloSecao('DEDUÇÕES — DARF');
+            linhaCampos([
+                { label: 'Data vencimento (bloco)', valor: vencStr },
+                { label: 'Data pagamento (ref.)', valor: hojeStr }
+            ]);
+            const rowsDarF = itensDARF.map(d => {
+                const base = Number(d.base || titulos.find(t => (t.idProc || t.id) === d.tituloIdProc)?.valorNotaFiscal || 0);
+                const aliq = Number(d.aliq || 0);
+                const rd = d.raw || {};
+                const comps = (rd.valorIR != null || rd.valorCOFINS != null || rd.valorCSLL != null || rd.valorPISPASEP != null)
+                    ? {
+                        valorIR: truncar2Pdf(rd.valorIR || 0),
+                        valorCOFINS: truncar2Pdf(rd.valorCOFINS || 0),
+                        valorCSLL: truncar2Pdf(rd.valorCSLL || 0),
+                        valorPISPASEP: truncar2Pdf(rd.valorPISPASEP || 0),
+                        total: truncar2Pdf((rd.valorIR || 0) + (rd.valorCOFINS || 0) + (rd.valorCSLL || 0) + (rd.valorPISPASEP || 0))
+                    }
+                    : calcularComponentesDarfPdf(base, aliq);
+                return [
+                    d.tituloIdProc,
+                    d.codReceita || '-',
+                    moeda(base),
+                    `${aliq.toFixed(2)}%`,
+                    moeda(comps.valorIR),
+                    moeda(comps.valorCOFINS),
+                    moeda(comps.valorCSLL),
+                    moeda(comps.valorPISPASEP),
+                    moeda(comps.total)
+                ];
             });
-            docPDF.setFont('helvetica', 'bold');
-            docPDF.text('Base total: ' + moeda(tb) + '  |  Total: ' + moeda(tv), M.l, y); y += 6;
-            docPDF.setFont('helvetica', 'normal');
-        });
-        blocoDedSec('4.2 DDF021 — INSS', d021, false);
-        blocoDedSec('4.3 DDR001 — ISS', dddr, false);
+            tabela(
+                ['ID-PROC', 'Cod. Receita', 'Base', 'Alíq. tot.', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total'],
+                rowsDarF,
+                [16, 18, 20, 14, 14, 14, 14, 16, 18]
+            );
+            if (itensDARF.length > 1) {
+                let sumDarf = 0;
+                itensDARF.forEach(d => {
+                    const base = Number(d.base || titulos.find(t => (t.idProc || t.id) === d.tituloIdProc)?.valorNotaFiscal || 0);
+                    const aliq = Number(d.aliq || 0);
+                    const rd = d.raw || {};
+                    const usarRaw = rd.valorIR != null || rd.valorCOFINS != null || rd.valorCSLL != null || rd.valorPISPASEP != null;
+                    sumDarf += usarRaw
+                        ? truncar2Pdf((rd.valorIR || 0) + (rd.valorCOFINS || 0) + (rd.valorCSLL || 0) + (rd.valorPISPASEP || 0))
+                        : calcularComponentesDarfPdf(base, aliq).total;
+                });
+                linhaTotalDireita('Valor total DARF', moeda(sumDarf));
+            }
+        }
 
-        tituloSecao('5. Dados de pagamento');
-        docPDF.setFontSize(8);
-        docPDF.text('Recolhedor (credor): ' + cnpjCred, M.l, y); y += 5;
-        docPDF.text('Valor líquido: ' + moeda(valorDoc - totalDed), M.l, y); y += 7;
+        tituloSecao('DADOS DE PAGAMENTO');
+        linhaCampos([
+            { label: 'Recolhedor (CNPJ)', valor: cnpjCred || '-' },
+            { label: 'Valor total dos TCs', valor: moeda(valorTCNum) },
+            { label: 'Total das deduções', valor: moeda(totalDed) },
+            { label: 'Valor líquido (OB)', valor: moeda(valorOB) }
+        ]);
 
-        tituloSecao('6. DetaCustos (NE × subelemento × CC × UG)');
-        consolidarDetaCustos(titulos).forEach(l => {
-            garantirEspaco(5);
-            docPDF.text(`${l.ne12} sub ${l.subelemento} | CC ${l.centroCustos} | UG ${l.ug} | ${moeda(l.valor)}`, M.l, y);
-            y += 5;
-        });
+        tituloSecao('DETA CUSTOS (AGRUPADO NE × SUB × CC × UG)');
+        const detaRows = consolidarDetaCustos(titulos).map(l => [
+            l.ne12, l.subelemento, l.centroCustos, l.ug, moeda(l.valor)
+        ]);
+        if (detaRows.length) {
+            tabela(['NE (12 díg.)', 'Sub', 'Centro custos', 'UG', 'Valor'], detaRows, [28, 14, 40, 28, 22]);
+        }
 
-        tituloSecao('7. Histórico / Auditoria (pré-liquidação)');
-        (pl.historico || []).slice().reverse().slice(0, 40).forEach(h => {
-            garantirEspaco(5);
+        const histRows = (pl.historico || []).slice().reverse().slice(0, 45).map(h => {
             const dt = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : '-';
-            docPDF.setFontSize(7.5);
-            docPDF.text(`${dt} | ${h.tipo || ''} | ${h.usuario || ''} | ${String(h.detalhe || '').slice(0, 100)}`, M.l, y);
-            y += 4;
+            return [dt, h.tipo || '-', h.usuario || '-', String(h.detalhe || '') + (h.motivo ? ' — ' + h.motivo : '')];
         });
+        if (histRows.length) {
+            tituloSecao('HISTÓRICO / AUDITORIA (PRÉ-LIQUIDAÇÃO)');
+            tabela(['Data', 'Tipo', 'Utilizador', 'Detalhe'], histRows, [28, 22, 32, 72]);
+        }
 
-        const totalPag = docPDF.internal.getNumberOfPages();
-        for (let i = 1; i <= totalPag; i++) {
+        const totalPages = docPDF.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
             docPDF.setPage(i);
             docPDF.setFontSize(8);
-            docPDF.text('Página ' + i + ' / ' + totalPag + ' | ' + (pl.codigo || ''), M.l + W / 2, PAGE_H - 6, { align: 'center' });
+            docPDF.text(`Página ${i} de ${totalPages}`, 105, 290, { align: 'center' });
         }
+
         docPDF.save('DAuLiq_' + String(pl.codigo || 'lote').replace(/\//g, '-') + '.pdf');
     }
 
