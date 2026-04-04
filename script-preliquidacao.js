@@ -37,6 +37,27 @@
         return d.length <= 12 ? d : d.slice(-12);
     }
 
+    /** PDF: "741000000012026NE000194" ou núcleo "012026000194" → "2026NE000194" */
+    function neExibicaoPdf(numEmpenho) {
+        const s = String(numEmpenho == null ? '' : numEmpenho).trim();
+        if (!s) return '-';
+        const mLiteral = s.match(/(\d{4})\s*NE\s*(\d{1,6})/i);
+        if (mLiteral) {
+            const ano = mLiteral[1];
+            const seq = String(mLiteral[2] || '').replace(/\D/g, '').padStart(6, '0').slice(-6);
+            return `${ano}NE${seq}`;
+        }
+        const core = ne12(s);
+        if (core.length === 12) {
+            const ano = core.slice(2, 6);
+            const seq = core.slice(6, 12);
+            if (/^(19|20)\d{2}$/.test(ano)) {
+                return `${ano}NE${seq}`;
+            }
+        }
+        return s;
+    }
+
     function subel2(sub) {
         const d = normalizarDigitos(sub);
         if (!d) return '';
@@ -343,7 +364,7 @@
                     }
                 }
             }
-            return [neFull, nd, row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
+            return [neExibicaoPdf(neFull), nd, row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
         });
     }
 
@@ -712,10 +733,10 @@
 
         tituloSecao('DETA CUSTOS (AGRUPADO NE × SUB × CC × UG)');
         const detaRows = consolidarDetaCustos(titulos).map(l => [
-            l.ne12, l.subelemento, l.centroCustos, l.ug, moeda(l.valor)
+            neExibicaoPdf(l.ne12), l.subelemento, l.centroCustos, l.ug, moeda(l.valor)
         ]);
         if (detaRows.length) {
-            tabela(['NE (12 díg.)', 'Sub', 'Centro custos', 'UG', 'Valor'], detaRows, [28, 14, 40, 28, 22]);
+            tabela(['Nota de Empenho', 'Sub', 'Centro custos', 'UG', 'Valor'], detaRows, [28, 14, 40, 28, 22]);
         }
 
         const histRows = (pl.historico || []).slice().reverse().slice(0, 45).map(h => {
