@@ -2,7 +2,7 @@
 
 Este documento consolida as regras debatidas para o fluxo de **pré-liquidação** (individual ou em bloco), geração do **DAuLiq** em PDF e vínculo posterior com **NP** e **data de liquidação** do SIAFI, além do papel da **aba Liquidação** do Título de Crédito (TC).
 
-**Última atualização de regras:** consolidação com decisões de produto fechadas para implementação (MVP, permissões, cancelamento, DetaCustos, sequência PL, OP/NP, visibilidade ativo/inativo).
+**Última atualização de regras:** alinhamento com a implementação atual — lista de PLs (ações e colunas), modo **visualização**, geração de DAuLiq **a partir da lista**, diálogo **PDF completo vs sem histórico**, exibição amigável da **NE** no PDF, metadados `auditoriaPdf.variantePdf`; mantém-se o núcleo MVP (§8.15), LF/Storage como fases posteriores.
 
 ---
 
@@ -36,6 +36,15 @@ Permitir que o usuário:
 |Tudo dentro do formulário do TC|**Não** como lugar principal do bloco – o TC é centrado em um documento; o bloco é uma entidade de processo.|
 | Aba Liquidação do TC | **Informativa** – exibir rastro (código do lote, NP, data, status do lote, link/ação para DAuLiq quando aplicável). |
 
+**Lista de pré-liquidações (primeiro ecrã):**
+
+* **Colunas sugeridas (implementadas):** código, estado (badges), fornecedor, **valor total do lote** (soma dos TCs conhecidos no cliente), quantidade de TCs, **data de liquidação** (quando a PL já tem `dataLiquidacao`), **última atualização** (`editado_em`), NP.
+* **Ações por linha:**
+  * **Visualizar** — abre o editor em **modo somente leitura** (sem alterar carrinho, fornecedor ou ações de fecho/cancelamento; útil para consulta e auditoria). Disponível a quem tem `preliquidacao_ler`.
+  * **Editar** — abre o editor com permissões normais de operação (quem tem pelo menos uma permissão operacional além de só leitura: editar, inserir, fechar NP, cancelar, status/inativar, excluir ou admin).
+  * **DAuLiq** — gera o PDF **sem abrir o editor** (carrega títulos pelo `tituloIds` do lote; se o lote estiver **cancelado** e `tituloIds` vazio, usa `titulosParticiparamIds` quando existir). Respeita `preliquidacao_gerar_pdf` (e admin). Desativado se não houver IDs de títulos.
+* **Filtro:** opção de mostrar pré-liquidações **inativas** (comportamento alinhado a admin / `preliquidacao_status`).
+
 ---
 
 ## 4. Modelo de dados (Firebase / Firestore)
@@ -61,6 +70,13 @@ Em cada TC vinculado, manter espelho mínimo para a aba Liquidação e relatóri
 
 *(Campos exatos ficam para definição na implementação, alinhados à seção 8 — em especial §8.15 MVP.)*
 
+### 4.3 Exercício e emissão (PL)
+
+No documento **`preLiquidacoes`**, além do código `PL-#####/AAAA`, o sistema persiste:
+
+* **`anoExercicio`** (number): ano do exercício do lote, alinhado ao ano usado na geração do código (contador `preLiquidacao_{ano}`);
+* **`anoEmissao`** (number): mesmo valor no fluxo atual (identificação do exercício da PL no SisExeFin).
+
 ---
 
 ## 5. Fluxo operacional (resumo)
@@ -69,8 +85,8 @@ Em cada TC vinculado, manter espelho mínimo para a aba Liquidação e relatóri
 2. Filtra por **fornecedor** (e critérios de elegibilidade – ver §8).
 3. Adiciona TCs ao **carrinho**; o sistema **impede** incluir fornecedor diferente do primeiro item.
 4. O sistema **consolida** dados (valores, empenhos, deduções, datas conforme regras do DAuLiq).
-5. Usuário **gera o PDF** do DAuLiq.
-6. Usuário **salva** o lote (gera **código** único).
+5. Usuário **gera o PDF** do DAuLiq (no editor **ou** diretamente na lista — ver §3). Antes da geração, o sistema apresenta um **diálogo** para escolher **PDF completo** (com secção de histórico da PL no documento) ou **sem histórico no PDF** (apenas blocos operacionais; ver §6 e §8.3).
+6. Usuário **salva** o lote (gera **código** único). *Nota:* na prática o passo 6 costuma anteceder o 5 na primeira vez; o PDF pode ser regerado em qualquer momento com títulos no lote.
 7. Após liquidação no SIAFI, usuário **informa NP** e **data de liquidação** → lote **Fechado**; TCs atualizados conforme política acordada.
 
 **Rascunho e handoff entre usuários:** entre os passos 6 e 7 o lote permanece em **Rascunho** até existir NP. Um utilizador pode **montar e salvar** a PL (com código PL); outro pode, em momento posterior, **efetuar a liquidação no SIAFI** e **registar a NP** no SisExeFin — desde que possua as permissões adequadas (`preliquidacao_fechar_np` ou equivalente combinado com edição da PL).
@@ -97,11 +113,13 @@ Conforme documento auxiliar debatido, o PDF do DAuLiq deve seguir **blocos fixos
 
 1. **Cabeçalho** – logo, título “Documento Auxiliar de Liquidação”, data/hora de impressão, usuário que gerou.
 2. **Dados básicos** – dados comuns (vencimento, ateste, valor do documento, credor) + lista de documentos de origem (TCs) + observação concatenada conforme padrão definido.
-3. **Principal com orçamento** – favorecido, conta de contrato (RC), tabela de empenhos (NE com regra de 12 dígitos finais, subelemento 2 dígitos, valor; **somar** se a mesma NE aparecer em mais de um TC).
+3. **Principal com orçamento** – favorecido, conta de contrato (RC), tabela de empenhos. **Consolidação interna:** continua a usar o **núcleo de 12 dígitos** finais do número da NE (e subelemento em 2 dígitos) para agregar e somar quando a mesma combinação aparece em mais de um TC. **Exibição no PDF:** a coluna “Nota de Empenho” deve mostrar o formato legível **`YYYYNE######`** (ex.: `2026NE000194`), obtido a partir do núcleo de 12 dígitos (posições de ano e sequência) ou, quando o texto já contiver o padrão `YYYYNE######`, extrair e normalizar essa parte — em vez de exibir o identificador longo completo ou só o núcleo numérico cru.
 4. **Deduções** – agrupamentos por tipo (DDF025, DDF021, DDR001) com regras de listagem e totais conforme especificação (incluindo TC de origem onde aplicável).
 5. **Dados de pagamento** – recolhedor, valor líquido (soma TCs − deduções).
-6. **DetaCustos** – consolidação das **NE vinculadas em todos os TCs** do lote. **Agrupamento:** quando forem a **mesma NE**, o **mesmo subelemento**, o **mesmo centro de custos** e a **mesma UG beneficiária**, **somar** os valores numa única linha; quando qualquer desses critérios diferir, **exibir linhas distintas** nesta secção.
-7. **Histórico** – refletir as **informações de auditoria** (trilha gravada no sistema para a PL e eventos relevantes: criação, geração de PDF, alterações de NP, cancelamentos, associações LF, etc.), alinhado aos registos em `historico` / eventos do documento `preLiquidacoes` (e referências aos TCs quando aplicável).
+6. **DetaCustos** – consolidação das **NE vinculadas em todos os TCs** do lote. **Agrupamento:** quando forem a **mesma NE**, o **mesmo subelemento**, o **mesmo centro de custos** e a **mesma UG beneficiária**, **somar** os valores numa única linha; quando qualquer desses critérios diferir, **exibir linhas distintas** nesta secção. **Cabeçalho da primeira coluna no PDF:** “Nota de Empenho”, com o mesmo formato de exibição **`YYYYNE######`** que no bloco “Principal com orçamento”.
+7. **Histórico (opcional no PDF)** — **Duas variantes à escolha do utilizador** no momento da geração:
+   * **Completo:** inclui a secção **HISTÓRICO / AUDITORIA (PRÉ-LIQUIDAÇÃO)** com os eventos gravados em `preLiquidacoes.historico` (amostra recente, p.ex. até 45 linhas), alinhada ao §8.8.
+   * **Sem histórico no PDF:** o ficheiro **não** inclui essa tabela; o conteúdo operacional (itens 1–6 acima) mantém-se. **Em ambos os casos** o sistema **regista** na PL um evento de auditoria (`historico` + `auditoriaPdf`) indicando a variante gerada (ver §8.3).
 8. **Rodapé** – paginação (padrão alinhado ao da NE/PDTC).
 
 **Regras de cálculo debatidas (resumo):**
@@ -179,7 +197,17 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 **Primeiro sprint (MVP):**
 
 * **Download imediato** no browser após gerar o PDF (sem obrigatoriedade de Firebase Storage).
-* **Persistir metadados** no documento `preLiquidacoes`: data/hora de geração, utilizador, versão do layout (se aplicável), nome do ficheiro sugerido, referência ao consolidado usado.
+* **Persistir metadados** no documento `preLiquidacoes` (objeto sugerido `auditoriaPdf`), incluindo no mínimo:
+  * `geradoEm` (ISO 8601);
+  * `usuario` (email do utilizador que gerou);
+  * `nomeArquivoSugerido`;
+  * **`variantePdf`:** `completo` ou `sem_historico` — conforme a opção escolhida no diálogo (PDF com ou sem a secção de histórico da PL);
+  * quando a geração for iniciada na **lista**, pode gravar-se também `origem: 'lista'` para distinguir do botão no editor.
+* **Diálogo obrigatório** antes de cada geração (lista ou editor): o utilizador escolhe **Completo** ou **Sem histórico** (cancelar interrompe sem gerar).
+* **Nome do ficheiro descarregado:** o padrão é `DAuLiq_<codigoPL>.pdf`; na variante sem histórico no PDF usa-se sufixo **`_sem-historico`** antes da extensão (ex.: `DAuLiq_PL-00001-2026_sem-historico.pdf`).
+* **Histórico da PL (`preLiquidacoes.historico`):** em **todas** as gerações é acrescentado um evento tipo `pdf` com texto que identifica a variante, por exemplo:
+  * a partir do editor: `DAuLiq gerado (completo)` ou `DAuLiq gerado (sem histórico no PDF)`;
+  * a partir da lista: `DAuLiq gerado (lista, completo)` ou `DAuLiq gerado (lista, sem histórico no PDF)`.
 
 **Fase posterior:**
 
@@ -223,7 +251,7 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 
 * **CRUD habitual:** `preliquidacao_ler`, `preliquidacao_inserir`, `preliquidacao_editar`.
 * **Exclusão física (delete):** apenas **`preliquidacao_excluir`** — restrita a **admin**.
-* **Ativo / inativo** (visibilidade da PL para não-admins): **`preliquidacao_inativar`** e reativação — apenas **admin** (equivalente a “ativar” pode ser a mesma chave ou `preliquidacao_ativar` conforme convenção do admin).
+* **Ativo / inativo** (visibilidade da PL para não-admins): na implementação atual, chave **`preliquidacao_status`** (inativar / reativar) — tipicamente **admin**; o documento de negócio também referia `preliquidacao_inativar` como sinónimo conceitual.
 * **Cancelar** PL (ação operacional §7.4): **`preliquidacao_cancelar`** — utilizador com perfil autorizado (não necessariamente admin).
 * **Ações de fluxo:** `preliquidacao_gerar_pdf`, `preliquidacao_fechar_np`, `preliquidacao_associar_lf` (esta última quando a etapa LF estiver disponível).
 
@@ -231,8 +259,8 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 
 10. **Conteúdo**
 
-* **DetaCustos:** alinhar ao §6 — agregação por **NE + subelemento + centro de custos + UG beneficiária**; somar valores quando o quadruplo for idêntico; linhas distintas quando diferir.
-* **Histórico (secção 7 do PDF):** refletir **informações de auditoria** (eventos gravados para a PL e impactos nos TCs), em coerência com os registos persistidos — não é obrigatório colar o PDF ao dump completo de `historicoStatus` de cada TC, mas deve ser **fiel à trilha de auditoria** definida no sistema (timestamps, utilizador, tipo de evento, motivos quando houver).
+* **DetaCustos:** alinhar ao §6 — agregação por **NE + subelemento + centro de custos + UG beneficiária**; somar valores quando o quadruplo for idêntico; linhas distintas quando diferir; exibição da NE no formato **`YYYYNE######`** no PDF (§6).
+* **Histórico no PDF (secção opcional):** quando o utilizador escolher a variante **completa**, a secção reflete **informações de auditoria** da PL (`historico`), em coerência com os registos persistidos — não é obrigatório incluir o dump completo de `historicoStatus` de cada TC; na variante **sem histórico no PDF**, essa secção **não** entra no documento, mas os eventos continuam na coleção Firestore e no `historico` da PL (§8.3).
 
 ### 8.9 Observação concatenada (DAuLiq)
 
@@ -266,7 +294,7 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 | NP única no fecho | **Sim** — todos os TC do carrinho partilham a **mesma NP** e **`dataLiquidacao`**. |
 | Correção de NP | Permitida com motivo **apenas antes de OP** vinculada no SisExeFin (§8.13); não por “até primeira LF”. |
 | Sequência PL | **Transação Firestore** + documento contador (§8.4). |
-| Histórico no PDF | **Auditoria** (§6 e §8.8). |
+| Histórico no PDF | **Auditoria** na PL sempre persistida; **no PDF**, opcional — **completo** (tabela de histórico) ou **sem histórico** no documento, à escolha do utilizador (§6 item 7, §8.3). |
 | Cancelamento com NP | **Permitido** com permissão, limpeza de NP nos TCs e auditoria (§7.4). |
 
 ### 8.12 Tópicos opcionais / futuros
@@ -290,17 +318,19 @@ No **SIAFI**, após autorizações, gera-se **OP** (Ordem de Pagamento); após a
 
 **Aceite para o primeiro sprint:**
 
-* Tela de **pré-liquidação**; filtro por fornecedor; **carrinho** com validações (mesmo credor, status `Em Liquidação`, sem NP, um vínculo ativo de rascunho por TC).
-* **Gerar DAuLiq** em PDF (**download**); persistir **metadados** no documento `preLiquidacoes`.
+* Tela de **pré-liquidação** com **lista** de PLs (colunas e ações §3); filtro por fornecedor no **editor**; **carrinho** com validações (mesmo credor, status `Em Liquidação`, sem NP, um vínculo ativo de rascunho por TC).
+* **Modo Visualizar** (somente leitura) e **Editar** conforme §3; geração **DAuLiq** a partir do **editor** ou da **lista** (§3, §8.3).
+* **Gerar DAuLiq** em PDF (**download**); **diálogo** completo vs sem histórico no PDF; persistir **metadados** (`auditoriaPdf`, incluindo `variantePdf`) e evento em `historico` (§8.3).
+* Layout do PDF alinhado à **PDTC** (papeleta de referência); **NE** exibida como **`YYYYNE######`** onde aplicável (§6).
 * **Salvar** lote em **Rascunho** com código **`PL-#####/AAAA`** (transação + contador).
 * **Informar NP + data** (outro utilizador ou o mesmo), fechar lote; propagar **NP** e **`dataLiquidacao`** a **todos** os TCs; vínculo com coleção **`np`** + histórico.
-* **Cancelamento** e **remoção de TC** conforme §7.4 e §8.6; permissões §8.7; **inativar** só admin (visibilidade).
+* **Cancelamento** e **remoção de TC** conforme §7.4 e §8.6; permissões §8.7; **inativar** via `preliquidacao_status` (tipicamente admin — visibilidade).
 
 **Etapas posteriores:** associação **LF** no âmbito da PL, atualização em lote de `empenhosVinculados`, reflexo de import **`lfpf`**, Storage do PDF.
 
 ---
 
-**Estado do documento:** regras **fechadas** para iniciar implementação; revisar §8.12 após primeiro sprint e quando Storage / exceção 2 LF forem priorizados.
+**Estado do documento:** regras alinhadas à **implementação atual** do módulo (lista, variantes de PDF, visualização); §8.12 permanece para **opcionais** (Storage, exceção 2 LF, associação LF na PL).
 
 ## 9. Sistemática de implementação sugerida (LF ↔ NE, LFxPF, espelho no TC)
 
@@ -365,6 +395,7 @@ flowchart LR
 
 ## 10. Referências no repositório
 
+* Módulo **pré-liquidação** (lista, editor, PDF DAuLiq, NP, Firestore): `preliquidacao.html`, `script-preliquidacao.js`
 * Especificação detalhada do layout do DAuLiq: `regras de negócio - Documento auxiliar de liquidação..txt`
 * Papeleta (PDTC) – referência de formatação: geração em `script-titulos-spa.js` (`gerarPDFTitulo`)
 * Aba Liquidação do TC, NP, LF/PF: `script-titulos-spa.js`, `titulos.html`, e `Regras de Negócio - Aba Liquidação.md`
@@ -373,5 +404,5 @@ flowchart LR
 
 ---
 
-*Documento vivo: decisões consolidadas nas secções 7–8 e §8.15 (MVP). Revisar §8.12 (opcionais) antes de Storage e exceções 2 LF.*
+*Documento vivo: decisões nas secções 7–8 e §8.15 (MVP); §3 e §6 refletem a UI e o PDF em produção. Revisar §8.12 (opcionais) antes de Storage e exceções 2 LF.*
 

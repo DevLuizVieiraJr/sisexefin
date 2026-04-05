@@ -7,6 +7,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
     <title>SisExeFin - Pré-Liquidação</title>
+    <script src="script-tema.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
@@ -22,18 +23,20 @@
         .badge-pl-cancel { background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
         .badge-pl-inativo { background: #bdc3c7; color: #333; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
         .autocomplete-list { max-height: 200px; }
+        .pl-acoes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 320px; }
+        .pl-acoes .btn-small { margin: 0; }
     </style>
 </head>
 <body style="display: none; flex-direction: column;" id="corpo-preliquidacao">
     <div id="loadingApp" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
-        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">Sincronizando com a nuvem...</p>
     </div>
 
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Pré-Liquidação</div>
         <div class="topbar-user">
-            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 Carregando...</span>
             <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
@@ -45,7 +48,7 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu" aria-label="Ocultar ou mostrar menu"><i class="fas fa-bars menu-btn-icon" aria-hidden="true"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
                 <ul></ul>
             </nav>
@@ -57,18 +60,27 @@
                     <h2 style="margin:0;">Pré-Liquidações</h2>
                     <button type="button" id="btnNovaPL" class="btn-primary" data-permission="preliquidacao_inserir">+ Nova pré-liquidação</button>
                 </div>
-                <p style="color:#666; font-size:13px; margin:12px 0;">Monte lotes de TC do mesmo fornecedor, gere o DAuLiq (PDF) e registe a NP após o SIAFI.</p>
-                <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-                    <input type="checkbox" id="filtroPLInativas">
-                    Mostrar pré-liquidações inativas (admin)
-                </label>
+                <p style="color:#666; font-size:13px; margin:12px 0;">Monte lotes de TC do mesmo fornecedor, gere o DAuLiq (PDF) e registre a NP após o SIAFI.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:10px;">
+                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px;">
+                        <span>Exercício</span>
+                        <select id="filtroAnoExercicioPL" title="Filtrar lotes por ano do exercício"></select>
+                    </label>
+                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="filtroPLInativas">
+                        Mostrar pré-liquidações inativas (admin)
+                    </label>
+                </div>
                 <table class="tabela-gov">
                     <thead>
                         <tr>
                             <th>Código</th>
                             <th>Estado</th>
                             <th>Fornecedor</th>
+                            <th>Valor (R$)</th>
                             <th>TCs</th>
+                            <th>Data liq.</th>
+                            <th>Atualizado</th>
                             <th>NP</th>
                             <th>Ações</th>
                         </tr>
@@ -121,7 +133,7 @@
                         <ul id="plListaCarrinho" style="list-style:none; padding:0; margin:10px 0; font-size:13px;"></ul>
                         <p id="plCarrinhoVazio" style="color:#999; font-size:13px;">Nenhum TC no carrinho.</p>
                         <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
-                            <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Guardar pré-liquidação</button>
+                            <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Salvar pré-liquidação</button>
                             <button type="button" id="btnPLPdf" class="btn-default" data-permission="preliquidacao_gerar_pdf">Gerar DAuLiq (PDF)</button>
                             <button type="button" id="btnPLFecharNP" class="btn-primary" data-permission="preliquidacao_fechar_np" style="display:none;">Informar NP e data</button>
                             <button type="button" id="btnPLCorrigirNP" class="btn-default" data-permission="preliquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
@@ -135,7 +147,7 @@
                 <fieldset class="gov-fieldset" style="margin-top:16px;">
                     <legend>Auditoria desta pré-liquidação</legend>
                     <table class="tabela-gov">
-                        <thead><tr><th>Data</th><th>Tipo</th><th>Utilizador</th><th>Detalhe</th></tr></thead>
+                        <thead><tr><th>Data</th><th>Tipo</th><th>Usuário</th><th>Detalhe</th></tr></thead>
                         <tbody id="tbodyPLHistorico"></tbody>
                     </table>
                 </fieldset>
@@ -167,6 +179,24 @@
         </div>
     </div>
 
+    <div id="modalPLVarianteDauliq" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:440px;">
+            <h3 style="margin-bottom:8px;">Gerar DAuLiq</h3>
+            <p style="font-size:13px; color:#555; margin:0 0 14px 0; line-height:1.45;">Escolha o conteúdo do PDF. Em ambos os casos o sistema registra a geração na auditoria desta pré-liquidação.</p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button type="button" id="btnModalDauliqSemHist" class="btn-default" style="text-align:left; padding:10px 12px;">
+                    <strong>Sem histórico</strong> — só dados do lote (sem a tabela de auditoria da PL no PDF).
+                </button>
+                <button type="button" id="btnModalDauliqCompleto" class="btn-primary" style="text-align:left; padding:10px 12px;">
+                    <strong>Completo</strong> — inclui a seção de histórico / auditoria da pré-liquidação.
+                </button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="btnModalDauliqCancel" class="btn-default">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -174,6 +204,7 @@
     <script src="admin-utils.js"></script>
     <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
+    <script src="script-ano-documento.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script-preliquidacao.js"></script>
     <script src="script-menu-toggle.js"></script>

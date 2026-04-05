@@ -426,6 +426,19 @@
                         gerencia: escapeHTML(getVal(rowNorm, ['GERÊNCIA', 'GERENCIA', 'gerencia', 'Gerencia'])),
                         projeto: escapeHTML(getVal(rowNorm, ['PROJETO', 'projeto', 'Projeto']))
                     };
+                    if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosEmpenho === 'function') {
+                        window.sisAnoDocumento.aplicarAnosEmpenho(dados);
+                    }
+                    var anoEmImp = getVal(rowNorm, ['ANO_EMISSAO', 'AnoEmissao', 'anoEmissao', 'ano_emissao']);
+                    var anoExImp = getVal(rowNorm, ['ANO_EXERCICIO', 'AnoExercicio', 'anoExercicio', 'ano_exercicio']);
+                    if (window.sisAnoDocumento && anoEmImp) {
+                        var ae = window.sisAnoDocumento.anoValido(anoEmImp);
+                        if (ae != null) dados.anoEmissao = ae;
+                    }
+                    if (window.sisAnoDocumento && anoExImp) {
+                        var ax = window.sisAnoDocumento.anoValido(anoExImp);
+                        if (ax != null) dados.anoExercicio = ax;
+                    }
                     var refEmp = await db.collection('empenhos').add(dados);
                     mapEmpenhosPorNumero[neNorm] = refEmp.id;
                     inseridos++;
@@ -485,6 +498,12 @@
                             if (situacao) updateData.situacao = situacao;
                             if (pf !== undefined && pf !== null && String(pf).trim() !== '') updateData.pf = escapeHTML(String(pf).trim());
                             if (ultimaAtual) updateData.ultimaAtualizacao = ultimaAtual;
+                            var anoLfUp = getVal(rowNorm, ['ANO_EMISSAO', 'AnoEmissao', 'anoEmissao', 'ANO_EXERCICIO', 'AnoExercicio', 'anoExercicio']);
+                            if (anoLfUp && window.sisAnoDocumento && window.sisAnoDocumento.anoValido(anoLfUp) != null) {
+                                var yLf = window.sisAnoDocumento.anoValido(anoLfUp);
+                                updateData.anoEmissao = yLf;
+                                updateData.anoExercicio = yLf;
+                            }
                             await db.collection('lfpf').doc(docId).update(updateData);
                             atualizados++;
                         } catch (err) { erros.push('Linha ' + (i + 2) + ': ' + (err.message || err)); }
@@ -510,6 +529,15 @@
                                 updatedBy: userEmail,
                                 historico: ['Importado em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail]
                             };
+                            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosLfPf === 'function') {
+                                window.sisAnoDocumento.aplicarAnosLfPf(dados);
+                            }
+                            var anoLfNovo = getVal(rowNorm, ['ANO_EMISSAO', 'AnoEmissao', 'anoEmissao', 'ANO_EXERCICIO', 'AnoExercicio', 'anoExercicio']);
+                            if (anoLfNovo && window.sisAnoDocumento && window.sisAnoDocumento.anoValido(anoLfNovo) != null) {
+                                var yN = window.sisAnoDocumento.anoValido(anoLfNovo);
+                                dados.anoEmissao = yN;
+                                dados.anoExercicio = yN;
+                            }
                             var ref = await db.collection('lfpf').add(dados);
                             mapLfPorNumero[lfNorm] = ref.id;
                             inseridos++;

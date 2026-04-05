@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a2f4a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
+    <link rel="apple-touch-icon" href="icons/logo-192.png">
+    <title>SisExeFin — A minha conta</title>
+    <script src="script-tema.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spinConta 1s linear infinite; }
+        @keyframes spinConta { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body style="display: none;" id="corpo-conta">
+
+    <div id="loadingApp" class="loading-overlay" style="display:none;">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">Sincronizando com a nuvem...</p>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin — A minha conta</div>
+        <div class="topbar-user">
+            <span class="topbar-voltar" onclick="location.href='dashboard.html'" style="margin-right:15px;">⬅ Dashboard</span>
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 Carregando...</span>
+            <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
+                <label style="font-size: 12px;">Perfil:</label>
+                <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
+            </div>
+            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu" aria-label="Ocultar ou mostrar menu"><i class="fas fa-bars menu-btn-icon" aria-hidden="true"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul><!-- Menu injetado por script-menu-lateral.js --></ul>
+            </nav>
+        </nav>
+
+        <main class="content">
+            <div class="card conta-card">
+                <div class="header-lista" style="border: none; padding-bottom: 8px; margin-bottom: 12px;">
+                    <h2>Dados do usuário</h2>
+                </div>
+                <p class="conta-intro">Informação do seu cadastro no SisExeFin e na sessão atual. Alterações de perfil e permissões são feitas pelo administrador.</p>
+                <div id="conta-dados-corpo"></div>
+            </div>
+
+            <div class="card conta-card">
+                <div class="header-lista" style="border: none; padding-bottom: 8px; margin-bottom: 12px;">
+                    <h2>Tema da interface</h2>
+                </div>
+                <div class="form-group" style="max-width: 360px;">
+                    <label for="conta-select-tema">Aparência</label>
+                    <select id="conta-select-tema" aria-label="Tema da interface">
+                        <option value="claro">Claro</option>
+                        <option value="escuro">Escuro</option>
+                        <option value="sistema">Seguir o sistema</option>
+                    </select>
+                </div>
+                <p class="conta-intro">A preferência fica guardada neste dispositivo e aplica-se às páginas do SisExeFin que carregam o tema.</p>
+            </div>
+
+            <div class="card conta-card" id="conta-bloco-senha">
+                <div class="header-lista" style="border: none; padding-bottom: 8px; margin-bottom: 12px;">
+                    <h2>Alterar senha</h2>
+                </div>
+                <p id="conta-senha-google" class="conta-intro" style="display: none;">
+                    A sua sessão utiliza login social (por exemplo Google). A palavra-passe é gerida na conta desse serviço, não aqui.
+                </p>
+                <form id="conta-form-senha" class="conta-form-senha" autocomplete="off">
+                    <div class="form-group">
+                        <label for="conta-senha-atual">Senha atual</label>
+                        <input type="password" id="conta-senha-atual" required autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-senha-nova">Nova senha</label>
+                        <input type="password" id="conta-senha-nova" required autocomplete="new-password" minlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-senha-conf">Confirmar nova senha</label>
+                        <input type="password" id="conta-senha-conf" required autocomplete="new-password" minlength="8">
+                    </div>
+                    <p id="conta-senha-msg" class="conta-form-msg" role="status" aria-live="polite"></p>
+                    <button type="submit" class="btn-primary">Alterar senha</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="script-menu-lateral.js"></script>
+    <script src="script.js"></script>
+    <script src="script-conta.js"></script>
+    <script src="script-menu-toggle.js"></script>
+    <script src="pwa-register.js"></script>
+</body>
+</html>

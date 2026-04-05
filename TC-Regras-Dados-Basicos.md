@@ -127,7 +127,9 @@ As abas **Processamento**, **Liquidação**, **Financeiro** e **Auditoria** mant
 | Campo BD | Tipo | Descrição |
 |----------|------|-----------|
 | idProc | string | Identificador do processamento (ex: PROC-001) |
-| ano | string | 2026 |
+| ano | string | Exercício do TC no cadastro (ex.: 2026), alinhado ao campo **Ano TC** na UI |
+| anoExercicio | number | Ano de exercício (inteiro, ex.: 2026) para consultas e futura divisão por exercício; derivado de `ano` e, se necessário, das datas |
+| anoEmissao | number | Ano de emissão de referência (inteiro); no cadastro SisExeFin costuma coincidir com o ano da data de emissão do TC |
 | ug | string | 741000 |
 | tipoTC | string | NF, FT, BO ou OT |
 | dataExefin | string | Data de entrada na EXEFIN |
@@ -167,7 +169,7 @@ entradaSaida: [
 
 ## 5. Validações obrigatórias
 
-- Ano: sempre 2026
+- Ano (exercício do TC): informado no cadastro; `anoExercicio` / `anoEmissao` são gravados como números para identificação e filtros futuros
 - UG: sempre 741000
 - Tipo de TC: uma das opções NF, FT, BO, OT
 - Entrada EXEFIN: obrigatória, data ≤ hoje

@@ -209,6 +209,13 @@
             empenhosVinculados: empenhosDaNotaAtual,
             criado_por: escapeHTML(usuarioLogadoEmail)
         };
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosTitulo === 'function') {
+            if (!dados.ano) {
+                const yEx = window.sisAnoDocumento.anoDeData(dados.dataExefin) || window.sisAnoDocumento.anoDeData(dados.dataEmissao);
+                dados.ano = yEx != null ? String(yEx) : String(new Date().getFullYear());
+            }
+            window.sisAnoDocumento.aplicarAnosTitulo(dados);
+        }
         try {
             if (fbID == -1 || fbID === "") {
                 dados.criado_em = firebase.firestore.FieldValue.serverTimestamp();

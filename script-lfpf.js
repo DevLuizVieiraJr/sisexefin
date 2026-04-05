@@ -323,6 +323,9 @@
             empenhosVinculados: empenhosVinculadosLfPf,
             ativo: true
         };
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosLfPf === 'function') {
+            window.sisAnoDocumento.aplicarAnosLfPf(dados);
+        }
         const userEmail = (auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
         mostrarLoading();
         try {

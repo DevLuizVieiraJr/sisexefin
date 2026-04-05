@@ -1,7 +1,7 @@
 // ==========================================
 // MENU LATERAL - Padrão AdminLTE 3 (adminlte.io)
 // ==========================================
-// Fonte única do menu. Páginas: dashboard.html, sistema.html, titulos.html, admin.html
+// Fonte única do menu. Páginas: dashboard.html, conta.html, sistema.html, titulos.html, preliquidacao.html, admin.html
 // Qualquer alteração no menu deve ser feita SOMENTE aqui.
 // ==========================================
 (function() {
@@ -12,20 +12,26 @@
                 <p>Dashboard</p>
             </a>
         </li>
+        <li class="nav-item">
+            <a href="conta.html" class="nav-link" data-menu-ativo="conta" title="A minha conta — dados, tema e senha">
+                <i class="nav-icon fas fa-user-cog"></i>
+                <p>A minha conta</p>
+            </a>
+        </li>
         <li class="nav-item has-treeview" data-tree="controle">
-            <a href="#" class="nav-link" data-toggle="tree">
+            <a href="#" class="nav-link" data-toggle="tree" title="Controle Orçamentário" aria-expanded="false">
                 <i class="nav-icon fas fa-calculator"></i>
                 <p>Controle Orçamentário <i class="right fas fa-angle-left"></i></p>
             </a>
             <ul class="nav nav-treeview">
                 <li class="nav-item">
-                    <a href="#" class="nav-link emdesevolvimento" onclick="alert('Em desenvolvimento.'); return false;" title="Em desenvolvimento">
+                    <a href="#" class="nav-link emdesevolvimento" title="Solicitação de Empenho — em desenvolvimento" aria-disabled="true">
                         <i class="far fa-circle nav-icon"></i>
                         <p>Solicitação de Empenho</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link emdesevolvimento" onclick="alert('Em desenvolvimento.'); return false;" title="Em desenvolvimento">
+                    <a href="#" class="nav-link emdesevolvimento" title="Alteração de Crédito — em desenvolvimento" aria-disabled="true">
                         <i class="far fa-circle nav-icon"></i>
                         <p>Alteração de Crédito</p>
                     </a>
@@ -45,7 +51,7 @@
             </a>
         </li>
         <li class="nav-item has-treeview" data-tree="tabelas">
-            <a href="#" class="nav-link" data-toggle="tree">
+            <a href="#" class="nav-link" data-toggle="tree" title="Tabelas de Apoio" aria-expanded="false">
                 <i class="nav-icon fas fa-table"></i>
                 <p>Tabelas de Apoio <i class="right fas fa-angle-left"></i></p>
             </a>
@@ -107,9 +113,9 @@
             </ul>
         </li>
         <li class="nav-item has-treeview" data-tree="links">
-            <a href="#" class="nav-link" data-toggle="tree">
+            <a href="#" class="nav-link" data-toggle="tree" title="Links rápidos" aria-expanded="false">
                 <i class="nav-icon fas fa-external-link-alt"></i>
-                <p>Links Rápido <i class="right fas fa-angle-left"></i></p>
+                <p>Links rápidos <i class="right fas fa-angle-left"></i></p>
             </a>
             <ul class="nav nav-treeview">
                 <li class="nav-item">
@@ -145,12 +151,94 @@
             </ul>
         </li>
         <li class="nav-item" data-permission="acesso_admin">
-            <a href="admin.html" class="nav-link" data-menu-ativo="admin" title="Controle de Acesso" style="color: #f39c12;">
+            <a href="admin.html" class="nav-link nav-link--admin" data-menu-ativo="admin" title="Controle de Acesso">
                 <i class="nav-icon fas fa-user-shield"></i>
                 <p>Controle de Acesso</p>
             </a>
         </li>
     `;
+
+    function textoRotuloSidebar(el) {
+        if (!el) return '';
+        var t = el.getAttribute('title');
+        if (t) return t.trim();
+        var p = el.querySelector(':scope > p');
+        if (p) {
+            var c = p.cloneNode(true);
+            c.querySelectorAll('.right').forEach(function(n) { n.remove(); });
+            return c.textContent.replace(/\s+/g, ' ').trim();
+        }
+        return String(el.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function alvoFlyoutMenuRecolhido(sidebar, target) {
+        if (!target || !sidebar.contains(target)) return null;
+        var el = target.closest('.brand-link, .sidebar-toggle');
+        if (el) return el;
+        var a = target.closest('ul.nav-sidebar a.nav-link');
+        if (!a || !sidebar.contains(a)) return null;
+        if (a.closest('ul.nav-treeview')) return null;
+        return a;
+    }
+
+    function initSidebarCollapsedFlyout(sidebar) {
+        if (!sidebar || sidebar.dataset.sidebarFlyoutInit === '1') return;
+        sidebar.dataset.sidebarFlyoutInit = '1';
+
+        var tip = document.getElementById('sisexefin-sidebar-flyout');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'sisexefin-sidebar-flyout';
+            tip.className = 'sidebar-flyout-tooltip';
+            tip.setAttribute('role', 'tooltip');
+            document.body.appendChild(tip);
+        }
+
+        function hideFlyout() {
+            tip.classList.remove('visivel');
+        }
+
+        function showFlyout(anchor, text) {
+            if (!text) { hideFlyout(); return; }
+            tip.textContent = text;
+            tip.classList.add('visivel');
+            var r = anchor.getBoundingClientRect();
+            var pad = 8;
+            tip.style.left = (r.right + pad) + 'px';
+            tip.style.top = (r.top + r.height / 2) + 'px';
+            requestAnimationFrame(function() {
+                var tr = tip.getBoundingClientRect();
+                var top = r.top + (r.height - tr.height) / 2;
+                top = Math.max(6, Math.min(top, window.innerHeight - tr.height - 6));
+                tip.style.top = top + 'px';
+            });
+        }
+
+        sidebar.addEventListener('mouseover', function(e) {
+            if (!sidebar.classList.contains('colapsado')) {
+                hideFlyout();
+                return;
+            }
+            var alvo = alvoFlyoutMenuRecolhido(sidebar, e.target);
+            if (!alvo) {
+                hideFlyout();
+                return;
+            }
+            if (alvo.classList.contains('sidebar-toggle')) {
+                showFlyout(alvo, 'Mostrar menu');
+                return;
+            }
+            showFlyout(alvo, textoRotuloSidebar(alvo));
+        });
+
+        sidebar.addEventListener('mouseleave', function() {
+            hideFlyout();
+        });
+
+        new MutationObserver(function() {
+            if (!sidebar.classList.contains('colapsado')) hideFlyout();
+        }).observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    }
 
     function detectarPaginaAtiva() {
         const path = window.location.pathname || '';
@@ -162,6 +250,7 @@
             const secao = new URLSearchParams(search).get('secao');
             return secao || 'sistema';
         }
+        if (path.includes('conta.html')) return 'conta';
         if (path.includes('dashboard.html') || path === '/' || path.endsWith('/')) return 'dashboard';
         return 'dashboard';
     }
@@ -177,8 +266,11 @@
             brandLink.href = 'dashboard.html';
             brandLink.className = 'brand-link';
             brandLink.innerHTML = '<span class="brand-image">🌐</span><span class="brand-text">SisExeFin</span>';
+            brandLink.title = 'Início — Dashboard';
             const toggle = sidebar.querySelector('.sidebar-toggle');
             sidebar.insertBefore(brandLink, toggle || sidebar.firstChild);
+        } else {
+            brandLink.title = 'Início — Dashboard';
         }
 
         const ul = sidebar.querySelector('ul');
@@ -212,6 +304,15 @@
             }
         });
 
+        ul.querySelectorAll('.nav-link[data-toggle="tree"]').forEach(function(link) {
+            const item = link.closest('.nav-item.has-treeview');
+            link.setAttribute('aria-expanded', item && item.classList.contains('menu-open') ? 'true' : 'false');
+        });
+
+        ul.addEventListener('click', function(e) {
+            if (e.target.closest('a.emdesevolvimento')) e.preventDefault();
+        });
+
         // Toggle treeview ao clicar + persistir estado
         ul.querySelectorAll('.nav-link[data-toggle="tree"]').forEach(function(link) {
             link.addEventListener('click', function(e) {
@@ -220,6 +321,7 @@
                 if (!item) return;
                 const id = item.getAttribute('data-tree');
                 item.classList.toggle('menu-open');
+                this.setAttribute('aria-expanded', item.classList.contains('menu-open') ? 'true' : 'false');
                 if (id) {
                     treeState[id] = item.classList.contains('menu-open');
                     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(treeState)); } catch (e2) {}
@@ -244,6 +346,8 @@
                 if (typeof history.pushState === 'function') history.pushState({}, '', 'sistema.html?secao=' + secao);
             });
         }
+
+        initSidebarCollapsedFlyout(sidebar);
     }
 
     if (document.readyState === 'loading') {

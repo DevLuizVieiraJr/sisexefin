@@ -151,16 +151,7 @@ function toggleSidebar() {
     try { localStorage.setItem('sidebarColapsado', colapsado ? '1' : '0'); } catch (e) {}
     const toggle = sidebar.querySelector('.sidebar-toggle');
     if (toggle) {
-        const icon = toggle.querySelector('.menu-btn-icon');
         const text = toggle.querySelector('.sidebar-toggle-text');
-        if (icon) {
-            if (icon.classList) {
-                icon.classList.toggle('fa-chevron-left', !colapsado);
-                icon.classList.toggle('fa-chevron-right', colapsado);
-            } else {
-                icon.textContent = colapsado ? '\u25B6' : '\u25C0';
-            }
-        }
         if (text) text.textContent = colapsado ? ' Mostrar menu' : ' Ocultar menu';
     }
 }
@@ -174,12 +165,7 @@ function initSidebarState() {
             sidebar.classList.add('colapsado');
             const toggle = sidebar.querySelector('.sidebar-toggle');
             if (toggle) {
-                const icon = toggle.querySelector('.menu-btn-icon');
                 const text = toggle.querySelector('.sidebar-toggle-text');
-                if (icon && icon.classList) {
-                    icon.classList.remove('fa-chevron-left');
-                    icon.classList.add('fa-chevron-right');
-                } else if (icon) icon.textContent = '\u25B6';
                 if (text) text.textContent = ' Mostrar menu';
             }
         }
@@ -234,7 +220,7 @@ function formatarCNPJ(val) {
 // ==========================================
 let permissoesEmCache = [];
 let perfilAtualEmCache = null;   // Perfil ativo na sessão
-let perfisDoUsuario = [];        // Perfis atribuídos ao utilizador (permite troca)
+let perfisDoUsuario = [];        // Perfis atribuídos ao usuário (permite troca)
 
 async function carregarPermissoes() {
     const user = auth.currentUser;
@@ -285,7 +271,7 @@ window.trocarPerfil = trocarPerfil;
 
 
 /**
- * Verifica se o utilizador tem permissão para UI (com fallback para admins).
+ * Verifica se o usuário tem permissão para UI (com fallback para admins).
  * Regra de salvação: acesso_admin implica dashboard_ler, backup_ler e acesso às Tabelas de Apoio.
  */
 function temPermissaoUI(perm) {
@@ -311,6 +297,14 @@ function aplicarPermissoesUI() {
         const req = el.getAttribute('data-permission');
         if (!temPermissaoUI(req)) el.remove();
     });
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.querySelectorAll('.nav-item.has-treeview').forEach(function(item) {
+            const sub = item.querySelector(':scope > ul.nav-treeview');
+            if (!sub) return;
+            if (sub.querySelectorAll(':scope > li').length === 0) item.remove();
+        });
+    }
 }
 window.aplicarPermissoesUI = aplicarPermissoesUI;
 
@@ -406,6 +400,7 @@ auth.onAuthStateChanged(async (user) => {
         const corpoTitulos = document.getElementById('corpo-titulos');
         const corpoPreLiquidacao = document.getElementById('corpo-preliquidacao');
         const corpoDashboard = document.getElementById('corpo-dashboard');
+        const corpoConta = document.getElementById('corpo-conta');
 
         // Lógica de Rota: Estamos no Admin?
         if (corpoAdmin) {
@@ -453,6 +448,13 @@ auth.onAuthStateChanged(async (user) => {
             atualizarSeletorPerfil();
             corpoDashboard.style.display = 'flex';
             esconderLoading();
+        }
+        else if (corpoConta) {
+            aplicarPermissoesUI();
+            atualizarSeletorPerfil();
+            corpoConta.style.display = 'flex';
+            esconderLoading();
+            if (typeof window.inicializarPaginaConta === 'function') window.inicializarPaginaConta();
         }
         if (typeof iniciarWatcherInatividade === 'function') iniciarWatcherInatividade();
     } else {

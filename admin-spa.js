@@ -27,8 +27,6 @@
     let listaPerfis = [];
     let listaOI = [];
 
-    const TAB_INDEX = { usuarios: 1, pendentes: 2, perfis: 3, oi: 4, cadastrar: 5 };
-
     function adminLoading(mostrar) {
         // Direciona para o overlay global (script.js) para respeitar delay (3s) e prompt (60s)
         if (typeof window.mostrarLoading !== 'function' || typeof window.esconderLoading !== 'function') {
@@ -41,7 +39,7 @@
     }
     function btnLoading(btn, mostrar, textoLoading) {
         if (!btn) return;
-        const txt = textoLoading || 'A processar...';
+        const txt = textoLoading || 'Processando...';
         if (mostrar) { btn.disabled = true; btn.classList.add('btn-loading'); btn.dataset.origText = btn.textContent; btn.textContent = txt; }
         else { btn.disabled = false; btn.classList.remove('btn-loading'); if (btn.dataset.origText) btn.textContent = btn.dataset.origText; }
     }
@@ -49,12 +47,18 @@
     window.btnLoading = btnLoading;
 
     function mostrarPainelAdmin(painel) {
-        document.querySelectorAll('.admin-tab[data-painel]').forEach(t => t.classList.remove('ativo'));
-        const btnAtivo = document.querySelector('.admin-tab[data-painel="' + painel + '"]');
-        if (btnAtivo) btnAtivo.classList.add('ativo');
-        document.querySelectorAll('.admin-painel').forEach(p => p.classList.remove('visivel'));
-        const el = document.getElementById('painel-' + painel);
-        if (el) el.classList.add('visivel');
+        document.querySelectorAll('.admin-tab[data-painel]').forEach(t => {
+            const id = t.getAttribute('data-painel');
+            const sel = id === painel;
+            t.classList.toggle('ativo', sel);
+            t.setAttribute('aria-selected', sel ? 'true' : 'false');
+            t.setAttribute('tabindex', sel ? '0' : '-1');
+        });
+        document.querySelectorAll('.admin-painel').forEach(p => {
+            const match = p.id === 'painel-' + painel;
+            p.classList.toggle('visivel', match);
+            p.setAttribute('aria-hidden', match ? 'false' : 'true');
+        });
         if (painel === 'cadastrar') {
             const uidInput = document.getElementById('adminUsuarioUid');
             const senhaInicialGroup = document.getElementById('formGroupSenhaInicial');
@@ -79,7 +83,7 @@
     async function carregarUsuarios() {
         const tbody = document.getElementById('tbodyUsuarios');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">A carregar...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando...</td></tr>';
         try {
             const snap = await db.collection('usuarios').get();
             listaUsuarios = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -93,7 +97,7 @@
     async function carregarPendentes() {
         const tbody = document.getElementById('tbodyPendentes');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">A carregar...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
         try {
             const snap = await db.collection('usuarios').get();
             const pendentes = snap.docs
@@ -122,8 +126,8 @@
                 <td><span class="status-ativo">${escapeHTML(u.origem || '-')}</span></td>
                 <td>${criado}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-aprovar-usuario" data-uid="${escapeHTML(u.id)}" title="Aprovar">✓</button>
-                    <button type="button" class="btn-icon btn-rejeitar-usuario" data-uid="${escapeHTML(u.id)}" title="Rejeitar">✗</button>
+                    <button type="button" class="btn-icon btn-aprovar-usuario" data-uid="${escapeHTML(u.id)}" title="Aprovar" aria-label="Aprovar cadastro e atribuir perfis">✓</button>
+                    <button type="button" class="btn-icon btn-rejeitar-usuario" data-uid="${escapeHTML(u.id)}" title="Rejeitar" aria-label="Rejeitar cadastro e bloquear usuário">✗</button>
                 </td>`;
             tbody.appendChild(tr);
         });
@@ -134,7 +138,7 @@
     async function carregarPerfis() {
         const tbody = document.getElementById('tbodyPerfis');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">A carregar...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
         try {
             const snap = await db.collection('perfis').get();
             listaPerfis = snap.docs.map(doc => ({ id: doc.id, permissoes: doc.data().permissoes || [] }));
@@ -149,7 +153,7 @@
     async function carregarOI() {
         const tbody = document.getElementById('tbodyOI');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">A carregar...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando...</td></tr>';
         try {
             const snap = await db.collection('oi').get();
             listaOI = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -177,8 +181,8 @@
                 <td>${escapeHTML(o.telefoneOI || '-')}</td>
                 <td>${status}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-editar-oi" data-id="${escapeHTML(o.id)}" title="Editar">✏️</button>
-                    <button type="button" class="btn-icon btn-apagar-oi" data-id="${escapeHTML(o.id)}" title="Excluir">🗑️</button>
+                    <button type="button" class="btn-icon btn-editar-oi" data-id="${escapeHTML(o.id)}" title="Editar" aria-label="Editar organização interna">✏️</button>
+                    <button type="button" class="btn-icon btn-apagar-oi" data-id="${escapeHTML(o.id)}" title="Excluir" aria-label="Excluir organização interna">🗑️</button>
                 </td>`;
             tbody.appendChild(tr);
         });
@@ -232,7 +236,7 @@
     async function excluirOI(id) {
         const usuariosVinculados = listaUsuarios.filter(u => u.oi === id);
         if (usuariosVinculados.length > 0) {
-            alert('Não é possível excluir esta OI: existem ' + usuariosVinculados.length + ' utilizador(es) vinculado(s). Remova a OI dos utilizadores primeiro.');
+            alert('Não é possível excluir esta OI: existem ' + usuariosVinculados.length + ' usuário(s) vinculado(s). Remova a OI dos usuários primeiro.');
             return;
         }
         if (!confirm('Excluir esta OI permanentemente?')) return;
@@ -269,7 +273,7 @@
                 situacao: (document.getElementById('situacaoOI') || {}).value || 'Ativo'
             };
             const btn = formOI.querySelector('button[type="submit"]');
-            btnLoading(btn, true, 'A guardar...');
+            btnLoading(btn, true, 'Salvando...');
             adminLoading(true);
             if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
             try {
@@ -364,13 +368,13 @@
                 u.status === 'pendente' || (!(u.perfis && u.perfis.length) && !u.perfil) ? '<span class="status-pendente">Pendente</span>' :
                 '<span class="status-ativo">Ativo</span>';
             tr.innerHTML = `
-                <td><code style="font-size:11px;">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
+                <td><code class="uid-preview">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
                 <td>${escapeHTML(u.email || '-')}</td>
                 <td style="font-size:12px;">${escapeHTML(perfis.join(', ') || '-')}</td>
                 <td><strong>${escapeHTML(perfilAtual)}</strong></td>
                 <td>${status}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-editar-usuario" data-uid="${escapeHTML(u.id)}" title="Editar">✏️</button>
+                    <button type="button" class="btn-icon btn-editar-usuario" data-uid="${escapeHTML(u.id)}" title="Editar" aria-label="Editar usuário">✏️</button>
                     <button type="button" class="btn-outline btn-small btn-bloquear-usuario" data-uid="${escapeHTML(u.id)}" data-acao="${u.bloqueado ? 'desbloquear' : 'bloquear'}">${u.bloqueado ? 'Desbloquear' : 'Bloquear'}</button>
                 </td>`;
             tbody.appendChild(tr);
@@ -451,7 +455,7 @@
     };
 
     window.adminRejeitarUsuario = async function(uid) {
-        if (!confirm('Rejeitar este cadastro? O utilizador ficará bloqueado e não poderá aceder ao sistema.')) return;
+        if (!confirm('Rejeitar este cadastro? O usuário ficará bloqueado e não poderá acessar o sistema.')) return;
         adminLoading(true);
         if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');
         try {
@@ -503,7 +507,7 @@
             tr.innerHTML = `
                 <td><strong>${escapeHTML(p.id)}</strong></td>
                 <td style="font-size:12px;">${escapeHTML(perms)}</td>
-                <td><button type="button" class="btn-icon btn-editar-perfil" data-perfil="${escapeHTML(p.id)}" title="Editar">✏️</button></td>`;
+                <td><button type="button" class="btn-icon btn-editar-perfil" data-perfil="${escapeHTML(p.id)}" title="Editar" aria-label="Editar perfil de acesso">✏️</button></td>`;
             tbody.appendChild(tr);
         });
         tbody.querySelectorAll('.btn-editar-perfil').forEach(btn => btn.addEventListener('click', function() { adminEditarPerfil(this.getAttribute('data-perfil')); }));

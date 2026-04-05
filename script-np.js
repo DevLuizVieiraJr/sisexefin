@@ -538,7 +538,7 @@
         const userEmail = (auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
         mostrarLoading('Carregando...');
         try {
-            const documentosHabeis = itensFormNp.map(it => {
+            const documentosHabeisRaw = itensFormNp.map(it => {
                 const opFull = completarOpDocId(it.op, prefix11);
                 const obFull = completarObDocId(it.ob, prefix11);
                 return {
@@ -549,6 +549,9 @@
                     observacao: String(it.observacao || '').trim()
                 };
             });
+            const documentosHabeis = (window.sisAnoDocumento && typeof window.sisAnoDocumento.enriquecerItensOpOb === 'function')
+                ? window.sisAnoDocumento.enriquecerItensOpOb(documentosHabeisRaw)
+                : documentosHabeisRaw;
 
             const itensInvalidos = documentosHabeis.some(d =>
                 !d.op || !d.ob
@@ -575,6 +578,9 @@
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedBy: userEmail
             };
+            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(dadosBase, window.sisAnoDocumento.payloadAnosNp(npDocId));
+            }
 
             if (!isEdit) {
                 dadosBase.createdAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -803,27 +809,37 @@
                     if (!change.isNew && !change.changed && !isoPorNp.has(change.npNorm)) continue;
 
                     const docRef = db.collection('np').doc(change.npNorm);
+                    const dhabImport = (window.sisAnoDocumento && typeof window.sisAnoDocumento.enriquecerItensOpOb === 'function')
+                        ? window.sisAnoDocumento.enriquecerItensOpOb(change.documentosHabeis)
+                        : change.documentosHabeis;
                     if (change.isNew) {
-                        await docRef.set({
+                        const novoDoc = {
                             np: change.npNorm,
                             dataLiquidacao: isoPorNp.get(change.npNorm) || '',
-                            documentosHabeis: change.documentosHabeis,
+                            documentosHabeis: dhabImport,
                             ativo: true,
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                             createdBy: userEmail,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedBy: userEmail,
                             historico: ['Registro criado em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail]
-                        });
+                        };
+                        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                            Object.assign(novoDoc, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
+                        }
+                        await docRef.set(novoDoc);
                     } else {
                         const historicoAntigo = (change.docBase && Array.isArray(change.docBase.historico)) ? change.docBase.historico : [];
                         const novoHist = historicoAntigo.concat([histMsg]);
                         const payload = {
-                            documentosHabeis: change.documentosHabeis,
+                            documentosHabeis: dhabImport,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedBy: userEmail,
                             historico: novoHist
                         };
+                        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                            Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
+                        }
                         // Se veio data de liquidação no arquivo, atualiza; caso contrário, preserva o valor existente.
                         if (isoPorNp.has(change.npNorm)) payload.dataLiquidacao = isoPorNp.get(change.npNorm);
                         await docRef.set(payload, { merge: true });

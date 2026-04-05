@@ -11,21 +11,133 @@
     let listaCentroCustos = [];
     let listaUG = [];
     let listaPL = [];
+    /** Lista de PL: ano do exercício ou `'todos'`. Padrão: ano corrente. */
+    let filtroAnoExercicioPL = String(new Date().getFullYear());
+    let filtroAnoPLListenerOk = false;
     let unsubTitulos = null;
     let unsubPL = null;
 
     let plIdAtual = null;
     let plDocAtual = null;
+    let plSomenteLeitura = false;
     let carrinhoIds = new Set();
     let fornecedorFiltroCnpj = '';
     let fornecedorFiltroNome = '';
     let modalMotivoResolver = null;
+    let modalDauliqVarianteResolver = null;
 
     function tem(perm) {
         return typeof temPermissaoUI === 'function' && temPermissaoUI(perm);
     }
     function ehAdmin() {
         return tem('acesso_admin');
+    }
+    function podeOperarPLLista() {
+        return tem('preliquidacao_editar') || tem('preliquidacao_inserir') || tem('preliquidacao_fechar_np')
+            || tem('preliquidacao_cancelar') || tem('preliquidacao_status') || tem('preliquidacao_excluir') || ehAdmin();
+    }
+    function formatarDataHoraLista(ts) {
+        if (!ts) return '—';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function formatarDataSimplesPL(v) {
+        if (!v) return '—';
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+            const p = v.slice(0, 10).split('-');
+            return `${p[2]}/${p[1]}/${p[0]}`;
+        }
+        if (v.toDate) {
+            const d = v.toDate();
+            if (isNaN(d.getTime())) return '—';
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        }
+        return '—';
+    }
+    function valorTotalLoteNaLista(p) {
+        const ids = new Set([...(p.tituloIds || []), ...(p.titulosParticiparamIds || [])]);
+        if (!ids.size) return 0;
+        let s = 0;
+        baseTitulos.forEach(t => {
+            if (ids.has(t.id)) s += Number(t.valorNotaFiscal) || 0;
+        });
+        return s;
+    }
+    function idsTitulosParaPdfPL(p) {
+        const raw = [...(p.tituloIds || [])];
+        if (!raw.length && (p.titulosParticiparamIds || []).length) {
+            raw.push(...p.titulosParticiparamIds);
+        }
+        return [...new Set(raw)];
+    }
+    async function carregarTitulosParaPdfPL(pl) {
+        const ids = idsTitulosParaPdfPL(pl);
+        const out = [];
+        for (const id of ids) {
+            const s = await db.collection('titulos').doc(id).get();
+            if (s.exists) out.push({ id: s.id, ...s.data() });
+        }
+        return out;
+    }
+    function pedirVariantePdfDauliq() {
+        return new Promise((resolve) => {
+            modalDauliqVarianteResolver = resolve;
+            document.getElementById('modalPLVarianteDauliq').style.display = 'flex';
+        });
+    }
+    function fecharModalDauliqVariante(val) {
+        const el = document.getElementById('modalPLVarianteDauliq');
+        if (el) el.style.display = 'none';
+        if (modalDauliqVarianteResolver) {
+            const fn = modalDauliqVarianteResolver;
+            modalDauliqVarianteResolver = null;
+            fn(val);
+        }
+    }
+
+    async function gerarDauliqDaLista(plId) {
+        if (!tem('preliquidacao_gerar_pdf') && !ehAdmin()) return;
+        const variante = await pedirVariantePdfDauliq();
+        if (variante == null) return;
+        const incluirHistorico = variante === 'completo';
+        mostrarLoading();
+        try {
+            const snap = await db.collection('preLiquidacoes').doc(plId).get();
+            if (!snap.exists) {
+                alert('Pré-liquidação não encontrada.');
+                return;
+            }
+            const pl0 = { id: snap.id, ...snap.data() };
+            const titulos = await carregarTitulosParaPdfPL(pl0);
+            if (!titulos.length) {
+                alert('Sem títulos associados a esta pré-liquidação (ou dados ainda não sincronizados).');
+                return;
+            }
+            const meta = {
+                geradoEm: new Date().toISOString(),
+                usuario: typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '',
+                nomeArquivoSugerido: 'DAuLiq_' + String(pl0.codigo || '').replace(/\//g, '-') + (incluirHistorico ? '' : '_sem-historico') + '.pdf',
+                origem: 'lista',
+                variantePdf: incluirHistorico ? 'completo' : 'sem_historico'
+            };
+            const plRef = db.collection('preLiquidacoes').doc(plId);
+            const evDet = incluirHistorico ? 'DAuLiq gerado (lista, completo)' : 'DAuLiq gerado (lista, sem histórico no PDF)';
+            const ev = plHistoricoEntry('pdf', evDet, '');
+            const d = pl0;
+            const histNovo = (d.historico || []).concat([ev]);
+            await plRef.update({
+                auditoriaPdf: meta,
+                historico: histNovo,
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            const plMerged = { ...pl0, auditoriaPdf: meta, historico: histNovo };
+            await gerarPDFDauliq(plMerged, titulos, { incluirHistorico });
+        } catch (e) {
+            alert('Erro ao gerar PDF: ' + (e.message || e));
+        } finally {
+            esconderLoading();
+        }
     }
 
     function normalizarDigitos(v) {
@@ -136,6 +248,9 @@
             };
             if (dl) payload.dataLiquidacao = dl;
             if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(npDocId));
+            }
             if (snap.exists) {
                 await ref.set(payload, { merge: true });
                 did = true;
@@ -153,6 +268,9 @@
             };
             if (dl) payload.dataLiquidacao = dl;
             if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(npDocIdCriar));
+            }
             await db.collection('np').doc(npDocIdCriar).set(payload, { merge: true });
         }
     }
@@ -378,11 +496,12 @@
         return Array.from(m.values());
     }
 
-    async function gerarPDFDauliq(pl, titulos) {
+    async function gerarPDFDauliq(pl, titulos, opcoesPdf) {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             alert('Biblioteca jsPDF indisponível.');
             return;
         }
+        const incluirHistorico = !(opcoesPdf && opcoesPdf.incluirHistorico === false);
         const { jsPDF } = window.jspdf;
         const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
         const M = { l: 10, r: 10, t: 10, b: 12 };
@@ -739,13 +858,15 @@
             tabela(['Nota de Empenho', 'Sub', 'Centro custos', 'UG', 'Valor'], detaRows, [28, 14, 40, 28, 22]);
         }
 
-        const histRows = (pl.historico || []).slice().reverse().slice(0, 45).map(h => {
-            const dt = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : '-';
-            return [dt, h.tipo || '-', h.usuario || '-', String(h.detalhe || '') + (h.motivo ? ' — ' + h.motivo : '')];
-        });
-        if (histRows.length) {
-            tituloSecao('HISTÓRICO / AUDITORIA (PRÉ-LIQUIDAÇÃO)');
-            tabela(['Data', 'Tipo', 'Utilizador', 'Detalhe'], histRows, [28, 22, 32, 72]);
+        if (incluirHistorico) {
+            const histRows = (pl.historico || []).slice().reverse().slice(0, 45).map(h => {
+                const dt = h.data && h.data.toDate ? h.data.toDate().toLocaleString('pt-BR') : '-';
+                return [dt, h.tipo || '-', h.usuario || '-', String(h.detalhe || '') + (h.motivo ? ' — ' + h.motivo : '')];
+            });
+            if (histRows.length) {
+                tituloSecao('HISTÓRICO / AUDITORIA (PRÉ-LIQUIDAÇÃO)');
+                tabela(['Data', 'Tipo', 'Usuário', 'Detalhe'], histRows, [28, 22, 32, 72]);
+            }
         }
 
         const totalPages = docPDF.getNumberOfPages();
@@ -755,7 +876,8 @@
             docPDF.text(`Página ${i} de ${totalPages}`, 105, 290, { align: 'center' });
         }
 
-        docPDF.save('DAuLiq_' + String(pl.codigo || 'lote').replace(/\//g, '-') + '.pdf');
+        const sufArq = incluirHistorico ? '' : '_sem-historico';
+        docPDF.save('DAuLiq_' + String(pl.codigo || 'lote').replace(/\//g, '-') + sufArq + '.pdf');
     }
 
     function pedirMotivo(tituloModal) {
@@ -796,6 +918,55 @@
         return Array.from(m.entries()).map(([codigo, razaoSocial]) => ({ codigo, razaoSocial, nome: razaoSocial }));
     }
 
+    function resolverAnoExercicioPL(p) {
+        if (!p) return null;
+        if (typeof p.anoExercicio === 'number') {
+            const n = p.anoExercicio;
+            if (n >= 1900 && n <= 2100) return n;
+        }
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.anoDeCodigoPL === 'function') {
+            const y = window.sisAnoDocumento.anoDeCodigoPL(p.codigo);
+            if (y != null) return y;
+        }
+        const m = String(p.codigo || '').match(/\/(\d{4})\s*$/);
+        return m ? parseInt(m[1], 10) : null;
+    }
+
+    function popularSelectFiltroAnoPL() {
+        const sel = document.getElementById('filtroAnoExercicioPL');
+        if (!sel) return;
+        const cur = new Date().getFullYear();
+        const antes = filtroAnoExercicioPL;
+        sel.innerHTML = '';
+        const opTodos = document.createElement('option');
+        opTodos.value = 'todos';
+        opTodos.textContent = 'Todos os anos';
+        sel.appendChild(opTodos);
+        for (let y = cur + 1; y >= cur - 20; y--) {
+            const op = document.createElement('option');
+            op.value = String(y);
+            op.textContent = String(y);
+            sel.appendChild(op);
+        }
+        if (antes === 'todos') sel.value = 'todos';
+        else if (antes && [...sel.options].some(o => o.value === antes)) sel.value = antes;
+        else sel.value = String(cur);
+        filtroAnoExercicioPL = sel.value;
+        if (!filtroAnoPLListenerOk) {
+            filtroAnoPLListenerOk = true;
+            sel.addEventListener('change', function() {
+                filtroAnoExercicioPL = this.value;
+                try {
+                    const u = new URL(window.location.href);
+                    if (filtroAnoExercicioPL === 'todos') u.searchParams.delete('ano');
+                    else u.searchParams.set('ano', filtroAnoExercicioPL);
+                    if (history.replaceState) history.replaceState({}, '', u.pathname + u.search);
+                } catch (e) {}
+                desenharListaPL();
+            });
+        }
+    }
+
     function desenharListaPL() {
         const tbody = document.getElementById('tbodyListaPL');
         if (!tbody) return;
@@ -803,33 +974,63 @@
         tbody.innerHTML = '';
         const filtrada = listaPL.filter(p => {
             if (p.ativo === false && !mostrarInat && !ehAdmin()) return false;
+            if (filtroAnoExercicioPL && filtroAnoExercicioPL !== 'todos') {
+                const want = parseInt(filtroAnoExercicioPL, 10);
+                if (!isNaN(want) && resolverAnoExercicioPL(p) !== want) return false;
+            }
             return true;
         });
         if (!filtrada.length) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma pré-liquidação.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Nenhuma pré-liquidação.</td></tr>';
             return;
         }
         filtrada.sort((a, b) => String(b.codigo || '').localeCompare(String(a.codigo || '')));
+        const podePdf = tem('preliquidacao_gerar_pdf') || ehAdmin();
+        const podeEditarLista = podeOperarPLLista();
         filtrada.forEach(p => {
             const tr = document.createElement('tr');
             const n = (p.tituloIds || []).length || (p.titulosParticiparamIds || []).length;
+            const nPdf = idsTitulosParaPdfPL(p).length;
             const est = p.estado || 'Rascunho';
             let badge = '<span class="badge-pl-rascunho">Rascunho</span>';
             if (est === 'Fechado') badge = '<span class="badge-pl-fechado">Fechado</span>';
             if (est === 'Cancelado') badge = '<span class="badge-pl-cancel">Cancelado</span>';
             if (p.ativo === false) badge += ' <span class="badge-pl-inativo">Inativo</span>';
+            const vTot = valorTotalLoteNaLista(p);
+            const btnEditar = podeEditarLista
+                ? `<button type="button" class="btn-primary btn-small btn-pl-editar" data-id="${escapeHTML(p.id)}">Editar</button>`
+                : '';
+            const btnPdf = podePdf
+                ? `<button type="button" class="btn-default btn-small btn-pl-pdf" data-id="${escapeHTML(p.id)}" ${nPdf ? '' : 'disabled title="Sem títulos no lote"'}>DAuLiq</button>`
+                : '';
             tr.innerHTML = `
                 <td>${escapeHTML(p.codigo || '-')}</td>
                 <td>${badge}</td>
                 <td>${escapeHTML(p.fornecedorNome || '-')}</td>
-                <td>${n}</td>
-                <td>${escapeHTML(p.np || '-')}</td>
-                <td><button type="button" class="btn-default btn-small btn-abrir-pl" data-id="${escapeHTML(p.id)}">Abrir</button></td>
+                <td style="text-align:right;white-space:nowrap;">${escapeHTML(moeda(vTot))}</td>
+                <td style="text-align:center;">${n}</td>
+                <td style="white-space:nowrap;">${escapeHTML(formatarDataSimplesPL(p.dataLiquidacao))}</td>
+                <td style="font-size:12px;white-space:nowrap;">${escapeHTML(formatarDataHoraLista(p.editado_em))}</td>
+                <td style="font-size:12px;">${escapeHTML(p.np || '—')}</td>
+                <td class="pl-acoes">
+                    <button type="button" class="btn-default btn-small btn-pl-ver" data-id="${escapeHTML(p.id)}">Visualizar</button>
+                    ${btnEditar}
+                    ${btnPdf}
+                </td>
             `;
             tbody.appendChild(tr);
         });
-        tbody.querySelectorAll('.btn-abrir-pl').forEach(btn => {
-            btn.addEventListener('click', () => abrirEditorPL(btn.getAttribute('data-id')));
+        tbody.querySelectorAll('.btn-pl-ver').forEach(btn => {
+            btn.addEventListener('click', () => abrirEditorPL(btn.getAttribute('data-id'), { somenteLeitura: true }));
+        });
+        tbody.querySelectorAll('.btn-pl-editar').forEach(btn => {
+            btn.addEventListener('click', () => abrirEditorPL(btn.getAttribute('data-id'), { somenteLeitura: false }));
+        });
+        tbody.querySelectorAll('.btn-pl-pdf').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+                gerarDauliqDaLista(btn.getAttribute('data-id'));
+            });
         });
     }
 
@@ -844,7 +1045,7 @@
             return;
         }
         empty.style.display = 'none';
-        const podeRemover = plDocAtual && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar');
+        const podeRemover = plDocAtual && !plSomenteLeitura && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar');
         ts.forEach(t => {
             const li = document.createElement('li');
             li.style.cssText = 'padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;';
@@ -935,8 +1136,8 @@
         lista.forEach(t => {
             const outra = outraPLAberta(t);
             const tr = document.createElement('tr');
-            const podeAdd = (plDocAtual && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar'))
-                || (!plIdAtual && tem('preliquidacao_inserir'));
+            const podeAdd = !plSomenteLeitura && ((plDocAtual && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar'))
+                || (!plIdAtual && tem('preliquidacao_inserir')));
             const disabled = !!outra || !podeAdd || (plDocAtual && (plDocAtual.estado || '') !== 'Rascunho');
             tr.innerHTML = `
                 <td><input type="checkbox" class="pl-chk-tc" data-id="${escapeHTML(t.id)}" ${carrinhoIds.has(t.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''}></td>
@@ -965,7 +1166,7 @@
         tbody.innerHTML = '';
         const h = (plDocAtual && plDocAtual.historico) ? plDocAtual.historico.slice().reverse() : [];
         if (!h.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Sem registos.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Sem registros.</td></tr>';
             return;
         }
         h.forEach(ev => {
@@ -981,6 +1182,17 @@
         const fechado = est === 'Fechado';
         const cancel = est === 'Cancelado';
         const rasc = est === 'Rascunho' || est === 'Novo';
+        if (plSomenteLeitura && plIdAtual) {
+            document.getElementById('btnPLSalvar').style.display = 'none';
+            document.getElementById('btnPLFecharNP').style.display = 'none';
+            document.getElementById('btnPLCorrigirNP').style.display = 'none';
+            document.getElementById('btnPLCancelar').style.display = 'none';
+            document.getElementById('btnPLInativar').style.display = 'none';
+            document.getElementById('btnPLExcluir').style.display = 'none';
+            const pdfVis = carrinhoIds.size > 0 && (tem('preliquidacao_gerar_pdf') || ehAdmin());
+            document.getElementById('btnPLPdf').style.display = pdfVis ? 'inline-block' : 'none';
+            return;
+        }
         const salvarVis = (rasc && (tem('preliquidacao_editar') || tem('preliquidacao_inserir'))) || (!plIdAtual && tem('preliquidacao_inserir'));
         document.getElementById('btnPLSalvar').style.display = salvarVis ? 'inline-block' : 'none';
         document.getElementById('btnPLPdf').style.display = (carrinhoIds.size > 0 && tem('preliquidacao_gerar_pdf')) ? 'inline-block' : 'none';
@@ -992,10 +1204,25 @@
         if (fechado) document.getElementById('btnPLFecharNP').style.display = 'none';
     }
 
-    async function abrirEditorPL(id) {
+    function aplicarEstadoCamposEditorLeitura() {
+        const buscaForn = document.getElementById('plBuscaFornecedor');
+        const buscaTc = document.getElementById('plBuscaTC');
+        if (buscaForn) {
+            buscaForn.disabled = !!plSomenteLeitura;
+            buscaForn.style.opacity = plSomenteLeitura ? '0.75' : '';
+        }
+        if (buscaTc) {
+            buscaTc.disabled = !!plSomenteLeitura;
+            buscaTc.style.opacity = plSomenteLeitura ? '0.75' : '';
+        }
+    }
+
+    async function abrirEditorPL(id, opts) {
+        plSomenteLeitura = !!(opts && opts.somenteLeitura);
         plIdAtual = id;
         const snap = await db.collection('preLiquidacoes').doc(id).get();
         if (!snap.exists) {
+            plSomenteLeitura = false;
             alert('Pré-liquidação não encontrada.');
             return;
         }
@@ -1003,14 +1230,18 @@
         carrinhoIds = new Set(plDocAtual.tituloIds || []);
         fornecedorFiltroCnpj = plDocAtual.fornecedorCnpj || '';
         fornecedorFiltroNome = plDocAtual.fornecedorNome || '';
+        if (plSomenteLeitura) document.getElementById('plBuscaFornecedor').value = '';
         document.getElementById('plFornecedorSelecionado').textContent = fornecedorFiltroNome
             ? `${fornecedorFiltroNome} (${fornecedorFiltroCnpj})`
             : '';
-        document.getElementById('tituloEditorPL').textContent = 'Pré-Liquidação ' + (plDocAtual.codigo || '');
-        document.getElementById('resumoEditorPL').textContent =
-            `Estado: ${plDocAtual.estado || 'Rascunho'} | NP: ${plDocAtual.np || '—'} | Inativo: ${plDocAtual.ativo === false ? 'sim' : 'não'}`;
+        const sufLeitura = plSomenteLeitura ? ' — visualização' : '';
+        document.getElementById('tituloEditorPL').textContent = 'Pré-Liquidação ' + (plDocAtual.codigo || '') + sufLeitura;
+        let resumo = `Estado: ${plDocAtual.estado || 'Rascunho'} | NP: ${plDocAtual.np || '—'} | Inativo: ${plDocAtual.ativo === false ? 'sim' : 'não'}`;
+        if (plSomenteLeitura) resumo += ' | Modo somente leitura (sem alterar o lote).';
+        document.getElementById('resumoEditorPL').textContent = resumo;
         document.getElementById('tela-lista-pl').style.display = 'none';
         document.getElementById('tela-editor-pl').style.display = 'block';
+        aplicarEstadoCamposEditorLeitura();
         desenharCarrinho();
         desenharDisponiveis();
         desenharHistoricoPL();
@@ -1019,6 +1250,8 @@
     }
 
     function novaPL() {
+        plSomenteLeitura = false;
+        aplicarEstadoCamposEditorLeitura();
         plIdAtual = null;
         plDocAtual = null;
         carrinhoIds = new Set();
@@ -1027,12 +1260,12 @@
         document.getElementById('plBuscaFornecedor').value = '';
         document.getElementById('plFornecedorSelecionado').textContent = '';
         document.getElementById('tituloEditorPL').textContent = 'Nova pré-liquidação';
-        document.getElementById('resumoEditorPL').textContent = 'Guarde para gerar o código PL-#####/AAAA.';
+        document.getElementById('resumoEditorPL').textContent = 'Salve para gerar o código PL-#####/AAAA.';
         document.getElementById('tela-lista-pl').style.display = 'none';
         document.getElementById('tela-editor-pl').style.display = 'block';
         desenharCarrinho();
         desenharDisponiveis();
-        document.getElementById('tbodyPLHistorico').innerHTML = '<tr><td colspan="4" style="text-align:center;">Guarde para criar o histórico.</td></tr>';
+        document.getElementById('tbodyPLHistorico').innerHTML = '<tr><td colspan="4" style="text-align:center;">Salve para criar o histórico.</td></tr>';
         atualizarBotoesEditor();
         if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
     }
@@ -1068,7 +1301,7 @@
                         seq,
                         editado_em: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
-                    tx.set(plRef, {
+                    const plPayload = {
                         codigo,
                         estado: 'Rascunho',
                         ativo: true,
@@ -1081,7 +1314,14 @@
                         criado_em: firebase.firestore.FieldValue.serverTimestamp(),
                         criado_por: typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '',
                         editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    };
+                    if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosPreLiquidacao === 'function') {
+                        window.sisAnoDocumento.aplicarAnosPreLiquidacao(plPayload, ano);
+                    } else {
+                        plPayload.anoExercicio = ano;
+                        plPayload.anoEmissao = ano;
+                    }
+                    tx.set(plRef, plPayload);
                 });
                 const batch = db.batch();
                 Array.from(carrinhoIds).forEach(tid => {
@@ -1275,7 +1515,7 @@
             alert('Só é permitido excluir permanentemente uma pré-liquidação já cancelada.');
             return;
         }
-        if (!confirm('Eliminar permanentemente este registo?')) return;
+        if (!confirm('Excluir permanentemente este registro?')) return;
         mostrarLoading();
         try {
             await db.collection('preLiquidacoes').doc(plIdAtual).delete();
@@ -1335,6 +1575,8 @@
         document.getElementById('btnVoltarListaPL')?.addEventListener('click', () => {
             document.getElementById('tela-editor-pl').style.display = 'none';
             document.getElementById('tela-lista-pl').style.display = 'block';
+            plSomenteLeitura = false;
+            aplicarEstadoCamposEditorLeitura();
             plIdAtual = null;
             plDocAtual = null;
         });
@@ -1342,16 +1584,22 @@
         document.getElementById('btnPLPdf')?.addEventListener('click', async () => {
             const ts = titulosDoCarrinho();
             if (!ts.length) { alert('Carrinho vazio.'); return; }
-            if (!plDocAtual) { alert('Guarde a pré-liquidação antes de gerar o PDF (para histórico).'); return; }
+            if (!plDocAtual) { alert('Salve a pré-liquidação antes de gerar o PDF (para histórico).'); return; }
+            const eraSomenteLeitura = plSomenteLeitura;
+            const variante = await pedirVariantePdfDauliq();
+            if (variante == null) return;
+            const incluirHistorico = variante === 'completo';
             mostrarLoading();
             try {
                 const meta = {
                     geradoEm: new Date().toISOString(),
                     usuario: typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '',
-                    nomeArquivoSugerido: 'DAuLiq_' + String(plDocAtual.codigo || '').replace(/\//g, '-') + '.pdf'
+                    nomeArquivoSugerido: 'DAuLiq_' + String(plDocAtual.codigo || '').replace(/\//g, '-') + (incluirHistorico ? '' : '_sem-historico') + '.pdf',
+                    variantePdf: incluirHistorico ? 'completo' : 'sem_historico'
                 };
                 const plRef = db.collection('preLiquidacoes').doc(plIdAtual);
-                const ev = plHistoricoEntry('pdf', 'DAuLiq gerado', '');
+                const evDet = incluirHistorico ? 'DAuLiq gerado (completo)' : 'DAuLiq gerado (sem histórico no PDF)';
+                const ev = plHistoricoEntry('pdf', evDet, '');
                 const snap = await plRef.get();
                 const d = snap.data() || {};
                 await plRef.update({
@@ -1360,14 +1608,17 @@
                     editado_em: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 const plMerged = { id: plIdAtual, ...d, auditoriaPdf: meta, historico: (d.historico || []).concat([ev]) };
-                await gerarPDFDauliq(plMerged, ts);
-                await abrirEditorPL(plIdAtual);
+                await gerarPDFDauliq(plMerged, ts, { incluirHistorico });
+                await abrirEditorPL(plIdAtual, { somenteLeitura: eraSomenteLeitura });
             } catch (e) {
                 alert('Erro ao gerar PDF: ' + (e.message || e));
             } finally {
                 esconderLoading();
             }
         });
+        document.getElementById('btnModalDauliqSemHist')?.addEventListener('click', () => fecharModalDauliqVariante('sem_historico'));
+        document.getElementById('btnModalDauliqCompleto')?.addEventListener('click', () => fecharModalDauliqVariante('completo'));
+        document.getElementById('btnModalDauliqCancel')?.addEventListener('click', () => fecharModalDauliqVariante(null));
         document.getElementById('btnPLFecharNP')?.addEventListener('click', () => {
             document.getElementById('modalPLFecharNPTitulo').textContent = 'Informar NP (SIAFI)';
             document.getElementById('grpModalPLmotivoNP').style.display = 'none';
@@ -1406,10 +1657,20 @@
         document.getElementById('plBuscaTC')?.addEventListener('input', () => desenharDisponiveis());
         document.getElementById('filtroPLInativas')?.addEventListener('change', () => desenharListaPL());
 
+        const paramsAno = new URLSearchParams(window.location.search);
+        const anoPlQ = (paramsAno.get('ano') || '').trim().toLowerCase();
+        if (anoPlQ === 'todos' || anoPlQ === 'all') filtroAnoExercicioPL = 'todos';
+        else if (/^\d{4}$/.test(anoPlQ)) filtroAnoExercicioPL = anoPlQ;
+        else filtroAnoExercicioPL = String(new Date().getFullYear());
+        popularSelectFiltroAnoPL();
+
         setupFornecedorAutocomplete();
 
         unsubTitulos = db.collection('titulos').onSnapshot(snap => {
             baseTitulos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (document.getElementById('tela-lista-pl').style.display !== 'none') {
+                desenharListaPL();
+            }
             if (document.getElementById('tela-editor-pl').style.display !== 'none') {
                 desenharDisponiveis();
                 desenharCarrinho();

@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
     <link rel="apple-touch-icon" href="icons/logo-192.png">
     <title>SisExeFin - Títulos de Crédito</title>
+    <script src="script-tema.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -88,13 +89,13 @@
 <body style="display: none;" id="corpo-titulos">
     <div id="loadingApp" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
-        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">Sincronizando com a nuvem...</p>
     </div>
 
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Títulos de Crédito</div>
         <div class="topbar-user">
-            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 Carregando...</span>
             <div id="containerSeletorPerfil" class="topbar-item" style="display: none;">
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
@@ -106,7 +107,7 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu" aria-label="Ocultar ou mostrar menu"><i class="fas fa-bars menu-btn-icon" aria-hidden="true"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
                 <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
             </nav>
@@ -133,6 +134,10 @@
                 </div>
                 <div class="controles-tabela">
                     <label>A exibir <select id="itensPorPagina" onchange="mudarTamanhoPagina()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
+                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                        Exercício
+                        <select id="filtroAnoExercicioTitulos" title="Filtrar títulos por ano do exercício"></select>
+                    </label>
                     <div class="search-box"><input type="text" id="buscaTabelaTitulos" placeholder="Pesquisar PROC, Empresa ou NE..."></div>
                 </div>
                 <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
@@ -253,7 +258,7 @@
                         <div class="form-row">
                             <div class="form-group flex-1">
                                 <label>Observações:</label>
-                                <textarea id="observacoesTC" rows="3" placeholder="Registe informações adicionais relevantes para este TC..."></textarea>
+                                <textarea id="observacoesTC" rows="3" placeholder="Registre informações adicionais relevantes para este TC..."></textarea>
                             </div>
                         </div>
                         <div id="acoesAbaDadosBasicos" class="tc-acao-aba">
@@ -451,6 +456,18 @@
         </div>
     </div>
 
+    <!-- Modal: Confirmar encaminhamento / mudança de status -->
+    <div id="modalEncaminharStatus" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="text-align:left; max-width:440px;">
+            <h3 id="modalEncaminharStatusTitulo" style="margin-bottom:12px;">Confirmar encaminhamento</h3>
+            <p id="modalEncaminharStatusTexto" style="margin-bottom:20px; color:#555; font-size:14px; line-height:1.45;"></p>
+            <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                <button type="button" id="modalEncaminharStatusCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalEncaminharStatusConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Dar nova entrada -->
     <div id="modalNovaEntrada" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="text-align:left; max-width:350px;">
@@ -527,6 +544,7 @@
     <script src="admin-utils.js"></script>
     <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
+    <script src="script-ano-documento.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script-titulos-spa.js"></script>
     <script src="script-menu-toggle.js"></script>

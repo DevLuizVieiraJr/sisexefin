@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
     <link rel="apple-touch-icon" href="icons/logo-192.png">
     <title>SisExeFin - Tabelas de Apoio</title>
+    <script src="script-tema.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -42,14 +43,14 @@
     
     <div id="loadingApp" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
-        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">A Sincronizar com a Nuvem...</p>
+        <p style="margin-top: 15px; color: #337ab7; font-weight: bold;">Sincronizando com a nuvem...</p>
     </div>
 
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
         <div class="topbar-user">
             <span class="topbar-voltar" onclick="location.href='dashboard.html'" style="margin-right:15px;">⬅ Dashboard</span>
-            <span id="nomeUsuarioLogado" class="topbar-item">👤 A carregar...</span>
+            <span id="nomeUsuarioLogado" class="topbar-item">👤 Carregando...</span>
             <div id="containerSeletorPerfil" class="topbar-item" >
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
@@ -60,7 +61,7 @@
 
     <div class="app-container">
         <nav class="sidebar" id="sidebar">
-            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu"><i class="fas fa-chevron-left menu-btn-icon"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" title="Ocultar / Mostrar menu" aria-label="Ocultar ou mostrar menu"><i class="fas fa-bars menu-btn-icon" aria-hidden="true"></i><span class="sidebar-toggle-text"> Ocultar menu</span></button>
             <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
                 <ul><!-- Menu injetado por script-menu-lateral.js (fonte única) --></ul>
             </nav>
@@ -416,7 +417,7 @@
                         <div class="export-group"><button onclick="exportarContratos('csv')" class="btn-outline">CSV</button><button onclick="exportarContratos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
-                        <label>A exibir <select id="itensPorPaginaContratos" onchange="mudarTamanhoPaginaContratos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registos</label>
+                        <label>A exibir <select id="itensPorPaginaContratos" onchange="mudarTamanhoPaginaContratos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select> registros</label>
                         <div class="search-box"><input type="text" id="buscaTabelaContratos" placeholder="Pesquisar Fornecedor ou Instrumento..."></div>
                     </div>
                     <div style="overflow-x: auto;">
@@ -1000,7 +1001,7 @@
             <section id="secao-backup" class="secao" data-permission="backup_ler" >
                 <div class="card">
                     <h2>Sistema / Backup Global</h2>
-                    <p style="color: #7f8c8d; margin-bottom: 20px;">Gere um arquivo de segurança com todos os registos atuais da nuvem.</p>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">Gere um arquivo de segurança com todos os registros atuais da nuvem.</p>
                     <hr>
                     <div style="margin: 20px 0;">
                         <button onclick="exportarBancoDeDados()" class="btn-primary" data-permission="backup_ler">📥 Fazer Backup Completo (.JSON)</button>
@@ -1028,6 +1029,7 @@
     <script src="admin-utils.js"></script>
     <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>
+    <script src="script-ano-documento.js"></script>
     <script src="script-titulos.js"></script>
     <script src="script-sistema-init.js"></script>
     <script src="script-menu-toggle.js"></script>

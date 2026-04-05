@@ -38,6 +38,9 @@
     let itensPorPagina = 10;
     let termoBusca = '';
     let incluirInativos = false;
+    /** Ano do exercício na lista (`'todos'` ou `'2026'`). Padrão: ano corrente. */
+    let filtroAnoExercicioTitulos = String(new Date().getFullYear());
+    let filtroAnoTitulosListenerOk = false;
     let estadoOrdenacao = { coluna: 'idProc', direcao: 'asc' };
     let unsubscribeTitulos = null;
 
@@ -93,6 +96,9 @@
             };
             if (dl) payload.dataLiquidacao = dl;
             if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(npDocId));
+            }
 
             if (snap.exists) {
                 await ref.set(payload, { merge: true });
@@ -114,6 +120,9 @@
             };
             if (dl) payload.dataLiquidacao = dl;
             if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payload.editado_por = usuarioLogadoEmail;
+            if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(npDocIdCriar));
+            }
             await db.collection('np').doc(npDocIdCriar).set(payload, { merge: true });
         }
     }
@@ -175,7 +184,7 @@
             finalizarCarregamento();
             const tbody = document.getElementById('tbody-titulos');
             if (tbody && !tbody.querySelector('tr')) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Erro ao carregar. Verifique a ligação e permissões.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Erro ao carregar. Verifique a conexão e as permissões.</td></tr>';
             }
         };
 
@@ -250,6 +259,11 @@
         const urlParams = new URLSearchParams(window.location.search);
         const st = (urlParams.get('status') || '').trim();
         statusFiltroAtual = st || 'Rascunho';
+        const anoQ = (urlParams.get('ano') || '').trim().toLowerCase();
+        if (anoQ === 'todos' || anoQ === 'all') filtroAnoExercicioTitulos = 'todos';
+        else if (/^\d{4}$/.test(anoQ)) filtroAnoExercicioTitulos = anoQ;
+        else filtroAnoExercicioTitulos = String(new Date().getFullYear());
+        configurarFiltroAnoTitulos();
         assinarTitulosPorStatus(statusFiltroAtual);
         desenharFiltrosStatus();
         ligarEventos();
@@ -426,6 +440,83 @@
         input.addEventListener('blur', () => { setTimeout(() => { if (lista) lista.innerHTML = ''; }, 200); });
     }
 
+    function resolverAnoExercicioTitulo(t) {
+        if (!t) return null;
+        if (typeof t.anoExercicio === 'number') {
+            const n = t.anoExercicio;
+            if (n >= 1900 && n <= 2100) return n;
+        }
+        const a = parseInt(String(t.ano || '').replace(/\D/g, '').slice(0, 4), 10);
+        if (a >= 1900 && a <= 2100) return a;
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.anoDeData === 'function') {
+            const d1 = window.sisAnoDocumento.anoDeData(t.dataEmissao);
+            if (d1 != null) return d1;
+            const d2 = window.sisAnoDocumento.anoDeData(t.dataExefin);
+            if (d2 != null) return d2;
+        }
+        const s = String(t.dataEmissao || '').trim();
+        let m = s.match(/^(\d{4})-\d{2}-\d{2}/);
+        if (m) {
+            const y = parseInt(m[1], 10);
+            if (y >= 1900 && y <= 2100) return y;
+        }
+        m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) {
+            const y = parseInt(m[3], 10);
+            if (y >= 1900 && y <= 2100) return y;
+        }
+        const s2 = String(t.dataExefin || '').trim();
+        m = s2.match(/^(\d{4})-\d{2}-\d{2}/);
+        if (m) {
+            const y = parseInt(m[1], 10);
+            if (y >= 1900 && y <= 2100) return y;
+        }
+        m = s2.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) {
+            const y = parseInt(m[3], 10);
+            if (y >= 1900 && y <= 2100) return y;
+        }
+        return null;
+    }
+
+    function configurarFiltroAnoTitulos() {
+        const sel = document.getElementById('filtroAnoExercicioTitulos');
+        if (!sel) return;
+        const cur = new Date().getFullYear();
+        const antes = filtroAnoExercicioTitulos;
+        sel.innerHTML = '';
+        const opTodos = document.createElement('option');
+        opTodos.value = 'todos';
+        opTodos.textContent = 'Todos os anos';
+        sel.appendChild(opTodos);
+        for (let y = cur + 1; y >= cur - 20; y--) {
+            const op = document.createElement('option');
+            op.value = String(y);
+            op.textContent = String(y);
+            sel.appendChild(op);
+        }
+        if (antes === 'todos') sel.value = 'todos';
+        else if (antes && [...sel.options].some(o => o.value === antes)) sel.value = antes;
+        else sel.value = String(cur);
+        filtroAnoExercicioTitulos = sel.value;
+        if (!filtroAnoTitulosListenerOk) {
+            filtroAnoTitulosListenerOk = true;
+            sel.addEventListener('change', function() {
+                filtroAnoExercicioTitulos = this.value;
+                paginaAtual = 1;
+                titulosSelecionados.clear();
+                try {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('status', statusFiltroAtual);
+                    if (filtroAnoExercicioTitulos === 'todos') u.searchParams.delete('ano');
+                    else u.searchParams.set('ano', filtroAnoExercicioTitulos);
+                    if (history.replaceState) history.replaceState({}, '', u.pathname + u.search);
+                } catch (e) {}
+                atualizarTabelaTitulos();
+            });
+        }
+    }
+
     function desenharFiltrosStatus() {
         const container = document.getElementById('filtrosStatusTC');
         if (!container) return;
@@ -444,7 +535,15 @@
         statusFiltroAtual = status || 'Rascunho';
         titulosSelecionados.clear();
         paginaAtual = 1;
-        if (history.replaceState) history.replaceState({}, '', 'titulos.html?status=' + encodeURIComponent(statusFiltroAtual));
+        try {
+            const u = new URL(window.location.href);
+            u.searchParams.set('status', statusFiltroAtual);
+            if (filtroAnoExercicioTitulos && filtroAnoExercicioTitulos !== 'todos') u.searchParams.set('ano', filtroAnoExercicioTitulos);
+            else u.searchParams.delete('ano');
+            if (history.replaceState) history.replaceState({}, '', u.pathname + u.search);
+        } catch (e) {
+            if (history.replaceState) history.replaceState({}, '', 'titulos.html?status=' + encodeURIComponent(statusFiltroAtual));
+        }
         try { if (unsubscribeTitulos) unsubscribeTitulos(); } catch (e) {}
         let query = db.collection('titulos');
         if (statusFiltroAtual !== 'Todos') query = query.where('status', '==', statusFiltroAtual);
@@ -475,6 +574,12 @@
         let lista = baseTitulos.map(t => ({ ...t, status: t.status || 'Rascunho' }));
         if (!incluirInativos) {
             lista = lista.filter(t => !t.inativo);
+        }
+        if (filtroAnoExercicioTitulos && filtroAnoExercicioTitulos !== 'todos') {
+            const want = parseInt(filtroAnoExercicioTitulos, 10);
+            if (!isNaN(want)) {
+                lista = lista.filter(t => resolverAnoExercicioTitulo(t) === want);
+            }
         }
         if (statusFiltroAtual && statusFiltroAtual !== 'Todos') lista = lista.filter(t => t.status === statusFiltroAtual);
         if (termoBusca.trim()) {
@@ -577,8 +682,42 @@
 
         tbody.querySelectorAll('.btn-ver-titulo').forEach(btn => btn.addEventListener('click', () => visualizarTitulo(btn.getAttribute('data-id'))));
         tbody.querySelectorAll('.btn-editar-titulo').forEach(btn => btn.addEventListener('click', () => editarTitulo(btn.getAttribute('data-id'))));
-        tbody.querySelectorAll('.btn-encaminhar-processamento-titulo').forEach(btn => btn.addEventListener('click', () => encaminharTC(btn.getAttribute('data-id'), 'Em Processamento')));
-        tbody.querySelectorAll('.btn-encaminhar-liquidacao-titulo').forEach(btn => btn.addEventListener('click', () => encaminharTC(btn.getAttribute('data-id'), 'Em Liquidação')));
+        tbody.querySelectorAll('.btn-encaminhar-processamento-titulo').forEach(btn => btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const destino = 'Em Processamento';
+            modalEncaminharStatusPromessa({
+                texto: 'Deseja enviar este título para "Em Processamento"? Ao confirmar, o sistema verifica se os dados básicos e a OI de origem estão completos.'
+            }).then(async (sim) => {
+                if (!sim) return;
+                mostrarLoading();
+                try {
+                    await encaminharTC(id, destino, false);
+                    atualizarTabelaTitulos();
+                } catch (err) {
+                    alert('Erro ao encaminhar: ' + (err.message || err));
+                } finally {
+                    esconderLoading();
+                }
+            });
+        }));
+        tbody.querySelectorAll('.btn-encaminhar-liquidacao-titulo').forEach(btn => btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const destino = 'Em Liquidação';
+            modalEncaminharStatusPromessa({
+                texto: 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica se há NEs vinculadas com subelemento, valores e UG/Centro de custos válidos.'
+            }).then(async (sim) => {
+                if (!sim) return;
+                mostrarLoading();
+                try {
+                    await encaminharTC(id, destino, false);
+                    atualizarTabelaTitulos();
+                } catch (err) {
+                    alert('Erro ao encaminhar: ' + (err.message || err));
+                } finally {
+                    esconderLoading();
+                }
+            });
+        }));
         tbody.querySelectorAll('.btn-devolver-titulo').forEach(btn => btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-id');
             if (!id) return;
@@ -745,23 +884,106 @@
         );
     }
 
-    async function encaminharTC(id, destino, emBloco = false) {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
-        const t = baseTitulos.find(x => x.id === id);
-        if (!t) return;
-        const statusAtual = t.status || 'Rascunho';
-        if (destino === 'Em Processamento' && statusAtual !== 'Rascunho') return;
-        if (destino === 'Em Liquidação' && statusAtual !== 'Em Processamento') return;
-        if (destino === 'Em Processamento' && !dadosBasicosCompletos(t)) {
-            return alert('Dados Básicos incompletos. Complete a aba Dados Básicos antes de encaminhar para Processamento.');
+    /** Validação única para encaminhar (lista, bloco, botão do formulário) e espelhada no submit da aba Processamento. */
+    function validarPreRequisitosEncaminharTC(t, destino) {
+        const tc = t || {};
+        if (destino === 'Em Processamento') {
+            if (!dadosBasicosCompletos(tc)) {
+                return { ok: false, mensagem: 'Dados básicos incompletos. Preencha tipo, entrada EXEFIN, nº TC, fornecedor, contrato, valor e datas (aba Dados Básicos) antes de encaminhar para Processamento.' };
+            }
+            if (!String(tc.oiEntregou || '').trim()) {
+                return { ok: false, mensagem: 'É necessário informar a OI de Origem (aba Dados Básicos) antes de encaminhar para Processamento.' };
+            }
+            return { ok: true };
         }
-        if (destino === 'Em Liquidação' && (!Array.isArray(t.empenhosVinculados) || t.empenhosVinculados.length < 1)) {
-            return alert('Para enviar à Liquidação, vincule ao menos 1 NE na aba Processamento.');
+        if (destino === 'Em Liquidação') {
+            const emps = Array.isArray(tc.empenhosVinculados) ? tc.empenhosVinculados : [];
+            if (emps.length < 1) {
+                return { ok: false, mensagem: 'Para enviar à Liquidação, vincule ao menos 1 NE na aba Processamento.' };
+            }
+            for (let i = 0; i < emps.length; i++) {
+                const v = emps[i] || {};
+                const sub = String(v.subelemento || '').trim();
+                if (!/^\d{2}$/.test(sub)) {
+                    return { ok: false, mensagem: `NE ${i + 1}: subelemento deve ter exatamente 2 dígitos numéricos.` };
+                }
+                const val = Number(v.valorVinculado || 0);
+                if (val < 0.01) {
+                    return { ok: false, mensagem: `NE ${i + 1}: valor utilizado deve ser no mínimo R$ 0,01.` };
+                }
+                if (!String(v.centroCustosId || '').trim()) {
+                    return { ok: false, mensagem: `NE ${i + 1}: Centro de Custos é obrigatório.` };
+                }
+                if (!String(v.ugId || '').trim()) {
+                    return { ok: false, mensagem: `NE ${i + 1}: UG Beneficiária é obrigatória.` };
+                }
+            }
+            return { ok: true };
         }
+        return { ok: false, mensagem: 'Destino de tramitação não reconhecido.' };
+    }
+
+    function configurarModalEncaminharStatus() {
+        const overlay = document.getElementById('modalEncaminharStatus');
+        const btnC = document.getElementById('modalEncaminharStatusCancelar');
+        const btnO = document.getElementById('modalEncaminharStatusConfirmar');
+        if (!overlay || !btnC || !btnO || overlay.dataset.bound === '1') return;
+        overlay.dataset.bound = '1';
+        const fechar = (res) => {
+            overlay.style.display = 'none';
+            const r = configurarModalEncaminharStatus._resolve;
+            configurarModalEncaminharStatus._resolve = null;
+            if (typeof r === 'function') r(res);
+        };
+        btnC.addEventListener('click', () => fechar(false));
+        btnO.addEventListener('click', () => fechar(true));
+    }
+
+    /** @returns {Promise<boolean>} */
+    function modalEncaminharStatusPromessa(opcoes) {
+        configurarModalEncaminharStatus();
+        const overlay = document.getElementById('modalEncaminharStatus');
+        const h3 = document.getElementById('modalEncaminharStatusTitulo');
+        const p = document.getElementById('modalEncaminharStatusTexto');
+        const tituloModal = opcoes && opcoes.tituloModal;
+        const texto = (opcoes && opcoes.texto) || 'Confirmar esta operação?';
+        if (h3) h3.textContent = tituloModal || 'Confirmar encaminhamento';
+        if (p) p.textContent = texto;
+        return new Promise((resolve) => {
+            configurarModalEncaminharStatus._resolve = resolve;
+            overlay.style.display = 'flex';
+        });
+    }
+
+    /**
+     * @param {boolean} emBloco
+     * @param {{ silent?: boolean }} [opts] — silent: não usa alert; retorna { ok, mensagem? }
+     * @returns {Promise<void|{ ok: boolean, mensagem?: string }>}
+     */
+    async function encaminharTC(id, destino, emBloco = false, opts) {
+        const silent = !!(opts && opts.silent);
+        const falhar = (msg) => {
+            if (silent) return { ok: false, mensagem: msg };
+            alert(msg);
+            return null;
+        };
+        if (!usuarioPodeTramitarTC()) return falhar('Acesso negado para tramitação.');
+        const snap = await db.collection('titulos').doc(id).get();
+        if (!snap.exists) return falhar('Título não encontrado.');
+        const dadosDoc = snap.data() || {};
+        const statusAtual = dadosDoc.status || 'Rascunho';
+        if (destino === 'Em Processamento' && statusAtual !== 'Rascunho') {
+            return falhar('Status atual não permite encaminhar para Processamento.');
+        }
+        if (destino === 'Em Liquidação' && statusAtual !== 'Em Processamento') {
+            return falhar('Status atual não permite encaminhar para Liquidação.');
+        }
+        const val = validarPreRequisitosEncaminharTC(dadosDoc, destino);
+        if (!val.ok) return falhar(val.mensagem);
         const acaoTxt = destino === 'Em Processamento' ? 'Enc. p/ Processamento' : 'Enc. p/ Liquidação';
         const eventoTxt = destino === 'Em Processamento' ? 'Enc. p/ Processamento' : 'Enc. p/ Liquidação';
         const info = emBloco ? 'Operação em bloco' : '';
-        const hist = obterHistorico(t || {});
+        const hist = obterHistorico(dadosDoc);
         hist.push(construirEntradaHistorico({
             status: destino,
             evento: eventoTxt,
@@ -775,6 +997,7 @@
             historicoStatus: hist,
             editado_em: firebase.firestore.FieldValue.serverTimestamp()
         });
+        return silent ? { ok: true } : undefined;
     }
 
     function podeEditarAba(tabIndex) {
@@ -2358,9 +2581,10 @@
         // Garanto que o modelo interno persista sempre `subelemento` (legado: subitem).
         normalizarEmpenhosDaNotaAtualSubelemento();
 
+        const anoTCVal = (document.getElementById('anoTC')?.value || '').trim() || String(new Date().getFullYear());
         const dados = {
             idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
-            ano: '2026',
+            ano: escapeHTML(anoTCVal),
             ug: '741000',
             tipoTC: (document.getElementById('tipoTC')?.value || '').trim(),
             dataExefin: escapeHTML(dataExefin),
@@ -2388,13 +2612,16 @@
             criado_por: usuarioLogadoEmail
         };
 
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosTitulo === 'function') {
+            window.sisAnoDocumento.aplicarAnosTitulo(dados);
+        }
+
         let novoStatus = statusAtual;
         const npPreenchida = !!dados.np?.trim();
         const eraNovo = (fbID === '-1' || !fbID);
         if (eraNovo) {
             dados.entradaSaida = [{ tipo: 'entrada', data: dataExefin, oiOrigem: oiEntregou }];
         }
-        const dadosSanitizados = normalizarParaFirestore(dados);
 
         // Descobre qual aba está ativa (0 = Dados básicos / Rascunho)
         const abaAtivaEl = document.querySelector('.tab-tc.ativo');
@@ -2413,31 +2640,64 @@
                 dados.status = 'Rascunho';
                 novoStatus = 'Rascunho';
             } else if (statusAtual === 'Em Processamento') {
-                if (confirm("Deseja enviar para Liquidação?")) {
-                    if (empenhosDaNotaAtual.length === 0) {
-                        alert("Para enviar à Liquidação, vincule ao menos um empenho na aba Processamento.");
+                const sim = await modalEncaminharStatusPromessa({
+                    texto: 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica as NEs vinculadas (subelemento, valores, centro de custos e UG).'
+                });
+                if (sim) {
+                    const vEmp = validarPreRequisitosEncaminharTC({ empenhosVinculados: empenhosDaNotaAtual }, 'Em Liquidação');
+                    if (!vEmp.ok) {
+                        alert(vEmp.mensagem);
                         return;
                     }
                     novoStatus = 'Em Liquidação';
                     dados.status = novoStatus;
                 } else {
                     dados.status = 'Em Processamento';
+                    novoStatus = dados.status;
                 }
             } else if (statusAtual === 'Em Liquidação' && npPreenchida) {
-                novoStatus = 'Liquidado';
-                dados.status = novoStatus;
+                const sim = await modalEncaminharStatusPromessa({
+                    texto: 'Deseja enviar este título para "Liquidado"? Ao confirmar, o sistema grava a NP e registra a liquidação concluída.'
+                });
+                if (sim) {
+                    novoStatus = 'Liquidado';
+                    dados.status = novoStatus;
+                } else {
+                    dados.status = 'Em Liquidação';
+                    novoStatus = dados.status;
+                }
             } else if (statusAtual === 'Liquidado' || statusAtual === 'Aguardando Financeiro') {
                 if (empenhosDaNotaAtual.length === 0) {
-                    alert("É necessário ter empenhos vinculados para avançar. Verifique a aba Processamento.");
+                    alert('É necessário ter empenhos vinculados para avançar. Verifique a aba Processamento.');
                     return;
                 }
                 const todosLF = empenhosDaNotaAtual.every(v => !!(v.lf || '').trim());
                 const todosPF = empenhosDaNotaAtual.every(v => !!(v.pf || '').trim());
-                if (todosLF && todosPF) novoStatus = 'Para Pagamento';
-                else if (todosLF) novoStatus = 'Aguardando Financeiro';
-                dados.status = novoStatus;
+                let candidato = statusAtual;
+                if (todosLF && todosPF) candidato = 'Para Pagamento';
+                else if (todosLF) candidato = 'Aguardando Financeiro';
+                if (candidato !== statusAtual) {
+                    const sim = await modalEncaminharStatusPromessa({
+                        texto: `Deseja enviar este título para "${candidato}"? Ao confirmar, o sistema grava as alterações e registra a mudança de status.`
+                    });
+                    if (sim) {
+                        novoStatus = candidato;
+                        dados.status = candidato;
+                    } else {
+                        dados.status = statusAtual;
+                        novoStatus = statusAtual;
+                    }
+                } else {
+                    dados.status = statusAtual;
+                    novoStatus = statusAtual;
+                }
+            } else {
+                dados.status = statusAtual || 'Rascunho';
+                novoStatus = dados.status;
             }
         }
+
+        const dadosSanitizados = normalizarParaFirestore(dados);
 
         mostrarLoading();
         try {
@@ -2559,10 +2819,11 @@
         const t = baseTitulos.find(x => x.id === fbID);
         const statusAtual = t?.status || 'Rascunho';
         const destino = statusAtual === 'Em Processamento' ? 'Em Liquidação' : 'Em Processamento';
-        const pergunta = destino === 'Em Liquidação'
-            ? 'Confirmar envio para Liquidação?'
-            : 'Confirmar encaminhamento para Processamento?';
-        if (!confirm(pergunta)) return;
+        const texto = destino === 'Em Liquidação'
+            ? 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica as NEs vinculadas (subelemento, valores, centro de custos e UG).'
+            : 'Deseja enviar este título para "Em Processamento"? Ao confirmar, o sistema verifica os dados básicos e a OI de origem.';
+        const sim = await modalEncaminharStatusPromessa({ texto });
+        if (!sim) return;
         mostrarLoading();
         try {
             await encaminharTC(fbID, destino, false);
@@ -3294,10 +3555,18 @@
         if (faltando.length > 0) {
             return { erro: 'Campos obrigatórios ausentes: ' + faltando.join(', ') };
         }
+        let anoImp = valorTexto(row, ['ano', 'ANO', 'anoTC', 'anoExercicio']);
+        if (!anoImp && window.sisAnoDocumento && typeof window.sisAnoDocumento.anoDeData === 'function') {
+            const y = window.sisAnoDocumento.anoDeData(obrigatorios.dataEmissao) || window.sisAnoDocumento.anoDeData(obrigatorios.dataExefin);
+            if (y) anoImp = String(y);
+        }
+        if (!anoImp) anoImp = String(new Date().getFullYear());
+
         const update = {
             tipoTC: obrigatorios.tipoTC,
             dataExefin: obrigatorios.dataExefin,
             numTC: obrigatorios.numTC,
+            ano: anoImp,
             fornecedorCnpj: obrigatorios.fornecedorCnpj,
             fornecedorNome: obrigatorios.fornecedorNome,
             instrumento: obrigatorios.instrumento,
@@ -3313,6 +3582,9 @@
             editado_em: firebase.firestore.FieldValue.serverTimestamp(),
             editado_por: usuarioLogadoEmail || ''
         };
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosTitulo === 'function') {
+            window.sisAnoDocumento.aplicarAnosTitulo(update);
+        }
         return { idProc: obrigatorios.idProc, update };
     }
 
@@ -3379,19 +3651,38 @@
         const todosEmProcessamento = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Processamento');
         if (!todosRascunho && !todosEmProcessamento) return alert('Selecione TCs do mesmo status (Rascunho ou Em Processamento).');
         const destino = todosRascunho ? 'Em Processamento' : 'Em Liquidação';
-        const pergunta = destino === 'Em Processamento'
-            ? 'Confirmar encaminhamento em bloco para Processamento?'
-            : 'Confirmar envio em bloco para Liquidação?';
-        if (!confirm(pergunta)) return;
+        const n = ids.length;
+        const texto = destino === 'Em Processamento'
+            ? `Deseja enviar ${n} título(s) selecionado(s) para "Em Processamento"? Ao confirmar, o sistema verifica dados básicos e OI de cada um. Os que não cumprirem requisitos serão ignorados e listados ao final.`
+            : `Deseja enviar ${n} título(s) selecionado(s) para "Em Liquidação"? Ao confirmar, o sistema verifica NEs e vínculos de cada um. Os que não cumprirem requisitos serão ignorados e listados ao final.`;
+        const sim = await modalEncaminharStatusPromessa({ texto });
+        if (!sim) return;
         mostrarLoading();
+        const falhas = [];
+        let okCount = 0;
         try {
             for (const id of ids) {
-                await encaminharTC(id, destino, true);
+                const tc = baseTitulos.find(t => t.id === id);
+                const idProc = tc ? String(tc.idProc || id).trim() : id;
+                try {
+                    const r = await encaminharTC(id, destino, true, { silent: true });
+                    if (r && r.ok) okCount++;
+                    else falhas.push(`${idProc}: ${(r && r.mensagem) || 'Não foi possível encaminhar.'}`);
+                } catch (err) {
+                    falhas.push(`${idProc}: ${err.message || err}`);
+                }
             }
             titulosSelecionados.clear();
             atualizarUIselecao();
             atualizarTabelaTitulos();
-            alert(destino === 'Em Processamento' ? 'TCs encaminhados em bloco para Processamento.' : 'TCs enviados em bloco para Liquidação.');
+            let msg = destino === 'Em Processamento'
+                ? `Processamento: ${okCount} TC(s) encaminhado(s) em bloco.`
+                : `Liquidação: ${okCount} TC(s) enviado(s) em bloco.`;
+            if (falhas.length) {
+                msg += `\n\nNão encaminhados (${falhas.length}):\n- ` + falhas.slice(0, 12).join('\n- ');
+                if (falhas.length > 12) msg += `\n- ... e mais ${falhas.length - 12}.`;
+            }
+            alert(msg);
         } catch (err) {
             alert("Erro: " + (err.message || err));
         } finally {

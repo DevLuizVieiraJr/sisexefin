@@ -347,6 +347,9 @@
             gerencia: escapeHTML(document.getElementById('gerenciaEmpenho')?.value || ''),
             projeto: escapeHTML(document.getElementById('projetoEmpenho')?.value || '')
         };
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosEmpenho === 'function') {
+            window.sisAnoDocumento.aplicarAnosEmpenho(dados);
+        }
         try {
             const file = inputImportarPdfEmpenho && inputImportarPdfEmpenho.files ? inputImportarPdfEmpenho.files[0] : null;
             if (file) {
