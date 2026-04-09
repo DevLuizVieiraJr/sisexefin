@@ -11,7 +11,6 @@
         deducoesEncargos: 'secao-deducoes-encargos',
         contratos: 'secao-contratos',
         fornecedores: 'secao-fornecedores',
-        titulos: 'secao-titulos',
         centrocustos: 'secao-centrocustos',
         ug: 'secao-ug',
         backup: 'secao-backup'
@@ -23,18 +22,20 @@
         'secao-deducoes-encargos': 'dedenc_ler',
         'secao-contratos': 'contratos_ler',
         'secao-fornecedores': 'fornecedores_ler',
-        'secao-titulos': 'titulos_ler',
         'secao-centrocustos': 'centrocustos_ler',
         'secao-ug': 'ug_ler',
         'secao-backup': 'backup_ler'
     };
     const params = new URLSearchParams(window.location.search);
     let secaoParam = params.get('secao');
-    const ordemSecoes = ['empenhos', 'lf', 'op', 'deducoesEncargos', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug', 'backup'];
+    const ordemSecoes = ['empenhos', 'lf', 'op', 'deducoesEncargos', 'contratos', 'fornecedores', 'centrocustos', 'ug', 'backup'];
 
     function executarInicializacao() {
         let idSecao, permissaoRequerida;
-        if (secaoParam && mapSecao[secaoParam]) {
+        if (secaoParam && !mapSecao[secaoParam]) {
+            window.location.replace('404.html?origem=' + encodeURIComponent(window.location.pathname + window.location.search));
+            return;
+        } else if (secaoParam && mapSecao[secaoParam]) {
             idSecao = mapSecao[secaoParam];
             permissaoRequerida = mapSecaoPermissao[idSecao];
         } else {

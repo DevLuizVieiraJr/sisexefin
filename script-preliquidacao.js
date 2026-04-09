@@ -967,6 +967,40 @@
         }
     }
 
+    function titulosDoLoteParaResumoFin(p) {
+        const raw = [...new Set([...(p.tituloIds || []), ...(p.titulosParticiparamIds || [])])];
+        const out = [];
+        raw.forEach(id => {
+            const t = baseTitulos.find(x => x.id === id);
+            if (t) out.push(t);
+        });
+        return out;
+    }
+
+    /**
+     * Lista PL: acompanhamento pós-NP a partir de empenhosVinculados dos TCs do lote
+     * (heurística até existir itensNe[] / status persistido na PL).
+     */
+    function resumoFinanceiroLotePL(p) {
+        if (!p || (p.estado || '') !== 'Fechado') return null;
+        const titulos = titulosDoLoteParaResumoFin(p);
+        if (!titulos.length) return null;
+        const linhas = [];
+        titulos.forEach(t => {
+            (t.empenhosVinculados || []).forEach(v => {
+                if ((v.numEmpenho || '').trim() || Number(v.valorVinculado) > 0) linhas.push(v);
+            });
+        });
+        if (!linhas.length) return null;
+        const total = linhas.length;
+        const comLf = linhas.filter(v => String(v.lf || '').trim());
+        if (comLf.length < total) return { cls: 'badge-pl-pendente-lf', label: 'Pendente LF' };
+        const comPf = linhas.filter(v => String(v.pf || '').trim());
+        if (comPf.length === 0) return { cls: 'badge-pl-aguardando-fin', label: 'Aguardando Fin.' };
+        if (comPf.length === total) return { cls: 'badge-pl-para-pg', label: 'Para pagamento' };
+        return { cls: 'badge-pl-pgto-parcial', label: 'Pgto parcial' };
+    }
+
     function desenharListaPL() {
         const tbody = document.getElementById('tbodyListaPL');
         if (!tbody) return;
@@ -993,7 +1027,13 @@
             const nPdf = idsTitulosParaPdfPL(p).length;
             const est = p.estado || 'Rascunho';
             let badge = '<span class="badge-pl-rascunho">Rascunho</span>';
-            if (est === 'Fechado') badge = '<span class="badge-pl-fechado">Fechado</span>';
+            if (est === 'Fechado') {
+                badge = '<span class="badge-pl-fechado">Fechado</span>';
+                const fin = resumoFinanceiroLotePL(p);
+                if (fin) {
+                    badge += ' <span class="' + fin.cls + '" title="Derivado das NE/LF/PF nos TCs do lote">' + escapeHTML(fin.label) + '</span>';
+                }
+            }
             if (est === 'Cancelado') badge = '<span class="badge-pl-cancel">Cancelado</span>';
             if (p.ativo === false) badge += ' <span class="badge-pl-inativo">Inativo</span>';
             const vTot = valorTotalLoteNaLista(p);

@@ -203,7 +203,7 @@
                                     <option value="NFSE">NFS-e (DANFS-e)</option>
                                     <option value="FAT">Fatura (FAT)</option>
                                     <option value="BO">Boleto</option>
-                                    <option value="OUT">Outro</option>
+                                    <option value="NFG">NF Genérica</option>
                                 </select>
                             </div>
                             <div class="form-group flex-1"><label>Entrada na EXEFIN:</label><input type="date" id="dataExefin" required></div>
@@ -339,7 +339,7 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel2">
-                        <p style="color:#666; margin-bottom:12px;">Informe a NP do SIAFI e vincule uma LF (da coleção LFxPF) a cada NE. NP é obrigatória para salvar.</p>
+                        <p style="color:#666; margin-bottom:12px;">Informe a <strong>NP</strong> e a <strong>data de liquidação</strong> quando aplicável. <strong>LF e PF</strong> são <strong>somente leitura</strong> nesta tela (origem: <a href="preliquidacao.html" class="btn-modelo-csv">Pré-Liquidação</a> e importação LFxPF). Com o TC em liquidação, a NP é obrigatória para salvar.</p>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>NP (Nota de Pagamento) <span style="color:#e74c3c;">*</span>:</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
                             <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="date" id="dataLiquidacao"></div>
@@ -372,13 +372,13 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel3">
-                        <p style="color:#666; margin-bottom:15px;">LF é definida na aba Liquidação. Preencha PF quando a LF for atendida (informação da LFxPF).</p>
+                        <p style="color:#666; margin-bottom:15px;"><strong>LF, PF e OP</strong> são <strong>somente leitura</strong> (Pré-Liquidação / LFxPF / importações). Use esta aba apenas para consulta.</p>
                         <table class="tabela-gov tabela-ne-inputs" id="tabelaLFPF">
                             <thead><tr><th>NE</th><th>Valor</th><th>LF</th><th>PF</th></tr></thead>
                             <tbody id="tbodyLFPF"></tbody>
                         </table>
                         <div class="form-row" style="margin-top:15px;">
-                            <div class="form-group flex-1"><label>OP (Ordem de Pagamento):</label><input type="text" id="op" placeholder="Preenchido via import CSV"></div>
+                            <div class="form-group flex-1"><label>OP (Ordem de Pagamento):</label><input type="text" id="op" class="input-readonly" placeholder="Importação / NP" readonly data-tc-somente-leitura="1"></div>
                         </div>
                         <div id="acoesAbaFinanceiro" class="tc-acao-aba">
                             <button type="button" id="btnEditarAbaFinanceiro" class="btn-default btn-editar-aba" data-permission="titulos_editar">Editar Financeiro</button>

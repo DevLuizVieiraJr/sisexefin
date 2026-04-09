@@ -2,7 +2,7 @@
 
 Este documento consolida as regras debatidas para o fluxo de **pré-liquidação** (individual ou em bloco), geração do **DAuLiq** em PDF e vínculo posterior com **NP** e **data de liquidação** do SIAFI, além do papel da **aba Liquidação** do Título de Crédito (TC).
 
-**Última atualização de regras:** alinhamento com a implementação atual — lista de PLs (ações e colunas), modo **visualização**, geração de DAuLiq **a partir da lista**, diálogo **PDF completo vs sem histórico**, exibição amigável da **NE** no PDF, metadados `auditoriaPdf.variantePdf`; mantém-se o núcleo MVP (§8.15), LF/Storage como fases posteriores.
+**Última atualização de regras:** alinhamento com [Regras de Negócios - TC - Aba Liquidação.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Liquidação.md) e [Regras de Negócios - TC - Aba Financeiro.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Financeiro.md): **LF, PF e OP no TC somente leitura**; **edição na PL**; **unificação de NE idênticas dentro da mesma PL**; **várias LFs por NE** com soma de valores igual ao valor da NE; **status da PL e do TC** coerentes com completude de LF/PF (ver §2.1, §5.1 e §7.1). Mantém-se o núcleo MVP do DAuLiq/NP (§8.15); Storage e detalhes finos de modelo em §8.12.
 
 ---
 
@@ -23,8 +23,30 @@ Permitir que o usuário:
 
 1. **Liquidação em bloco** só é permitida para TCs com o **mesmo credor** (mesmo CNPJ/CPF normalizado, somente dígitos).
 2. O fluxo de pré-liquidação deve ser **único e padronizado**: serve tanto para **um** TC quanto para **vários** (carrinho).
-3. A **operação** concentra-se na tela de pré-liquidação; a **aba Liquidação do TC** tende a ser **informativa** (consulta e rastreabilidade), espelhando dados vindos do lote fechado.
+3. A **operação** concentra-se na tela de pré-liquidação; a **aba Liquidação** e a **aba Financeiro** do TC são **informativas** para **LF, PF e OP**, espelhando dados gravados na **PL** (e em `lfpf` quando aplicável).
 4. **Integridade e auditoria**: alterações relevantes após fechamento não devem apagar o histórico sem política explícita.
+
+### 2.1 Alinhamento com o módulo TC (fonte cruzada)
+
+Ler em conjunto com:
+
+* [Regras de Negócios - TC - Aba Liquidação.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Liquidação.md) — NP no TC quando o status exige; exibição somente leitura de LF/PF projetada da PL.
+* [Regras de Negócios - TC - Aba Financeiro.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Financeiro.md) — LF, PF e OP somente leitura no TC.
+
+**Síntese operacional:**
+
+1. Uma **PL** agrega **um ou mais TC** (mesmo credor — §2, itens 1–2).
+2. Cada TC traz **uma ou mais NE** (`empenhosVinculados`). Na PL, **NEs com o mesmo identificador** são **unificadas** para efeito de informação de **LF/PF**: uma alteração reflete em **todos os TC** da PL que compartilham essa NE.
+3. Por **NE distinta** no âmbito da PL, o utilizador informa **uma ou mais LFs**; cada LF pode ter **valor** parcial; a **soma** dos valores das LFs daquela NE deve **fechar** o valor consolidado da NE na PL (ex.: *x + y = valor da NE*).
+4. **LF e PF** são **editados na PL** (e refletidos via coleção **`lfpf`** quando aplicável — importação SIPLAD); as abas **Liquidação** e **Financeiro** do TC apenas **exibem** o espelho.
+5. **Transição de status do TC** (após **Liquidado**, com base na projeção da PL):
+   * se **alguma** NE do TC ainda **não** tiver LF completa na PL → TC permanece **Liquidado**;
+   * se **todas** as NE do TC tiverem LF informadas na PL → TC **Aguardando Financeiro**;
+   * se **todas** as LFs (dessas NE, no âmbito do TC) tiverem PF → TC **Para Pagamento**.
+6. **Transição de status da PL** (regra de PF nas LFs, no âmbito do lote):
+   * **Aguardando Financeiro:** nenhuma LF com PF;
+   * **Para Pagamento parcial:** parte das LFs com PF e parte sem;
+   * **Para Pagamento:** todas as LFs com PF.
 
 ---
 
@@ -91,19 +113,25 @@ No documento **`preLiquidacoes`**, além do código `PL-#####/AAAA`, o sistema p
 
 **Rascunho e handoff entre usuários:** entre os passos 6 e 7 o lote permanece em **Rascunho** até existir NP. Um utilizador pode **montar e salvar** a PL (com código PL); outro pode, em momento posterior, **efetuar a liquidação no SIAFI** e **registar a NP** no SisExeFin — desde que possua as permissões adequadas (`preliquidacao_fechar_np` ou equivalente combinado com edição da PL).
 
-### 5.1 Fluxo estendido (SIAFI → SIPLAD → SisExeFin)
+### 5.1 Fluxo estendido (SIAFI → SIPLAD → SisExeFin → Pré-Liquidação)
 
 Após o fechamento do lote com **NP** (referência ao que foi liquidado no **SIAFI** usando o **DAuLiq**):
 
-1. O **SIPLAD** passa a expor **uma LF (Liquidação Financeira) por NE** efetivamente liquidada naquele contexto (conforme processo real no órgão).
-2. No **SisExeFin**, o usuário deve **associar manualmente** cada **LF** à **NE** correspondente **no âmbito da pré-liquidação** (lista consolidada de NEs do lote — a mesma base usada no bloco “Principal com orçamento” do DAuLiq).
-3. As LF disponíveis para escolha vêm da coleção **`lfpf`** (LF × PF), hoje alimentada sobretudo por **importação** (CSV/Excel). Cada registro pode ter `lf`, `pf`, `situacao`, etc.
-4. Quando a importação atualizar o **`lfpf`**, o sistema pode **refletir a PF** na linha (se a LF selecionada já tiver PF atendida) — padrão já usado na aba Liquidação do TC (`script-titulos-spa.js`: ao escolher LF, preenche PF a partir do registo `lfpf`).
-5. **Status do lote** (documento `preLiquidacoes`) vs **status do TC** (`titulos`), quando a etapa LF/PF estiver implementada:
-
-   * No **lote**, quando nem todas as NEs têm LF/PF conforme regra de “LF atendida”: status da PL **`Para Pagamento Parcial`** (valor literal acordado no Firestore; usar constante no código).
-   * Nos **TCs** desse cenário: manter **`Aguardando Financeiro`** (não usar `Para pagamento parcial` no campo `titulos.status` — evita conflito com o fluxo atual do formulário do TC).
-   * Quando todas as NEs do lote cumprirem LF + PF: alinhar status do lote e dos TCs ao fluxo já existente (**Para Pagamento** no TC quando aplicável).
+1. O **SIPLAD** gera **LFs** (Liquidação Financeira) conforme o processo real no órgão; no SisExeFin elas são conhecidas sobretudo via importação para a coleção **`lfpf`** (LF × PF).
+2. No **módulo Pré-Liquidação**, o utilizador informa as **LF** (e acompanha **PF**) **no âmbito da PL**, sobre a **lista consolidada de NEs** do lote:
+   * **Unificação:** NEs **idênticas** que aparecem em mais de um TC da mesma PL são tratadas como **uma linha lógica** para LF/PF (valores consolidados; edição reflete em todos os TC que partilham essa NE **nessa PL**).
+   * **Cardinalidade:** por **NE distinta**, são permitidas **uma ou mais LFs**; cada LF pode ter **valor** parcial; a **soma** dos valores das LFs deve **fechar** o valor consolidado da NE na PL (*x + y = valor da NE*, etc.).
+3. As opções de LF para escolha continuam a vir preferencialmente da coleção **`lfpf`** (registos ativos; importação CSV/Excel). **PF** e **situação** da LF atualizam-se quando a importação refresca o `lfpf`.
+4. **Edição:** a associação LF/PF por NE é feita **na PL**, não nas abas Liquidação/Financeiro do TC (estas permanecem **somente leitura** — ver [Regras de Negócios - TC - Aba Liquidação.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Liquidação.md)).
+5. **Status da PL** (regra de PF nas LFs, no âmbito do lote):
+   * **Aguardando Financeiro:** nenhuma LF com PF;
+   * **Para Pagamento parcial:** parte das LFs com PF e parte sem;
+   * **Para Pagamento:** todas as LFs com PF.
+6. **Status do TC** (`titulos`), após **Liquidado**, alinhado à projeção da PL (detalhe em §2.1):
+   * alguma NE do TC **sem** LF completa na PL → TC **Liquidado**;
+   * todas as NE do TC com LF → **Aguardando Financeiro**;
+   * todas as LFs (dessas NE, no âmbito do TC) com PF → **Para Pagamento**.
+7. Após gravar na PL, o sistema **propaga** o espelho para `empenhosVinculados` (e demais campos acordados) em cada TC do lote, para exibição nas abas do TC **sem edição** ali.
 
 ---
 
@@ -138,9 +166,17 @@ Conforme documento auxiliar debatido, o PDF do DAuLiq deve seguir **blocos fixos
 | Estado | Descrição |
 |---|---|
 | **Rascunho** | Carrinho editável; pode regerar DAuLiq; sem NP obrigatória no lote. |
-| **Fechado** | NP e data informadas; ver §8.5 para correção de NP/data e vínculo com OP. |
+| **Fechado** | NP e data informadas (equivalente operacional a “lote fechado” no SIAFI); ver §8.5 para correção de NP/data e vínculo com OP. |
+| **Liquidada** | Lote com NP (e data) registados; liquidação no SIAFI refletida no SisExeFin; pode coexistir ou suceder **Fechado** conforme enum único na implementação. |
+| **Aguardando Financeiro** | No âmbito da PL: **nenhuma LF** com **PF** associada (todas as LFs do lote sem PF). |
+| **Para Pagamento parcial** | Parte das LFs com **PF** e parte sem. |
+| **Para Pagamento** | **Todas** as LFs do lote com **PF**. |
+| **Paga** | Pagamento concluído no processo do órgão (detalhar gatilho e campos na implementação). |
+| **Comprovação** | Fase de comprovação documental/pós-pagamento (detalhar na implementação). |
 | **Cancelado** | Ação do utilizador com permissão `preliquidacao_cancelar`: vínculo com TCs desfeito; ver §7.4. |
 | **Ativo / Inativo (visibilidade)** | **Apenas administrador:** controla se a PL **aparece ou não** nas listagens para utilizadores não-admin (registo mantido; não confundir com cancelamento operacional). |
+
+**Nota:** o código atual pode usar apenas um subconjunto destes valores (`Rascunho`, `Fechado`, etc.). A lista acima é o **alvo de produto** alinhado ao fluxo LF/PF na PL e ao espelho no TC (§2.1). Harmonizar **enum** e **migração** numa entrega dedicada.
 
 Implementação típica: flag ou estado auxiliar `ativo` no documento `preLiquidacoes`, com permissões `preliquidacao_inativar` / reativação apenas **admin**, conforme §8.7.
 
@@ -274,16 +310,18 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 
 **Decisão recomendada técnica:** usar **`situacao === 'Atendido'`** no registo `lfpf` como critério principal; **`pf` preenchido** como reforço (e para exibição). Se a importação SIPLAD marcar “atendida” só com PF, harmonizar regra na importação para não haver contradição.
 
-13. **NE em dois TCs / várias LF**  
-**Resposta:** regra habitual **uma LF por NE**; **casos raros com 2 LF**.
+13. **NE em vários TCs / várias LF por NE**  
+**Resposta (atualizada):** na **mesma PL**, NEs **idênticas** são **unificadas** para informação de LF/PF (uma edição reflete em todos os TC que compartilham essa NE **nessa PL**). Por **NE distinta** na PL, o modelo admite **uma ou mais LFs**, cada uma com **valor** parcial, sendo a **soma** igual ao valor consolidado da NE (*x + y = valor da NE*).
 
-**Decisão recomendada:** modelo de dados permitir **N linhas** no consolidado por chave `(NE, subelemento)` ou `(NE, lfEsperada)` quando o utilizador indicar exceção; UI com “adicionar 2.ª LF” só para perfil autorizado ou com justificativa.
+**Decisão de modelo:** persistir na PL uma estrutura por NE unificada (ex.: `itensNe[]` com array `lfs[]`: `{ lf, valorAlocado, pf?, … }`) e propagar espelho para `empenhosVinculados` nos TCs afetados (§9.1).
 
-14. **Status Para pagamento / Parcial**  
-**Resposta:** atualizar **documento `preLiquidacoes`** e **todos** os `titulos` do lote de forma **coerente** com o fluxo existente:
+14. **Status Para pagamento / Parcial (PL e TC)**  
+**Resposta (atualizada):** atualizar **`preLiquidacoes`** e os **`titulos`** do lote de forma **coerente** com §2.1 e §5.1:
 
-* Quando o lote estiver em cenário **parcial** (LF/PF): no documento da PL usar **`Para Pagamento Parcial`**; em cada TC manter **`Aguardando Financeiro`** (ver §5.1).
-* Quando concluído: alinhar a **atualização em lote** de `titulos.status` e `empenhosVinculados` (§9), sem depender de “abrir e salvar” cada TC.
+* **PL — Aguardando Financeiro:** nenhuma LF com PF.  
+* **PL — Para Pagamento parcial:** parte das LFs com PF e parte sem.  
+* **PL — Para Pagamento:** todas as LFs com PF.  
+* **TC:** após **Liquidado**, **Aguardando Financeiro** quando **todas** as NE do TC têm LF na PL; **Liquidado** se **alguma** NE ainda sem LF completa; **Para Pagamento** quando **todas** as LFs relevantes têm PF. Atualização preferencialmente em **lote** (§9.4), sem depender de “abrir e salvar” cada TC.
 
 ### 8.11 Síntese das decisões (antigas dúvidas §8.11)
 
@@ -299,8 +337,9 @@ Esta secção consolida as **respostas do utilizador** e as **decisões fechadas
 
 ### 8.12 Tópicos opcionais / futuros
 
-* **Exceção “2 LF” por NE** no mesmo lote: avaliar **anexo** ou campo **motivo** em `itensNe[]` e perfil autorizado (regra já mencionada em §8.10).
+* **Múltiplas LFs por NE** com valores parciais: modelo em `itensNe[].lfs[]` e validação de soma (§8.10 item 13, §9.1); UI na PL (§9.2).
 * **Firebase Storage** para PDF: configurar bucket, tamanho máximo e leitura alinhada a `preliquidacao_ler` / `titulos_ler`.
+* **Harmonização de enum** de status da PL (`Liquidada`, `Fechado`, etc.) com o código existente (§7.1).
 
 ### 8.13 OP, OB e alinhamento com o módulo OP × OB
 
@@ -330,7 +369,7 @@ No **SIAFI**, após autorizações, gera-se **OP** (Ordem de Pagamento); após a
 
 ---
 
-**Estado do documento:** regras alinhadas à **implementação atual** do módulo (lista, variantes de PDF, visualização); §8.12 permanece para **opcionais** (Storage, exceção 2 LF, associação LF na PL).
+**Estado do documento:** regras alinhadas à **implementação atual** do módulo (lista, variantes de PDF, visualização); §8.12 permanece para **opcionais** (Storage, múltiplas LFs por NE na UI, harmonização de enums).
 
 ## 9. Sistemática de implementação sugerida (LF ↔ NE, LFxPF, espelho no TC)
 
@@ -338,19 +377,19 @@ No **SIAFI**, após autorizações, gera-se **OP** (Ordem de Pagamento); após a
 
 | Dado | Onde guardar |
 |---|---|
-| Metadados do lote, NP, data, código PL | Documento `preLiquidacoes` |
-| Lista consolidada de NEs do lote + **LF escolhida** | Subcoleção ou array `itensNe[]` dentro de `preLiquidacoes` (chave estável: NE normalizada + subelemento se necessário) |
-| LF/PF “oficiais” vindos do SIPLAD | Coleção **`lfpf`** (já existente; importação diária) |
-| Continuidade com o ecrã atual do TC | Campos `empenhosVinculados[].lf` e `empenhosVinculados[].pf` em cada `titulos` |
+| Metadados do lote, NP, data, código PL, status do lote | Documento `preLiquidacoes` |
+| Lista consolidada de **NEs unificadas** do lote + **N LFs** por NE + valores | Array `itensNe[]` (ou equivalente) em `preLiquidacoes`: por NE distinta, armazenar `lfs[]` com `{ lf, valorAlocado, pf?, origemLfpfId?, … }`; chave estável: NE normalizada **+** subelemento quando a unificação exigir distinguir linhas do DetaCustos |
+| LF/PF “oficiais” vindos do SIPLAD | Coleção **`lfpf`** (importação) |
+| Espelho no TC (abas Liquidação / Financeiro somente leitura) | Projeção em `empenhosVinculados` (estrutura pode evoluir para `lfs[]` espelho ou campo agregado legível; **alinhar** ao enum e à UI) |
 
-**Regra de sincronização:** ao gravar a associação LF → NE na pré-liquidação, o sistema **propaga** o mesmo `lf` (e `pf` se já existir no `lfpf`) para **cada** entrada de `empenhosVinculados` de **cada** TC do lote que referencie aquela NE (e subelemento, se for parte da chave). Assim a **aba Liquidação** do TC continua coerente sem duplicar lógica só na PL.
+**Regra de sincronização:** ao gravar na PL, o sistema **propaga** para **cada** `empenhosVinculados` de **cada** TC do lote que referencie aquela NE (e subelemento, se parte da chave) o **mesmo conjunto** de LF/PF **unificado** na PL. A edição **não** ocorre no formulário do TC.
 
 ### 9.2 Etapas de UI na tela de pré-liquidação (abas ou steps)
 
 1. **Montagem** – fornecedor, carrinho de TCs, gerar DAuLiq, salvar rascunho / código.
 2. **Fecho SIAFI** – informar NP + data de liquidação (lote `Fechado` neste sentido operacional).
-3. **Associação LF** – tabela: colunas sugeridas — NE (12 dígitos visíveis + chave completa se necessário), subelemento, valor consolidado no lote, TCs de origem (idProc), **select de LF** (filtrado a partir de `lfpf` ativos), **PF** (read-only, preenchido ao escolher LF ou após importação), situação da LF.
-4. **Acompanhamento** – indicador global: X de Y NEs com LF; X de Y com PF; badge **Parcial** / **Para pagamento**.
+3. **Associação LF** – tabela por **NE unificada** no lote: NE, subelemento (se aplicável), **valor consolidado**, TCs de origem (idProc), lista **“adicionar LF”** com **uma ou mais** linhas por NE (cada linha: LF via `lfpf`, **valor alocado**, PF somente leitura após importação/atendimento), **validação** soma dos valores = valor da NE; **PF** e situação atualizáveis após import `lfpf`.
+4. **Acompanhamento** – indicadores: NEs com LF completa; LFs com PF; badges alinhados a **Aguardando Financeiro** / **Para Pagamento parcial** / **Para Pagamento** (§2.1).
 
 Botão **“Guardar associações LF”** executa: validações + escrita em `preLiquidacoes` + batch update nos `titulos` afetados.
 
@@ -398,11 +437,11 @@ flowchart LR
 * Módulo **pré-liquidação** (lista, editor, PDF DAuLiq, NP, Firestore): `preliquidacao.html`, `script-preliquidacao.js`
 * Especificação detalhada do layout do DAuLiq: `regras de negócio - Documento auxiliar de liquidação..txt`
 * Papeleta (PDTC) – referência de formatação: geração em `script-titulos-spa.js` (`gerarPDFTitulo`)
-* Aba Liquidação do TC, NP, LF/PF: `script-titulos-spa.js`, `titulos.html`, e `Regras de Negócio - Aba Liquidação.md`
+* Aba Liquidação do TC, NP, LF/PF: `script-titulos-spa.js`, `titulos.html`, e `Regras de Negócios - TC - Aba Liquidação.md`
 * Importação e coleção **LFxPF**: `script-import.js`, `script-lfpf.js`, `sistema.html` (secção LF/PF)
 * Módulo **OP × OB** (contexto §8.13): alinhar ao código e telas de OP/NP no repositório.
 
 ---
 
-*Documento vivo: decisões nas secções 7–8 e §8.15 (MVP); §3 e §6 refletem a UI e o PDF em produção. Revisar §8.12 (opcionais) antes de Storage e exceções 2 LF.*
+*Documento vivo: decisões nas secções 7–8 e §8.15 (MVP); §2.1 e §5.1 alinham PL ↔ TC com [Regras de Negócios - TC - Aba Liquidação.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Liquidação.md); §3 e §6 refletem a UI e o PDF em produção. Revisar §8.12 antes de Storage e migração de enums.*
 

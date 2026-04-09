@@ -42,9 +42,14 @@ service cloud.firestore {
     
     match /usuarios/{userId} {
       allow read: if logado() && (request.auth.uid == userId || temPermissao('acesso_admin'));
-      allow create: if logado() && request.auth.uid == userId
-        && !request.resource.data.keys().hasAny(['perfis', 'perfil_ativo', 'bloqueado', 'perfil'])
-        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'pendente');
+      // Auto-cadastro: só o próprio uid, sem perfis (fica pendente para aprovação do admin).
+      // Cadastro pelo painel admin: grava usuarios/{uid do novo usuário} com perfis — auth.uid é o admin, por isso exige acesso_admin.
+      allow create: if logado() && (
+        (request.auth.uid == userId
+          && !request.resource.data.keys().hasAny(['perfis', 'perfil_ativo', 'bloqueado', 'perfil'])
+          && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'pendente'))
+        || temPermissao('acesso_admin')
+      );
       allow update: if logado() && (
         (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['perfil_ativo']))
         || temPermissao('acesso_admin')
@@ -125,10 +130,14 @@ service cloud.firestore {
       allow delete: if logado() && temPermissao('acesso_admin');
     }
 
-    // Contador atómico para código PL-#####/AAAA (transação na app)
+    // Contadores atómicos (transação na app), incluindo PL e PROC de TC.
     match /contadores/{docId} {
       allow read: if logado() && (temPermissao('preliquidacao_ler') || temPermissao('preliquidacao_inserir') || temPermissao('acesso_admin'));
-      allow create, update: if logado() && (temPermissao('preliquidacao_inserir') || temPermissao('acesso_admin'));
+      allow create, update: if logado() && (
+        temPermissao('acesso_admin')
+        || temPermissao('preliquidacao_inserir')
+        || (docId == 'titulos_proc_global' && (temPermissao('titulos_inserir') || temPermissao('titulos_editar')))
+      );
       allow delete: if logado() && temPermissao('acesso_admin');
     }
 

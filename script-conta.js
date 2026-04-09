@@ -63,7 +63,6 @@
             var d = snap.exists ? snap.data() : {};
             var perfis = Array.isArray(d.perfis) ? d.perfis : (d.perfil ? [d.perfil] : []);
             var linhas = [
-                ['UID (Firebase)', escapeHTML(user.uid)],
                 ['E-mail (sessão)', escapeHTML(user.email || d.email || '—')],
                 ['Nome completo', escapeHTML(d.nomeCompleto || user.displayName || '—')],
                 ['Nome de guerra', escapeHTML(d.nomeGuerra || '—')],

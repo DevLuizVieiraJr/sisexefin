@@ -691,7 +691,6 @@ function ordenarTabela(modulo, coluna) {
     if (modulo === 'contratos') { paginaAtualContratos = 1; atualizarTabelaContratos(); }
     if (modulo === 'fornecedores' && typeof atualizarTabelaFornecedores === 'function') { paginaAtualFornecedores = 1; atualizarTabelaFornecedores(); }
     if (modulo === 'deducoesEncargos') { paginaAtualDeducoesEncargos = 1; atualizarTabelaDeducoesEncargos(); }
-    if (modulo === 'titulos') { paginaAtualTitulos = 1; atualizarTabelaTitulos(); }
     if (modulo === 'lfpf' && typeof atualizarTabelaLfPf === 'function') { window.paginaAtualLfPf = 1; atualizarTabelaLfPf(); }
     if (modulo === 'centrocustos' && typeof atualizarTabelaCentroCustos === 'function') { paginaAtualCentroCustos = 1; atualizarTabelaCentroCustos(); }
     if (modulo === 'ug' && typeof atualizarTabelaUG === 'function') { paginaAtualUG = 1; atualizarTabelaUG(); }
@@ -711,7 +710,7 @@ function aplicarOrdenacao(array, modulo) {
 }
 
 function inicializarSetasOrdenacao() {
-    ['empenhos', 'contratos', 'fornecedores', 'deducoesEncargos', 'titulos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
+    ['empenhos', 'contratos', 'fornecedores', 'deducoesEncargos', 'lfpf', 'centrocustos', 'ug'].forEach(modulo => {
         if (!estadoOrdenacao[modulo]) return;
         const col = estadoOrdenacao[modulo].coluna; 
         const iconEl = document.getElementById(`sort-${modulo}-${col}`);
@@ -747,7 +746,6 @@ function mostrarSecao(idSecao, botao) {
     if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos();
     if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores();
     if (typeof atualizarTabelaDeducoesEncargos === 'function') atualizarTabelaDeducoesEncargos();
-    if (typeof atualizarTabelaTitulos === 'function') atualizarTabelaTitulos();
     if (typeof atualizarTabelaLfPf === 'function') atualizarTabelaLfPf();
     if (typeof atualizarTabelaNp === 'function') atualizarTabelaNp();
     if (typeof atualizarTabelaCentroCustos === 'function') atualizarTabelaCentroCustos();
@@ -766,7 +764,6 @@ function escutarColecaoSecao(idSecao) {
         'secao-deducoes-encargos': ['deducoesEncargos'],
         'secao-contratos': ['contratos', 'deducoesEncargos'],
         'secao-fornecedores': ['fornecedores'],
-        'secao-titulos': ['titulos'],
         'secao-centrocustos': ['centroCustos'],
         'secao-ug': ['unidadesGestoras'],
         'secao-backup': ['empenhos', 'contratos', 'fornecedores', 'deducoesEncargos', 'titulos', 'lfpf', 'centroCustos', 'unidadesGestoras']
@@ -827,7 +824,7 @@ function escutarFirebase() {
 }
 
 // ==========================================
-// MÓDULOS (script-empenhos.js, script-contratos.js, script-deducoes-encargos.js, script-titulos.js)
+// MÓDULOS (script-empenhos.js, script-contratos.js, script-deducoes-encargos.js)
 // ==========================================
 // Funções atualizarTabela* são definidas pelos módulos. mostrarSecao chama-as.
 
@@ -855,7 +852,7 @@ function atualizarUltimoImportUI(data) {
 }
 window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 
-// Deduções e Encargos em script-deducoes-encargos.js; Títulos em script-titulos.js
+// Deduções e Encargos em script-deducoes-encargos.js.
 
 // 6. FUNÇÃO DE BACKUP GLOBAL (Implementada)
 function exportarBancoDeDados() {

@@ -1,6 +1,6 @@
 # Análise técnica – Painel de NE vinculada e navegação no TC
 
-Documento de apoio às regras em [Regras de Negócio - Aba Processamento.md](./Regras%20de%20Negócio%20-%20Aba%20Processamento.md).  
+Documento de apoio às regras em [Regras de Negócios - TC - Aba Processamento.md](./Regras%20de%20Negócios%20-%20TC%20-%20Aba%20Processamento.md).  
 Código de referência: `script-titulos-spa.js`, `titulos.html`.
 
 ---

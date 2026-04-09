@@ -246,6 +246,13 @@
         unsubscribers.push(db.collection('lfpf').onSnapshot(snap => {
             baseLfPf = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(r => r.ativo !== false);
             aoReceberSnapshot();
+            try {
+                const formTc = document.getElementById('tela-formulario-titulos');
+                if (formTc && formTc.style.display !== 'none') {
+                    desenharLiquidacao();
+                    desenharFinanceiro();
+                }
+            } catch (e) { /* ignore */ }
         }, onErr));
         unsubscribers.push(db.collection('deducoesEncargos').onSnapshot(snap => {
             baseDeducoesEncargos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => d.ativo !== false);
@@ -804,10 +811,16 @@
         atualizarTabelaTitulos();
     }));
 
-    function gerarNovoIDProc() {
-        const numeros = baseTitulos.map(t => parseInt((t.idProc || '0').split('-')[1]) || 0);
-        const max = numeros.length ? Math.max(...numeros) : 0;
-        return 'PROC-' + String(max + 1).padStart(3, '0');
+    async function gerarNovoIDProcGlobal() {
+        const seqRef = db.collection('contadores').doc('titulos_proc_global');
+        const proximoNumero = await db.runTransaction(async (tx) => {
+            const snap = await tx.get(seqRef);
+            const numeroPersistido = snap.exists ? (parseInt(snap.data().ultimoNumero, 10) || 0) : 0;
+            const next = numeroPersistido + 1;
+            tx.set(seqRef, { ultimoNumero: next, atualizadoEmMs: Date.now() }, { merge: true });
+            return next;
+        });
+        return 'PROC-' + String(proximoNumero).padStart(3, '0');
     }
 
     window.abrirFormularioTitulo = function() {
@@ -1039,6 +1052,9 @@
             const origReadonly = el.dataset.tcOrigReadonly === 'true';
             if (!habilitado) {
                 el.disabled = true;
+            } else if (el.getAttribute('data-tc-somente-leitura') === '1') {
+                el.disabled = true;
+                if ('readOnly' in el) el.readOnly = true;
             } else {
                 el.disabled = origDisabled;
                 if ('readOnly' in el) el.readOnly = origReadonly;
@@ -1057,6 +1073,10 @@
     }
 
     function atualizarBotoesEdicaoPorAba() {
+        if (abaEmEdicao === 3) {
+            abaEmEdicao = null;
+            alteracoesPendentesAba = false;
+        }
         const config = [
             { tab: 0, acao: 'acoesAbaDadosBasicos', editar: 'btnEditarAbaDadosBasicos', salvar: 'btnSalvarAbaDadosBasicos', desistir: 'btnDesistirAbaDadosBasicos' },
             { tab: 1, acao: 'acoesAbaProcessamento', editar: 'btnEditarAbaProcessamento', salvar: 'btnSalvarAbaProcessamento', desistir: 'btnDesistirAbaProcessamento' },
@@ -1072,6 +1092,11 @@
             const btnDesistir = document.getElementById(c.desistir);
             if (!acao || !btnEditar || !btnSalvar || !btnDesistir) return;
             const emEdicaoDestaAba = abaEmEdicao === c.tab;
+            // Aba Financeiro: LF/PF/OP somente leitura (RN); sem ciclo Editar/Salvar nesta aba.
+            if (c.tab === 3) {
+                acao.style.display = 'none';
+                return;
+            }
             const exibirAcoes = (salvo && podeEditar) || (!salvo && c.tab === 0);
             acao.style.display = exibirAcoes ? 'flex' : 'none';
             if (!exibirAcoes) return;
@@ -2148,7 +2173,7 @@
         const cnpjContrato = extrairCnpjDoContrato(contratoSel);
         const nomeFornecedorContrato = normalizarNome(contratoSel.nomeFornecedor || contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
 
-        // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "Outro").
+        // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "NF Genérica").
         const ndValido = (nd) => {
             const s = String(nd || '').trim();
             return s.length > 0 && /^\d+$/.test(s);
@@ -2161,8 +2186,8 @@
             if (tipoTC === 'NFE') return (ult2 === '30' || ult2 === '52');
             // NFS-e / FAT / BO
             if (tipoTC === 'NFSE' || tipoTC === 'FAT' || tipoTC === 'BO') return ult2 === '39';
-            // OUT: ignora filtro do ND, mas ainda exige ND válido (já checado).
-            if (tipoTC === 'OUT') return true;
+            // NFG: ignora filtro do ND, mas ainda exige ND válido (já checado).
+            if (tipoTC === 'NFG') return true;
             return false;
         };
 
@@ -2238,7 +2263,7 @@
     function obterSufixoNDPorTipoTC(tipoTC) {
         if (tipoTC === 'NFE') return '30 ou 52';
         if (tipoTC === 'NFSE' || tipoTC === 'FAT' || tipoTC === 'BO') return '39';
-        if (tipoTC === 'OUT') return 'numérico válido';
+        if (tipoTC === 'NFG') return 'numérico válido';
         return '--';
     }
     function atualizarAvisoFiltroBuscaNE() {
@@ -2439,60 +2464,40 @@
         if (!tbody) return;
         tbody.innerHTML = '';
         const lfAtivas = (baseLfPf || []).filter(r => r.ativo !== false);
-        const liquidacaoEditavel = podeEditarAba(2);
-        (empenhosDaNotaAtual || []).forEach((v, i) => {
+        (empenhosDaNotaAtual || []).forEach((v) => {
             const tr = document.createElement('tr');
             const ccLabel = labelCentroCustos(v.centroCustosId);
             const ugLabel = labelUG(v.ugId);
-            const opts = lfAtivas.map(r => {
-                const lfVal = r.lf || '';
-                const sel = (v.lf || '') === lfVal ? ' selected' : '';
-                return '<option value="' + escapeHTML(lfVal) + '"' + sel + '>' + escapeHTML(lfVal) + '</option>';
-            }).join('');
-            const selectLf = '<select data-index="' + i + '" data-field="lf" class="select-lf-liquidacao" ' + (liquidacaoEditavel ? '' : 'disabled') + '><option value="">Selecione LF...</option>' + opts + '</select>';
             const lfReg = lfAtivas.find(r => (r.lf || '') === (v.lf || ''));
-            const pfExib = lfReg && lfReg.pf ? escapeHTML(lfReg.pf) : (v.pf || '-');
+            const lfExib = (v.lf || '').trim() ? escapeHTML(v.lf) : '-';
+            const pfExib = lfReg && lfReg.pf ? escapeHTML(lfReg.pf) : escapeHTML((v.pf || '').trim() || '-');
             tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
                 '<td>' + escapeHTML(v.nd || '-') + '</td>' +
                 '<td>R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')) + '</td>' +
                 '<td>' + escapeHTML(ccLabel) + '</td>' +
                 '<td>' + escapeHTML(ugLabel) + '</td>' +
-                '<td>' + selectLf + '</td>' +
+                '<td class="lf-readonly">' + lfExib + '</td>' +
                 '<td class="pf-readonly">' + pfExib + '</td>';
             tbody.appendChild(tr);
         });
-        tbody.querySelectorAll('select[data-field="lf"]').forEach(sel => sel.addEventListener('change', function() {
-            if (!podeEditarAba(2)) return;
-            const idx = parseInt(this.getAttribute('data-index'));
-            if (empenhosDaNotaAtual[idx]) {
-                empenhosDaNotaAtual[idx].lf = this.value;
-                const lfReg = lfAtivas.find(r => (r.lf || '') === this.value);
-                empenhosDaNotaAtual[idx].pf = (lfReg && lfReg.pf) ? lfReg.pf : '';
-                desenharLiquidacao();
-                desenharResumoDeducoesLiquidacao();
-            }
-        }));
     }
 
     function desenharFinanceiro() {
         const tbody = document.getElementById('tbodyLFPF');
         if (!tbody) return;
         tbody.innerHTML = '';
-        const financeiroEditavel = podeEditarAba(3);
-        (empenhosDaNotaAtual || []).forEach((v, i) => {
+        const lfAtivas = (baseLfPf || []).filter(r => r.ativo !== false);
+        (empenhosDaNotaAtual || []).forEach((v) => {
             const tr = document.createElement('tr');
-            const lfExib = v.lf ? escapeHTML(v.lf) : '-';
+            const lfReg = lfAtivas.find(r => (r.lf || '') === (v.lf || ''));
+            const lfExib = (v.lf || '').trim() ? escapeHTML(v.lf) : '-';
+            const pfExib = lfReg && lfReg.pf ? escapeHTML(lfReg.pf) : escapeHTML((v.pf || '').trim() || '-');
             tr.innerHTML = '<td>' + (typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-')) + '</td>' +
                 '<td>R$ ' + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v.valorVinculado || 0) : (v.valorVinculado || '0')) + '</td>' +
                 '<td class="lf-readonly">' + lfExib + '</td>' +
-                '<td><input type="text" data-index="' + i + '" data-field="pf" value="' + escapeHTML(v.pf || '') + '" placeholder="PF" ' + (financeiroEditavel ? '' : 'disabled') + '></td>';
+                '<td class="pf-readonly">' + pfExib + '</td>';
             tbody.appendChild(tr);
         });
-        tbody.querySelectorAll('input[data-field="pf"]').forEach(inp => inp.addEventListener('change', function() {
-            if (!podeEditarAba(3)) return;
-            const idx = parseInt(this.getAttribute('data-index'));
-            if (empenhosDaNotaAtual[idx]) empenhosDaNotaAtual[idx].pf = this.value;
-        }));
     }
 
     function desenharAuditoria(titulo) {
@@ -2582,8 +2587,10 @@
         normalizarEmpenhosDaNotaAtualSubelemento();
 
         const anoTCVal = (document.getElementById('anoTC')?.value || '').trim() || String(new Date().getFullYear());
+        const idProcInformado = (document.getElementById('idProc').value || '').trim();
+        const idProcParaSalvar = idProcInformado || await gerarNovoIDProcGlobal();
         const dados = {
-            idProc: escapeHTML(document.getElementById('idProc').value || gerarNovoIDProc()),
+            idProc: escapeHTML(idProcParaSalvar),
             ano: escapeHTML(anoTCVal),
             ug: '741000',
             tipoTC: (document.getElementById('tipoTC')?.value || '').trim(),

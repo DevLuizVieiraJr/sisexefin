@@ -12,12 +12,6 @@
                 <p>Dashboard</p>
             </a>
         </li>
-        <li class="nav-item">
-            <a href="conta.html" class="nav-link" data-menu-ativo="conta" title="A minha conta — dados, tema e senha">
-                <i class="nav-icon fas fa-user-cog"></i>
-                <p>A minha conta</p>
-            </a>
-        </li>
         <li class="nav-item has-treeview" data-tree="controle">
             <a href="#" class="nav-link" data-toggle="tree" title="Controle Orçamentário" aria-expanded="false">
                 <i class="nav-icon fas fa-calculator"></i>
@@ -149,6 +143,12 @@
                     </a>
                 </li>
             </ul>
+        </li>
+        <li class="nav-item">
+            <a href="conta.html" class="nav-link" data-menu-ativo="conta" title="Minha conta — dados, tema e senha">
+                <i class="nav-icon fas fa-user-cog"></i>
+                <p>Minha conta</p>
+            </a>
         </li>
         <li class="nav-item" data-permission="acesso_admin">
             <a href="admin.html" class="nav-link nav-link--admin" data-menu-ativo="admin" title="Controle de Acesso">

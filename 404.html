@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin - Página não encontrada</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
+        <section class="card" style="max-width:720px;width:100%;text-align:center;">
+            <h1 style="margin-top:0;">404 - Página não encontrada</h1>
+            <p style="margin-bottom:12px;color:#444;">
+                O endereço informado não corresponde a uma rota válida do SisExeFin.
+            </p>
+            <p id="origemInvalida" style="margin-bottom:20px;color:#666;font-size:14px;"></p>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                <a href="dashboard.html" class="btn-primary" style="text-decoration:none;">Ir para Dashboard</a>
+                <a href="titulos.html" class="btn-default" style="text-decoration:none;">Ir para Títulos de Crédito</a>
+            </div>
+        </section>
+    </main>
+    <script>
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const origem = params.get('origem');
+            if (!origem) return;
+            const el = document.getElementById('origemInvalida');
+            if (el) el.textContent = 'Origem: ' + origem;
+        })();
+    </script>
+</body>
+</html>
