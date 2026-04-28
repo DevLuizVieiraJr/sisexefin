@@ -823,24 +823,6 @@
         return 'PROC-' + String(proximoNumero).padStart(3, '0');
     }
 
-    async function reservarNovoIDProcUnico(maxTentativas = 20) {
-        const seqRef = db.collection('contadores').doc('titulos_proc_global');
-        for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
-            const idProc = await db.runTransaction(async (tx) => {
-                const snap = await tx.get(seqRef);
-                const numeroPersistido = snap.exists ? (parseInt(snap.data().ultimoNumero, 10) || 0) : 0;
-                const next = numeroPersistido + 1;
-                const candidato = 'PROC-' + String(next).padStart(3, '0');
-                const tituloRef = db.collection('titulos').doc(candidato);
-                const tituloSnap = await tx.get(tituloRef);
-                tx.set(seqRef, { ultimoNumero: next, atualizadoEmMs: Date.now() }, { merge: true });
-                return tituloSnap.exists ? '' : candidato;
-            });
-            if (idProc) return idProc;
-        }
-        throw new Error('Não foi possível reservar um idProc único. Tente novamente.');
-    }
-
     window.abrirFormularioTitulo = function() {
         informacaoHistoricoPendente = '';
         document.getElementById('formTitulo')?.reset();
@@ -2606,7 +2588,7 @@
 
         const anoTCVal = (document.getElementById('anoTC')?.value || '').trim() || String(new Date().getFullYear());
         const idProcInformado = (document.getElementById('idProc').value || '').trim();
-        const idProcParaSalvar = idProcInformado || await reservarNovoIDProcUnico();
+        const idProcParaSalvar = idProcInformado || await gerarNovoIDProcGlobal();
         const dados = {
             idProc: escapeHTML(idProcParaSalvar),
             ano: escapeHTML(anoTCVal),
@@ -2743,9 +2725,8 @@
                 dadosSanitizados.historico = [histEntry];
                 dadosSanitizados.historicoStatus = [histEntry];
                 dadosSanitizados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
-                docId = dadosSanitizados.idProc;
-                if (!docId) throw new Error('idProc inválido para criação do TC.');
-                await db.collection('titulos').doc(docId).create(dadosSanitizados);
+                const ref = await db.collection('titulos').add(dadosSanitizados);
+                docId = ref.id;
             } else {
                 const doc = await db.collection('titulos').doc(fbID).get();
                 const hist = obterHistorico(doc.data() || {});
@@ -3545,152 +3526,6 @@
         return deducoes;
     }
 
-    function numeroDeIdProc(idProc) {
-        const m = String(idProc || '').trim().match(/^PROC-(\d+)$/i);
-        return m ? parseInt(m[1], 10) : 0;
-    }
-
-    function substituirIdProcEmHistorico(hist, idAntigo, idNovo) {
-        if (!Array.isArray(hist)) return hist;
-        return hist.map((item) => {
-            if (!item || typeof item !== 'object') return item;
-            const out = { ...item };
-            if (typeof out.info === 'string' && out.info.includes(idAntigo)) {
-                out.info = out.info.split(idAntigo).join(idNovo);
-            }
-            if (typeof out.motivo === 'string' && out.motivo.includes(idAntigo)) {
-                out.motivo = out.motivo.split(idAntigo).join(idNovo);
-            }
-            return out;
-        });
-    }
-
-    async function atualizarReferenciasIdProcEmColecao(nomeColecao, idAntigo, idNovo) {
-        const snap = await db.collection(nomeColecao).get();
-        if (snap.empty) return 0;
-        let alterados = 0;
-        const batch = db.batch();
-        snap.docs.forEach((docSnap) => {
-            const data = docSnap.data() || {};
-            let mudou = false;
-            const patch = {};
-            if (data.tituloIdProc === idAntigo) {
-                patch.tituloIdProc = idNovo;
-                mudou = true;
-            }
-            if (Array.isArray(data.deducoes)) {
-                const deducoesAtualizadas = data.deducoes.map((d) => {
-                    if (d && typeof d === 'object' && d.tituloIdProc === idAntigo) {
-                        return { ...d, tituloIdProc: idNovo };
-                    }
-                    return d;
-                });
-                const teveTroca = deducoesAtualizadas.some((d, idx) => d !== data.deducoes[idx]);
-                if (teveTroca) {
-                    patch.deducoes = deducoesAtualizadas;
-                    mudou = true;
-                }
-            }
-            if (Array.isArray(data.titulosVinculados)) {
-                const titulosVinculados = data.titulosVinculados.map((v) => (v === idAntigo ? idNovo : v));
-                const teveTroca = titulosVinculados.some((v, idx) => v !== data.titulosVinculados[idx]);
-                if (teveTroca) {
-                    patch.titulosVinculados = titulosVinculados;
-                    mudou = true;
-                }
-            }
-            if (mudou) {
-                batch.update(docSnap.ref, patch);
-                alterados++;
-            }
-        });
-        if (alterados > 0) await batch.commit();
-        return alterados;
-    }
-
-    async function garantirContadorProcAcimaDoMaiorExistente() {
-        const snap = await db.collection('titulos').get();
-        let maior = 0;
-        snap.docs.forEach((d) => {
-            const n = numeroDeIdProc((d.data() || {}).idProc);
-            if (n > maior) maior = n;
-        });
-        await db.collection('contadores').doc('titulos_proc_global').set(
-            { ultimoNumero: maior, atualizadoEmMs: Date.now() },
-            { merge: true }
-        );
-        return maior;
-    }
-
-    window.sanearDuplicidadeIdProcTitulos = async function() {
-        if (!confirm('Executar saneamento de idProc duplicado? Esta ação renumera TCs duplicados.')) return;
-        mostrarLoading();
-        try {
-            const snap = await db.collection('titulos').get();
-            const grupos = new Map();
-            snap.docs.forEach((docSnap) => {
-                const data = docSnap.data() || {};
-                const idProc = String(data.idProc || '').trim();
-                if (!idProc) return;
-                if (!grupos.has(idProc)) grupos.set(idProc, []);
-                grupos.get(idProc).push(docSnap);
-            });
-
-            const duplicados = Array.from(grupos.entries()).filter(([, docs]) => docs.length > 1);
-            if (duplicados.length === 0) {
-                const maior = await garantirContadorProcAcimaDoMaiorExistente();
-                alert(`Saneamento concluído: nenhum duplicado encontrado. Contador ajustado para PROC-${String(maior).padStart(3, '0')}.`);
-                return;
-            }
-
-            let totalRenumerados = 0;
-            let refsAtualizadas = 0;
-            for (const [idProcDuplicado, docs] of duplicados) {
-                const ordenados = docs.slice().sort((a, b) => {
-                    const aMs = (a.data()?.criado_em?.toMillis?.() || 0);
-                    const bMs = (b.data()?.criado_em?.toMillis?.() || 0);
-                    if (aMs !== bMs) return aMs - bMs;
-                    return a.id.localeCompare(b.id);
-                });
-                const manter = ordenados[0];
-                const renumerar = ordenados.slice(1);
-
-                for (const docSnap of renumerar) {
-                    const idNovo = await reservarNovoIDProcUnico();
-                    const dados = docSnap.data() || {};
-                    const hist = substituirIdProcEmHistorico(dados.historico, idProcDuplicado, idNovo);
-                    const histStatus = substituirIdProcEmHistorico(dados.historicoStatus, idProcDuplicado, idNovo);
-                    const novoPayload = normalizarParaFirestore({
-                        ...dados,
-                        idProc: idNovo,
-                        historico: hist,
-                        historicoStatus: histStatus,
-                        editado_em: firebase.firestore.FieldValue.serverTimestamp(),
-                        editado_por: usuarioLogadoEmail || ''
-                    });
-
-                    if (docSnap.id === idProcDuplicado && manter.id !== idProcDuplicado) {
-                        await db.collection('titulos').doc(idNovo).create(novoPayload);
-                        await db.collection('titulos').doc(docSnap.id).delete();
-                    } else {
-                        await db.collection('titulos').doc(docSnap.id).update(novoPayload);
-                    }
-
-                    refsAtualizadas += await atualizarReferenciasIdProcEmColecao('preLiquidacoes', idProcDuplicado, idNovo);
-                    refsAtualizadas += await atualizarReferenciasIdProcEmColecao('np', idProcDuplicado, idNovo);
-                    totalRenumerados++;
-                }
-            }
-
-            const maior = await garantirContadorProcAcimaDoMaiorExistente();
-            alert(`Saneamento concluído. Duplicidades tratadas: ${duplicados.length}. TCs renumerados: ${totalRenumerados}. Referências atualizadas: ${refsAtualizadas}. Contador final: PROC-${String(maior).padStart(3, '0')}.`);
-        } catch (err) {
-            alert('Erro no saneamento de idProc: ' + (err.message || err));
-        } finally {
-            esconderLoading();
-        }
-    };
-
     function montarAtualizacaoTC(row) {
         // Aceita legado: coluna "fornecedor" no formato "CNPJ - Nome"
         const fornecedorTexto = valorTexto(row, ['fornecedor', 'FORNECEDOR']);
@@ -3779,13 +3614,6 @@
             const wb = XLSX.read(data, { type: 'array' });
             const sh = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(sh, { defval: '' });
-            const contagemBasePorIdProc = new Map();
-            baseTitulos.forEach((t) => {
-                const idProc = String(t.idProc || '').trim();
-                if (!idProc) return;
-                contagemBasePorIdProc.set(idProc, (contagemBasePorIdProc.get(idProc) || 0) + 1);
-            });
-            const vistosNoArquivo = new Set();
             let atualizados = 0;
             const rejeitadas = [];
             for (let i = 0; i < rows.length; i++) {
@@ -3793,16 +3621,6 @@
                 const parsed = montarAtualizacaoTC(row);
                 if (parsed.erro) {
                     rejeitadas.push(`Linha ${i + 2}: ${parsed.erro}`);
-                    continue;
-                }
-                if (vistosNoArquivo.has(parsed.idProc)) {
-                    rejeitadas.push(`Linha ${i + 2}: idProc ${parsed.idProc} duplicado no arquivo de importação.`);
-                    continue;
-                }
-                vistosNoArquivo.add(parsed.idProc);
-                const ocorrenciasBase = contagemBasePorIdProc.get(parsed.idProc) || 0;
-                if (ocorrenciasBase > 1) {
-                    rejeitadas.push(`Linha ${i + 2}: idProc ${parsed.idProc} possui duplicidade na base. Execute o saneamento antes de importar.`);
                     continue;
                 }
                 const tc = baseTitulos.find(t => String(t.idProc || '').trim() === parsed.idProc);
