@@ -3309,7 +3309,9 @@
             tabela(
                 ['Nota de Empenho', 'Nat. de Despesa', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
                 empenhos.map(v => [
-                    v.numEmpenho || '-',
+                    (typeof formatarNumEmpenhoVisivel === 'function'
+                        ? formatarNumEmpenhoVisivel(v.numEmpenho)
+                        : (v.numEmpenho || '-')),
                     v.nd || '-',
                     v.subelemento || '-',
                     moeda(v.valorVinculado || 0),

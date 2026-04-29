@@ -23,6 +23,8 @@
     }
     window.abrirFormularioCentroCustos = abrirFormularioCentroCustos;
 
+    var CABECALHOS_CENTRO_CUSTOS = ['Código', 'Aplicação', 'Descrição'];
+
     function voltarParaListaCentroCustos() {
         document.getElementById('tela-formulario-centrocustos').style.display = 'none';
         document.getElementById('tela-lista-centrocustos').style.display = 'block';
@@ -151,6 +153,36 @@
         } catch (err) { alert('Erro ao guardar.'); }
         finally { esconderLoading(); }
     });
+
+    window.exportarCentroCustos = function(formato) {
+        if (typeof XLSX === 'undefined') return alert('Biblioteca XLSX não carregada.');
+        try {
+            var base = (baseCentroCustos || []).filter(function(c) { return c.ativo !== false; });
+            var dados;
+            if (base.length === 0) {
+                dados = [CABECALHOS_CENTRO_CUSTOS.reduce(function(acc, chave) {
+                    acc[chave] = '';
+                    return acc;
+                }, {})];
+            } else {
+                dados = base.map(function(c) {
+                    return {
+                        'Código': c.codigo || '',
+                        'Aplicação': c.aplicacao || '',
+                        'Descrição': c.descricao || ''
+                    };
+                });
+            }
+
+            var ws = XLSX.utils.json_to_sheet(dados);
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'CentroCustos');
+            var nomeArquivo = base.length === 0 ? 'centro_custos_modelo' : 'centro_custos';
+            XLSX.writeFile(wb, nomeArquivo + '.' + (formato === 'csv' ? 'csv' : 'xlsx'));
+        } catch (err) {
+            alert('Erro ao exportar Centro de Custos.');
+        }
+    };
 
     window.atualizarTabelaCentroCustos = atualizarTabelaCentroCustos;
 })();

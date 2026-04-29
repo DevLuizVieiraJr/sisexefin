@@ -450,6 +450,76 @@
         });
     }
 
+    // --- IMPORT CENTRO DE CUSTOS (chave única: codigo) ---
+    const fileImportCentroCustos = document.getElementById('fileImportCentroCustos');
+    if (fileImportCentroCustos) {
+        fileImportCentroCustos.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!verificarAdmin()) { e.target.value = ''; return; }
+            mostrarLoading();
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
+            try {
+                const data = await readFileAsArrayBuffer(file);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+                const baseCC = typeof baseCentroCustos !== 'undefined' ? baseCentroCustos : [];
+                const mapCentroCustosPorCodigo = {};
+
+                baseCC.forEach(function(item) {
+                    var codigoBase = String(item.codigo || '').trim().toLowerCase();
+                    if (codigoBase && item.id) mapCentroCustosPorCodigo[codigoBase] = item.id;
+                });
+
+                var inseridos = 0, atualizados = 0, erros = 0;
+                for (var i = 0; i < rows.length; i++) {
+                    if (importAbort.aborted) break;
+                    var row = rows[i];
+                    var rowNorm = {};
+                    Object.keys(row).forEach(function(k) {
+                        rowNorm[(k.replace(/^\ufeff/, '') || k).trim()] = row[k];
+                    });
+
+                    var codigo = getVal(rowNorm, ['Código', 'Codigo', 'codigo', 'CODIGO']);
+                    if (!codigo) { erros++; continue; }
+
+                    var aplicacao = getVal(rowNorm, ['Aplicação', 'Aplicacao', 'aplicacao', 'APLICACAO']);
+                    var descricao = getVal(rowNorm, ['Descrição', 'Descricao', 'descricao', 'DESCRICAO']);
+                    var codigoNorm = String(codigo).trim().toLowerCase();
+                    var dados = {
+                        codigo: escapeHTML(String(codigo).trim()),
+                        aplicacao: escapeHTML(aplicacao),
+                        descricao: escapeHTML(descricao),
+                        ativo: true
+                    };
+
+                    var docId = mapCentroCustosPorCodigo[codigoNorm];
+                    if (docId) {
+                        await db.collection('centroCustos').doc(docId).update(dados);
+                        atualizados++;
+                    } else {
+                        var refCC = await db.collection('centroCustos').add(dados);
+                        mapCentroCustosPorCodigo[codigoNorm] = refCC.id;
+                        inseridos++;
+                    }
+                }
+
+                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                await salvarUltimoImport('centroCustos');
+            } catch (err) {
+                alert('Erro ao tentar carregar dados.');
+            } finally {
+                esconderLoading();
+                e.target.value = '';
+            }
+        });
+    }
+
     // --- IMPORT LF/PF (Liquidação Financeira): se LF não existe insere; se existe atualiza apenas Situação, PF, Última Atualização
     const fileImportLfPf = document.getElementById('fileImportLfPf');
     if (fileImportLfPf) {

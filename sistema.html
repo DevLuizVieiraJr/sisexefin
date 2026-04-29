@@ -808,6 +808,19 @@
                         <h2>Centro de Custos</h2>
                         <button onclick="abrirFormularioCentroCustos(false)" class="btn-primary" data-permission="centrocustos_inserir">+ Adicionar Centro de Custos</button>
                     </div>
+                    <div class="toolbar">
+                        <div class="import-group">
+                            <span data-permission="centrocustos_inserir">
+                                <button type="button" class="btn-outline" onclick="document.getElementById('fileImportCentroCustos').click()" title="Selecionar arquivo CSV ou Excel para importar">📤 Importar CSV</button>
+                                <input type="file" id="fileImportCentroCustos" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;">
+                            </span>
+                            <span id="ultimoImportCentroCustos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
+                        </div>
+                        <div class="export-group">
+                            <button onclick="exportarCentroCustos('csv')" class="btn-outline">CSV</button>
+                            <button onclick="exportarCentroCustos('xlsx')" class="btn-outline">Excel</button>
+                        </div>
+                    </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPaginaCentroCustos" onchange="mudarTamanhoPaginaCentroCustos()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
                         <div class="search-box"><input type="text" id="buscaTabelaCentroCustos" placeholder="Pesquisar código, aplicação ou descrição..."></div>
@@ -846,7 +859,7 @@
                             <div class="form-group flex-2"><label>Descrição:</label><input type="text" id="centrocustosDescricao" maxlength="200"></div>
                         </div>
                         <div class="form-row" style="margin-top:15px;">
-                            <button type="submit" class="btn-primary">Salvar</button>
+                            <button type="submit" class="btn-primary" data-permission="centrocustos_editar">Salvar</button>
                             <button type="button" id="btnCancelarCentroCustos" onclick="voltarParaListaCentroCustos()" class="btn-default">Cancelar</button>
                         </div>
                     </form>

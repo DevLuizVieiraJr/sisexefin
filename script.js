@@ -828,7 +828,7 @@ function escutarFirebase() {
 // ==========================================
 // Funções atualizarTabela* são definidas pelos módulos. mostrarSecao chama-as.
 
-/** Atualiza os spans de "Último upload" nas telas de importação (LF, NE, Contratos). */
+/** Atualiza os spans de "Último upload" nas telas de importação. */
 function atualizarUltimoImportUI(data) {
     if (!data || typeof data !== 'object') return;
     function formatarData(ts) {
@@ -843,12 +843,14 @@ function atualizarUltimoImportUI(data) {
     const elFornecedores = document.getElementById('ultimoImportFornecedores');
     const elNp = document.getElementById('ultimoImportNp');
     const elDedEnc = document.getElementById('ultimoImportDeducoesEncargos');
+    const elCentroCustos = document.getElementById('ultimoImportCentroCustos');
     if (elLf && data.lfpf) elLf.textContent = 'Último upload: ' + formatarData(data.lfpf);
     if (elNe && data.empenhos) elNe.textContent = 'Último upload: ' + formatarData(data.empenhos);
     if (elContratos && data.contratos) elContratos.textContent = 'Último upload: ' + formatarData(data.contratos);
     if (elFornecedores && data.fornecedores) elFornecedores.textContent = 'Último upload: ' + formatarData(data.fornecedores);
     if (elNp && data.np) elNp.textContent = 'Último upload: ' + formatarData(data.np);
     if (elDedEnc && data.deducoesEncargos) elDedEnc.textContent = 'Último upload: ' + formatarData(data.deducoesEncargos);
+    if (elCentroCustos && data.centroCustos) elCentroCustos.textContent = 'Último upload: ' + formatarData(data.centroCustos);
 }
 window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 
