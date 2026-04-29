@@ -581,7 +581,15 @@
                         <button onclick="abrirFormularioEmpenho(false)" class="btn-primary" data-permission="empenhos_inserir">+ Adicionar Empenho</button>
                     </div>
                     <div class="toolbar">
-                        <div class="import-group"><span data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv"></span><span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span></div>
+                        <div class="import-group">
+                            <span data-permission="acesso_admin" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <label>Importar Excel/CSV:</label>
+                                <input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv">
+                                <button type="button" id="btnImportarEmpenhos" class="btn-primary btn-small" disabled>Importar</button>
+                                <span id="statusImportEmpenhos" style="font-size:12px; color:#666;" aria-live="polite">Selecione e valide um arquivo.</span>
+                            </span>
+                            <span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
+                        </div>
                         <div class="export-group"><button onclick="exportarEmpenhos('csv')" class="btn-outline">CSV</button><button onclick="exportarEmpenhos('xlsx')" class="btn-outline">Excel</button></div>
                     </div>
                     <div class="controles-tabela">
