@@ -654,6 +654,8 @@ if (formUsuarioAdmin) {
 // ==========================================
 let baseEmpenhos = []; let baseContratos = []; let baseFornecedores = []; let baseDeducoesEncargos = []; let baseTitulos = []; let baseLfPf = []; let baseNp = [];
 let baseCentroCustos = []; let baseUnidadesGestoras = [];
+window.__suspenderAtualizacaoEmpenhos = window.__suspenderAtualizacaoEmpenhos === true;
+window.__empenhosRefreshPendente = false;
 let paginaAtualEmpenhos = 1; let itensPorPaginaEmpenhos = 10; let termoBuscaEmpenhos = "";
 let paginaAtualContratos = 1; let itensPorPaginaContratos = 10; let termoBuscaContratos = "";
 let paginaAtualFornecedores = 1; let itensPorPaginaFornecedores = 10; let termoBuscaFornecedores = "";
@@ -784,7 +786,15 @@ function escutarColecaoSecao(idSecao) {
     const onError = () => { esconderLoading(); esconderBarraLoading(); };
 
     const handlers = {
-        empenhos: snap => { baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaEmpenhos === 'function') atualizarTabelaEmpenhos(); aoCarregar(); },
+        empenhos: snap => {
+            baseEmpenhos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (window.__suspenderAtualizacaoEmpenhos) {
+                window.__empenhosRefreshPendente = true;
+            } else if (typeof atualizarTabelaEmpenhos === 'function') {
+                atualizarTabelaEmpenhos();
+            }
+            aoCarregar();
+        },
         contratos: snap => { baseContratos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaContratos === 'function') atualizarTabelaContratos(); aoCarregar(); },
         fornecedores: snap => { baseFornecedores = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaFornecedores === 'function') atualizarTabelaFornecedores(); aoCarregar(); },
         deducoesEncargos: snap => { baseDeducoesEncargos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (typeof atualizarTabelaDeducoesEncargos === 'function') atualizarTabelaDeducoesEncargos(); aoCarregar(); },
