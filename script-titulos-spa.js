@@ -280,31 +280,11 @@
     function popularSelectOI() { /* OI agora é autocomplete; mantido para compatibilidade */ }
 
     function popularSelectCentroCustos() {
-        const sel = document.getElementById('vinculoCentroCustos');
-        if (!sel) return;
-        const val = sel.value;
-        sel.innerHTML = '<option value="">Selecione...</option>';
-        (listaCentroCustos || []).forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.textContent = (c.codigo || '-') + ' - ' + (c.descricao || c.aplicacao || '-');
-            sel.appendChild(opt);
-        });
-        if (val) sel.value = val;
+        sincronizarCampoBuscaCentroCustos();
     }
 
     function popularSelectUG() {
-        const sel = document.getElementById('vinculoUG');
-        if (!sel) return;
-        const val = sel.value;
-        sel.innerHTML = '<option value="">Selecione...</option>';
-        (listaUG || []).forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u.id;
-            opt.textContent = (u.codigo || '-') + ' - ' + (u.nome || '-');
-            sel.appendChild(opt);
-        });
-        if (val) sel.value = val;
+        sincronizarCampoBuscaUG();
     }
 
     function removerAcentos(str) {
@@ -355,7 +335,7 @@
             String(e.processo || '').trim(),
             String(e.tipoNE || '').trim(),
             String(e.contrato || '').trim(),
-            String(e.cnpj || '').trim()
+            String(e.cnpjCpf || e.cnpj_cpf || e.cnpj || '').trim()
         ];
     }
 
@@ -1242,6 +1222,151 @@
         return u ? (u.codigo || '-') + ' - ' + (u.nome || '') : id;
     }
 
+    function limparSugestoesAutocomplete(idLista) {
+        const lista = document.getElementById(idLista);
+        if (lista) lista.innerHTML = '';
+    }
+
+    function sincronizarCampoBuscaCentroCustos() {
+        const hidden = document.getElementById('vinculoCentroCustos');
+        const input = document.getElementById('vinculoCentroCustosBusca');
+        if (!hidden || !input) return;
+        const idAtual = String(hidden.value || '').trim();
+        input.value = idAtual ? labelCentroCustos(idAtual) : '';
+    }
+
+    function sincronizarCampoBuscaUG() {
+        const hidden = document.getElementById('vinculoUG');
+        const input = document.getElementById('vinculoUGBusca');
+        if (!hidden || !input) return;
+        const idAtual = String(hidden.value || '').trim();
+        input.value = idAtual ? labelUG(idAtual) : '';
+    }
+
+    function selecionarCentroCustosVinculo(item) {
+        const hidden = document.getElementById('vinculoCentroCustos');
+        const input = document.getElementById('vinculoCentroCustosBusca');
+        if (!hidden || !input || !item) return;
+        hidden.value = item.id || '';
+        input.value = labelCentroCustos(item.id || '');
+        limparSugestoesAutocomplete('listaResultadosCentroCustosT');
+    }
+
+    function selecionarUGVinculo(item) {
+        const hidden = document.getElementById('vinculoUG');
+        const input = document.getElementById('vinculoUGBusca');
+        if (!hidden || !input || !item) return;
+        hidden.value = item.id || '';
+        input.value = labelUG(item.id || '');
+        limparSugestoesAutocomplete('listaResultadosUGT');
+    }
+
+    function renderizarSugestoesVinculo(listaId, itens, onSelect, mensagemVazio) {
+        const lista = document.getElementById(listaId);
+        if (!lista) return;
+        lista.innerHTML = '';
+        if (!itens.length) {
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">' + mensagemVazio + '</li>';
+            return;
+        }
+        itens.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item.label || '-';
+            li.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                onSelect(item.raw);
+            });
+            lista.appendChild(li);
+        });
+    }
+
+    function mostrarSugestoesCentroCustosVinculo() {
+        const input = document.getElementById('vinculoCentroCustosBusca');
+        const lista = document.getElementById('listaResultadosCentroCustosT');
+        if (!input || !lista || input.readOnly) return;
+
+        const termo = removerAcentos(String(input.value || '').toLowerCase()).trim();
+        lista.innerHTML = '';
+        if (termo.length < 3) {
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres.</li>';
+            return;
+        }
+
+        const itens = (listaCentroCustos || [])
+            .map(c => ({
+                raw: c,
+                label: (c.codigo || '-') + ' - ' + (c.descricao || c.aplicacao || '-'),
+                busca: removerAcentos(((c.codigo || '') + ' ' + (c.descricao || c.aplicacao || '')).toLowerCase())
+            }))
+            .filter(c => c.busca.includes(termo))
+            .slice(0, 20);
+
+        renderizarSugestoesVinculo('listaResultadosCentroCustosT', itens, selecionarCentroCustosVinculo, 'Nenhum Centro de Custos encontrado.');
+    }
+
+    function mostrarSugestoesUGVinculo() {
+        const input = document.getElementById('vinculoUGBusca');
+        const lista = document.getElementById('listaResultadosUGT');
+        if (!input || !lista || input.readOnly) return;
+
+        const termo = removerAcentos(String(input.value || '').toLowerCase()).trim();
+        lista.innerHTML = '';
+        if (termo.length < 3) {
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres.</li>';
+            return;
+        }
+
+        const itens = (listaUG || [])
+            .map(u => ({
+                raw: u,
+                label: (u.codigo || '-') + ' - ' + (u.nome || '-'),
+                busca: removerAcentos(((u.codigo || '') + ' ' + (u.nome || '')).toLowerCase())
+            }))
+            .filter(u => u.busca.includes(termo))
+            .slice(0, 20);
+
+        renderizarSugestoesVinculo('listaResultadosUGT', itens, selecionarUGVinculo, 'Nenhuma UG encontrada.');
+    }
+
+    function configurarAutocompleteCentroCustosEUG() {
+        const ccInput = document.getElementById('vinculoCentroCustosBusca');
+        const ugInput = document.getElementById('vinculoUGBusca');
+        if (ccInput && ccInput.dataset.autocompleteBound !== '1') {
+            ccInput.dataset.autocompleteBound = '1';
+            ccInput.addEventListener('input', debounce(() => {
+                const hidden = document.getElementById('vinculoCentroCustos');
+                if (hidden) hidden.value = '';
+                mostrarSugestoesCentroCustosVinculo();
+            }, 350));
+            ccInput.addEventListener('focus', () => { if ((ccInput.value || '').trim().length >= 3) mostrarSugestoesCentroCustosVinculo(); });
+            ccInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    const hidden = document.getElementById('vinculoCentroCustos');
+                    if (hidden && !hidden.value) ccInput.value = '';
+                    limparSugestoesAutocomplete('listaResultadosCentroCustosT');
+                }, 200);
+            });
+        }
+        if (ugInput && ugInput.dataset.autocompleteBound !== '1') {
+            ugInput.dataset.autocompleteBound = '1';
+            ugInput.addEventListener('input', debounce(() => {
+                const hidden = document.getElementById('vinculoUG');
+                if (hidden) hidden.value = '';
+                mostrarSugestoesUGVinculo();
+            }, 350));
+            ugInput.addEventListener('focus', () => { if ((ugInput.value || '').trim().length >= 3) mostrarSugestoesUGVinculo(); });
+            ugInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    const hidden = document.getElementById('vinculoUG');
+                    if (hidden && !hidden.value) ugInput.value = '';
+                    limparSugestoesAutocomplete('listaResultadosUGT');
+                }, 200);
+            });
+        }
+        sincronizarCampoBuscaCentroCustos();
+        sincronizarCampoBuscaUG();
+    }
+
     function desenharEmpenhosNota() {
         const tbody = document.getElementById('tbodyEmpenhosNota');
         if (!tbody) return;
@@ -1670,8 +1795,10 @@
         if (val) val.value = '';
         const cc = document.getElementById('vinculoCentroCustos');
         if (cc) cc.value = '';
+        sincronizarCampoBuscaCentroCustos();
         const ug = document.getElementById('vinculoUG');
         if (ug) ug.value = '';
+        sincronizarCampoBuscaUG();
         atualizarBotaoAdicionarEmpenhoNaNota();
         atualizarBloqueioBotoesPrincipais();
     }
@@ -1721,9 +1848,11 @@
 
         const cc = document.getElementById('vinculoCentroCustos');
         if (cc) cc.value = v.centroCustosId || '';
+        sincronizarCampoBuscaCentroCustos();
 
         const ug = document.getElementById('vinculoUG');
         if (ug) ug.value = v.ugId || '';
+        sincronizarCampoBuscaUG();
 
         podeCancelarUltimaInclusaoEmpenhoNota = false;
         const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
@@ -2199,7 +2328,7 @@
 
         const resultados = (baseEmpenhos || [])
             .filter(e => {
-                const cnpjNE = normalizarCNPJ(e.cnpj || '');
+                const cnpjNE = normalizarCNPJ(e.cnpjCpf || e.cnpj_cpf || e.cnpj || '');
                 const nomeFavorecido = normalizarNome(e.favorecido || '');
                 // Preferência: casar por CNPJ quando disponível; fallback: nome do favorecido.
                 if (cnpjContrato && cnpjNE) {
@@ -2245,8 +2374,10 @@
                 document.getElementById('vinculoValor').value = '';
                 const cc = document.getElementById('vinculoCentroCustos');
                 if (cc) cc.value = '';
+                sincronizarCampoBuscaCentroCustos();
                 const ug = document.getElementById('vinculoUG');
                 if (ug) ug.value = '';
+                sincronizarCampoBuscaUG();
                 // Em modo de seleção/novo item: desfaz qualquer edição anterior e esconde "cancelar inclusão".
                 indiceEmpenhoEditando = null;
                 podeCancelarUltimaInclusaoEmpenhoNota = false;
@@ -3852,6 +3983,7 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarAutocompleteEmpenho();
+        configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();
         configurarAutocompleteOIGenerico('buscaOIDestino', 'listaResultadosOIDestino', 'oiDestinoId', 'limparOIDestinoBtn');
         configurarAutocompleteOIGenerico('novaEntradaOI', 'listaResultadosNovaEntradaOI', 'novaEntradaOIId', 'limparNovaEntradaOIBtn');
@@ -3866,6 +3998,7 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarAutocompleteEmpenho();
+        configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();
     }
 })();

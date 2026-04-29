@@ -365,8 +365,14 @@
                     if (neBase && e && e.id) mapEmpenhosPorNumero[neBase] = e.id;
                 });
                 let inseridos = 0, atualizados = 0, erros = 0;
+                let processados = 0;
                 for (const row of rows) {
                     if (importAbort.aborted) break;
+                    processados++;
+                    // Evita "script lento" em navegadores quando a planilha é grande.
+                    if (processados % 25 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
                     var rowNorm = {};
                     Object.keys(row).forEach(function(k) {
                         var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
@@ -374,7 +380,7 @@
                     });
                     // Aceita cabeçalhos em maiúsculas/minúsculas e variações comuns
                     // Ex.: modelo do usuário pode vir com "ne" e "data" (minúsculos)
-                    var numEmpenho = getVal(rowNorm, ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho']);
+                    var numEmpenho = getVal(rowNorm, ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE']);
                     if (!numEmpenho) { erros++; continue; }
                     if (modoCompleto) {
                         const completo = completarNumEmpenho(numEmpenho);
@@ -385,10 +391,26 @@
                     if (docIdExistente) {
                         var updateData = {};
                         var subitemImport = getVal(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento']);
-                        var descricaoImport = getVal(rowNorm, ['OBS', 'descricao', 'Descricao', 'obs']);
+                        var descricaoImport = getVal(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']);
+                        var observacoesImport = getVal(rowNorm, ['OBS', 'obs', 'observacoes', 'Observacoes', 'OBSERVACOES']);
+                        var cnpjCpfImport = getVal(rowNorm, ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF']);
+                        var pjPfImport = getVal(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf', 'pjpf']);
+                        var ugeImport = getVal(rowNorm, ['UGE', 'uge', 'ugEmitente', 'UGEMITENTE']);
                         // Campos vazios no CSV não sobrescrevem valores existentes.
                         if (String(subitemImport || '').trim() !== '') updateData.subitem = escapeHTML(String(subitemImport).trim());
                         if (String(descricaoImport || '').trim() !== '') updateData.descricao = escapeHTML(String(descricaoImport).trim());
+                        if (String(observacoesImport || '').trim() !== '') updateData.observacoes = escapeHTML(String(observacoesImport).trim());
+                        if (String(cnpjCpfImport || '').trim() !== '') {
+                            const cnpjCpfEsc = escapeHTML(String(cnpjCpfImport).trim());
+                            updateData.cnpjCpf = cnpjCpfEsc;
+                            updateData.cnpj = cnpjCpfEsc; // espelho legado
+                        }
+                        if (String(pjPfImport || '').trim() !== '') updateData.pjPf = escapeHTML(String(pjPfImport).trim());
+                        if (String(ugeImport || '').trim() !== '') {
+                            const ugeEsc = escapeHTML(String(ugeImport).trim());
+                            updateData.uge = ugeEsc;
+                            updateData.ugEmitente = ugeEsc; // espelho semântico
+                        }
                         if (Object.keys(updateData).length > 0) {
                             await db.collection('empenhos').doc(docIdExistente).update(updateData);
                             atualizados++;
@@ -397,8 +419,13 @@
                     }
                     // Valor pode vir como "9138,72" ou "1.234,56" ou "R$ 1.234,56"
                     var valorRaw = getVal(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']);
+                    const cnpjCpfImport = getVal(rowNorm, ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF']);
+                    const observacoesImport = getVal(rowNorm, ['OBS', 'obs', 'observacoes', 'Observacoes', 'OBSERVACOES']);
+                    const descricaoImport = getVal(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']) || observacoesImport;
+                    const ugeImport = getVal(rowNorm, ['UGE', 'uge', 'ugEmitente', 'UGEMITENTE']);
                     var dados = {
                         numEmpenho: escapeHTML(numEmpenho),
+                        numNE: escapeHTML(numEmpenho), // espelho para layout novo
                         dataEmissao: escapeHTML(getVal(rowNorm, ['DATA', 'data', 'Data', 'dataEmissao', 'DataEmissao'])),
                         valorGlobal: parseValorMonetarioBR(valorRaw),
                         nd: escapeHTML(getVal(rowNorm, ['ND', 'nd'])),
@@ -411,7 +438,8 @@
                         cap: escapeHTML(getVal(rowNorm, ['CAP', 'cap'])),
                         altcred: escapeHTML(getVal(rowNorm, ['ALTCRED', 'altcred', 'Altcred'])),
                         meio: escapeHTML(getVal(rowNorm, ['MEIO', 'meio', 'Meio'])),
-                        descricao: escapeHTML(getVal(rowNorm, ['OBS', 'descricao', 'Descricao', 'obs'])),
+                        descricao: escapeHTML(descricaoImport),
+                        observacoes: escapeHTML(observacoesImport),
                         pi: escapeHTML(getVal(rowNorm, ['PI', 'pi'])),
                         tipoNE: escapeHTML(getVal(rowNorm, ['TIPO NE', 'tipoNE', 'TipoNE', 'tipo ne'])),
                         numModal: escapeHTML(getVal(rowNorm, ['NUM MODAL', 'numModal', 'NumModal', 'num modal'])),
@@ -420,11 +448,14 @@
                         inciso: escapeHTML(getVal(rowNorm, ['INCISO', 'inciso', 'Inciso'])),
                         lei: escapeHTML(getVal(rowNorm, ['LEI', 'lei', 'Lei'])),
                         processo: escapeHTML(getVal(rowNorm, ['PROCESSO', 'processo', 'Processo'])),
-                        cnpj: escapeHTML(getVal(rowNorm, ['CNPJ', 'cnpj', 'cpf', 'cpfcnpj', 'cnpjcpf', 'cpf_cnpj', 'cnpj_cpf'])),
+                        cnpjCpf: escapeHTML(cnpjCpfImport),
+                        cnpj: escapeHTML(cnpjCpfImport), // espelho legado
                         favorecido: escapeHTML(getVal(rowNorm, ['FAVORECIDO', 'favorecido', 'Favorecido'])),
                         pjPf: escapeHTML(getVal(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf'])),
                         gerencia: escapeHTML(getVal(rowNorm, ['GERÊNCIA', 'GERENCIA', 'gerencia', 'Gerencia'])),
-                        projeto: escapeHTML(getVal(rowNorm, ['PROJETO', 'projeto', 'Projeto']))
+                        projeto: escapeHTML(getVal(rowNorm, ['PROJETO', 'projeto', 'Projeto'])),
+                        uge: escapeHTML(ugeImport),
+                        ugEmitente: escapeHTML(ugeImport)
                     };
                     if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosEmpenho === 'function') {
                         window.sisAnoDocumento.aplicarAnosEmpenho(dados);
@@ -445,7 +476,10 @@
                 }
                 alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
                 await salvarUltimoImport('empenhos');
-            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            } catch (err) {
+                console.error('Falha na importação de empenhos:', err);
+                alert('Erro ao tentar carregar dados: ' + (err && err.message ? err.message : err));
+            }
             finally { esconderLoading(); e.target.value = ''; }
         });
     }

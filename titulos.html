@@ -287,8 +287,18 @@
                                     <div class="form-group flex-1"><label>Valor utilizado (R$):</label><input type="text" id="vinculoValor" inputmode="numeric" placeholder="0,01" data-moeda title="Mín. R$ 0,01 e máx. o valor do TC"></div>
                                 </div>
                                 <div class="form-row">
-                                    <div class="form-group flex-1"><label>Centro de Custos:</label><select id="vinculoCentroCustos"><option value="">Selecione...</option></select></div>
-                                    <div class="form-group flex-1"><label>UG Beneficiária:</label><select id="vinculoUG"><option value="">Selecione...</option></select></div>
+                                    <div class="form-group flex-1" style="position: relative;">
+                                        <label>Centro de Custos:</label>
+                                        <input type="text" id="vinculoCentroCustosBusca" placeholder="Digite código ou descrição..." autocomplete="off">
+                                        <ul id="listaResultadosCentroCustosT" class="autocomplete-list"></ul>
+                                        <input type="hidden" id="vinculoCentroCustos">
+                                    </div>
+                                    <div class="form-group flex-1" style="position: relative;">
+                                        <label>UG Beneficiária:</label>
+                                        <input type="text" id="vinculoUGBusca" placeholder="Digite código ou descrição..." autocomplete="off">
+                                        <ul id="listaResultadosUGT" class="autocomplete-list"></ul>
+                                        <input type="hidden" id="vinculoUG">
+                                    </div>
                                 </div>
                                 <div style="display:flex; gap:8px; align-items:center;">
                                     <button type="button" id="btnAcaoEmpenhoNota" onclick="adicionarEmpenhoNaNota()" class="btn-primary">Adicionar</button>

@@ -127,13 +127,14 @@
         document.getElementById('subitemEmpenho').value = e.subitem || '';
         document.getElementById('ptresEmpenho').value = e.ptres || '';
         document.getElementById('frEmpenho').value = e.fr || '';
+        document.getElementById('ugeEmpenho').value = e.uge || e.ugEmitente || '';
         document.getElementById('numModalEmpenho').value = e.numModal || '';
         document.getElementById('descModalEmpenho').value = e.descModal || '';
         document.getElementById('codAmpEmpenho').value = e.codAmp || '';
         document.getElementById('incisoEmpenho').value = e.inciso || '';
         document.getElementById('leiEmpenho').value = e.lei || '';
         document.getElementById('processoEmpenho').value = e.processo || '';
-        document.getElementById('cnpjEmpenho').value = e.cnpj || '';
+        document.getElementById('cnpjEmpenho').value = e.cnpjCpf || e.cnpj || '';
         document.getElementById('favorecidoEmpenho').value = e.favorecido || '';
         document.getElementById('pjPfEmpenho').value = e.pjPf || '';
         document.getElementById('telefoneEmpenho').value = e.telefone || '';
@@ -317,6 +318,7 @@
 
         const dados = {
             numEmpenho: escapeHTML(numEmpenhoSalvavel),
+            numNE: escapeHTML(numEmpenhoSalvavel), // espelho para layout novo
             dataEmissao: escapeHTML(document.getElementById('dataEmpenho').value),
             valorGlobal: typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorEmpenho').value) : (parseFloat(document.getElementById('valorEmpenho').value) || 0),
             ativo: true,
@@ -324,6 +326,8 @@
             subitem: escapeHTML(document.getElementById('subitemEmpenho').value),
             ptres: escapeHTML(document.getElementById('ptresEmpenho').value),
             fr: escapeHTML(document.getElementById('frEmpenho').value),
+            uge: escapeHTML(document.getElementById('ugeEmpenho')?.value || ''),
+            ugEmitente: escapeHTML(document.getElementById('ugeEmpenho')?.value || ''), // espelho semântico
             docOrig: escapeHTML(document.getElementById('docOrigEmpenho').value),
             oi: escapeHTML(document.getElementById('oiEmpenho').value),
             contrato: escapeHTML(document.getElementById('contratoEmpenho').value),
@@ -339,7 +343,8 @@
             inciso: escapeHTML(document.getElementById('incisoEmpenho')?.value || ''),
             lei: escapeHTML(document.getElementById('leiEmpenho')?.value || ''),
             processo: escapeHTML(document.getElementById('processoEmpenho')?.value || ''),
-            cnpj: escapeHTML(document.getElementById('cnpjEmpenho')?.value || ''),
+            cnpjCpf: escapeHTML(document.getElementById('cnpjEmpenho')?.value || ''),
+            cnpj: escapeHTML(document.getElementById('cnpjEmpenho')?.value || ''), // espelho legado
             favorecido: escapeHTML(document.getElementById('favorecidoEmpenho')?.value || ''),
             pjPf: escapeHTML(document.getElementById('pjPfEmpenho')?.value || ''),
             telefone: escapeHTML(document.getElementById('telefoneEmpenho')?.value || ''),
