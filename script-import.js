@@ -442,14 +442,14 @@
                     if (docIdExistente) {
                         var updateData = {};
                         var subitemImport = valorPorAliases(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento']);
-                        var descricaoImport = valorPorAliases(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']);
+                        var descricaoImportUpd = valorPorAliases(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']);
                         var observacoesImport = valorPorAliases(rowNorm, ['OBS', 'obs', 'observacoes', 'Observacoes', 'OBSERVACOES']);
                         var cnpjCpfImport = valorPorAliases(rowNorm, ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF']);
                         var pjPfImport = valorPorAliases(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf', 'pjpf']);
                         var ugeImport = valorPorAliases(rowNorm, ['UGE', 'uge', 'ugEmitente', 'UGEMITENTE']);
                         // Campos vazios no CSV não sobrescrevem valores existentes.
                         if (String(subitemImport || '').trim() !== '') updateData.subitem = escapeHTML(String(subitemImport).trim());
-                        if (String(descricaoImport || '').trim() !== '') updateData.descricao = escapeHTML(String(descricaoImport).trim());
+                        if (String(descricaoImportUpd || '').trim() !== '') updateData.descricao = escapeHTML(String(descricaoImportUpd).trim());
                         if (String(observacoesImport || '').trim() !== '') updateData.observacoes = escapeHTML(String(observacoesImport).trim());
                         if (String(cnpjCpfImport || '').trim() !== '') {
                             const cnpjCpfEsc = escapeHTML(String(cnpjCpfImport).trim());

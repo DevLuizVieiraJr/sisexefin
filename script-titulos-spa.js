@@ -43,6 +43,10 @@
     let filtroAnoTitulosListenerOk = false;
     let estadoOrdenacao = { coluna: 'idProc', direcao: 'asc' };
     let unsubscribeTitulos = null;
+    let estadoAutocompleteVinculo = {
+        listaResultadosCentroCustosT: { itens: [], activeIndex: -1 },
+        listaResultadosUGT: { itens: [], activeIndex: -1 }
+    };
 
     window.baseTitulos = function() { return baseTitulos; };
 
@@ -690,8 +694,9 @@
         tbody.querySelectorAll('.btn-encaminhar-liquidacao-titulo').forEach(btn => btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-id');
             const destino = 'Em Liquidação';
+            const titulo = baseTitulos.find(x => x.id === id);
             modalEncaminharStatusPromessa({
-                texto: 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica se há NEs vinculadas com subelemento, valores e UG/Centro de custos válidos.'
+                texto: montarResumoPreEncaminhamentoLiquidacao(titulo)
             }).then(async (sim) => {
                 if (!sim) return;
                 mostrarLoading();
@@ -916,6 +921,19 @@
         return { ok: false, mensagem: 'Destino de tramitação não reconhecido.' };
     }
 
+    function montarResumoPreEncaminhamentoLiquidacao(tc) {
+        const emps = Array.isArray(tc?.empenhosVinculados) ? tc.empenhosVinculados : [];
+        const total = emps.length;
+        const pendencias = emps.filter(v => {
+            const sub = String(v?.subelemento || '').trim();
+            const val = Number(v?.valorVinculado || 0);
+            const semCC = !String(v?.centroCustosId || '').trim();
+            const semUG = !String(v?.ugId || '').trim();
+            return !/^\d{2}$/.test(sub) || val < 0.01 || semCC || semUG;
+        }).length;
+        return `Deseja enviar este título para "Em Liquidação"? NE vinculadas: ${total}. Pendências detectadas: ${pendencias}. Ao confirmar, o sistema valida subelemento, valores, Centro de Custos e UG.`;
+    }
+
     function configurarModalEncaminharStatus() {
         const overlay = document.getElementById('modalEncaminharStatus');
         const btnC = document.getElementById('modalEncaminharStatusCancelar');
@@ -944,6 +962,57 @@
         if (p) p.textContent = texto;
         return new Promise((resolve) => {
             configurarModalEncaminharStatus._resolve = resolve;
+            overlay.style.display = 'flex';
+        });
+    }
+
+    function modalExcluirVinculoEmpenhoPromessa(vinculo) {
+        const overlay = document.getElementById('modalExcluirVinculoEmpenho');
+        const btnCancelar = document.getElementById('btnModalExcluirVinculoEmpenhoCancelar');
+        const btnConfirmar = document.getElementById('btnModalExcluirVinculoEmpenhoConfirmar');
+        const resumo = document.getElementById('modalExcluirVinculoEmpenhoResumo');
+        if (!overlay || !btnCancelar || !btnConfirmar || !resumo) return Promise.resolve(false);
+        if (overlay.dataset.bound !== '1') {
+            overlay.dataset.bound = '1';
+            const fechar = (res) => {
+                overlay.style.display = 'none';
+                const fn = modalExcluirVinculoEmpenhoPromessa._resolve;
+                modalExcluirVinculoEmpenhoPromessa._resolve = null;
+                if (typeof fn === 'function') fn(res);
+            };
+            btnCancelar.addEventListener('click', () => fechar(false));
+            btnConfirmar.addEventListener('click', () => fechar(true));
+        }
+        resumo.innerHTML = [
+            '<div><strong>NE:</strong> ' + escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(vinculo?.numEmpenho) : (vinculo?.numEmpenho || '-')) + '</div>',
+            '<div><strong>Valor:</strong> R$ ' + escapeHTML(typeof formatarMoedaBR === 'function' ? formatarMoedaBR(vinculo?.valorVinculado || 0) : String(vinculo?.valorVinculado || 0)) + '</div>',
+            '<div><strong>Centro de Custos:</strong> ' + escapeHTML(labelCentroCustos(vinculo?.centroCustosId)) + '</div>',
+            '<div><strong>UG Beneficiária:</strong> ' + escapeHTML(labelUG(vinculo?.ugId)) + '</div>'
+        ].join('');
+        return new Promise((resolve) => {
+            modalExcluirVinculoEmpenhoPromessa._resolve = resolve;
+            overlay.style.display = 'flex';
+        });
+    }
+
+    function modalTrocaEdicaoEmpenhoPromessa() {
+        const overlay = document.getElementById('modalTrocaEdicaoEmpenho');
+        const btnContinuar = document.getElementById('btnModalTrocaEdicaoEmpenhoContinuar');
+        const btnDescartar = document.getElementById('btnModalTrocaEdicaoEmpenhoDescartar');
+        if (!overlay || !btnContinuar || !btnDescartar) return Promise.resolve(true);
+        if (overlay.dataset.bound !== '1') {
+            overlay.dataset.bound = '1';
+            const fechar = (res) => {
+                overlay.style.display = 'none';
+                const fn = modalTrocaEdicaoEmpenhoPromessa._resolve;
+                modalTrocaEdicaoEmpenhoPromessa._resolve = null;
+                if (typeof fn === 'function') fn(res);
+            };
+            btnContinuar.addEventListener('click', () => fechar(false));
+            btnDescartar.addEventListener('click', () => fechar(true));
+        }
+        return new Promise((resolve) => {
+            modalTrocaEdicaoEmpenhoPromessa._resolve = resolve;
             overlay.style.display = 'flex';
         });
     }
@@ -1225,6 +1294,91 @@
     function limparSugestoesAutocomplete(idLista) {
         const lista = document.getElementById(idLista);
         if (lista) lista.innerHTML = '';
+        if (estadoAutocompleteVinculo[idLista]) {
+            estadoAutocompleteVinculo[idLista].activeIndex = -1;
+            estadoAutocompleteVinculo[idLista].itens = [];
+        }
+    }
+
+    function atualizarResumoSelecaoVinculo() {
+        const wrap = document.getElementById('resumoSelecaoVinculo');
+        const ccTxt = document.getElementById('resumoCentroCustosSelecionado');
+        const ugTxt = document.getElementById('resumoUGSelecionada');
+        const ccId = (document.getElementById('vinculoCentroCustos')?.value || '').trim();
+        const ugId = (document.getElementById('vinculoUG')?.value || '').trim();
+        if (ccTxt) ccTxt.textContent = 'CC selecionado: ' + (ccId ? labelCentroCustos(ccId) : '-');
+        if (ugTxt) ugTxt.textContent = 'UG selecionada: ' + (ugId ? labelUG(ugId) : '-');
+        if (wrap) wrap.style.display = (ccId || ugId) ? 'block' : 'none';
+    }
+
+    function limparErroVinculoEmpenho() {
+        const box = document.getElementById('mensagemErroVinculoEmpenho');
+        if (!box) return;
+        box.style.display = 'none';
+        box.textContent = '';
+    }
+
+    function exibirErroVinculoEmpenho(mensagem, campoId) {
+        const box = document.getElementById('mensagemErroVinculoEmpenho');
+        if (box) {
+            box.textContent = mensagem;
+            box.style.display = 'block';
+        }
+        if (campoId) {
+            const el = document.getElementById(campoId);
+            if (el && typeof el.focus === 'function') el.focus();
+        }
+    }
+
+    function escaparRegex(texto) {
+        return String(texto || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function destacarTrecho(texto, termo) {
+        const base = String(texto || '');
+        const t = String(termo || '').trim();
+        if (!t) return escapeHTML(base);
+        try {
+            const re = new RegExp('(' + escaparRegex(t) + ')', 'ig');
+            return escapeHTML(base).replace(re, '<strong>$1</strong>');
+        } catch (_) {
+            return escapeHTML(base);
+        }
+    }
+
+    function atualizarSelecaoVisualLista(listaId) {
+        const lista = document.getElementById(listaId);
+        const estado = estadoAutocompleteVinculo[listaId];
+        if (!lista || !estado) return;
+        lista.querySelectorAll('li[data-opcao="1"]').forEach((li, idx) => {
+            li.style.background = idx === estado.activeIndex ? '#e8f4f8' : '';
+        });
+    }
+
+    function navegarSugestoesVinculo(evt, listaId, onSelect) {
+        const estado = estadoAutocompleteVinculo[listaId];
+        if (!estado || !Array.isArray(estado.itens) || estado.itens.length === 0) return;
+        if (evt.key === 'ArrowDown') {
+            evt.preventDefault();
+            estado.activeIndex = Math.min(estado.activeIndex + 1, estado.itens.length - 1);
+            atualizarSelecaoVisualLista(listaId);
+            return;
+        }
+        if (evt.key === 'ArrowUp') {
+            evt.preventDefault();
+            estado.activeIndex = Math.max(estado.activeIndex - 1, 0);
+            atualizarSelecaoVisualLista(listaId);
+            return;
+        }
+        if (evt.key === 'Enter' && estado.activeIndex >= 0) {
+            evt.preventDefault();
+            const item = estado.itens[estado.activeIndex];
+            if (item) onSelect(item.raw);
+            return;
+        }
+        if (evt.key === 'Escape') {
+            limparSugestoesAutocomplete(listaId);
+        }
     }
 
     function sincronizarCampoBuscaCentroCustos() {
@@ -1233,6 +1387,7 @@
         if (!hidden || !input) return;
         const idAtual = String(hidden.value || '').trim();
         input.value = idAtual ? labelCentroCustos(idAtual) : '';
+        atualizarResumoSelecaoVinculo();
     }
 
     function sincronizarCampoBuscaUG() {
@@ -1241,6 +1396,7 @@
         if (!hidden || !input) return;
         const idAtual = String(hidden.value || '').trim();
         input.value = idAtual ? labelUG(idAtual) : '';
+        atualizarResumoSelecaoVinculo();
     }
 
     function selecionarCentroCustosVinculo(item) {
@@ -1250,6 +1406,8 @@
         hidden.value = item.id || '';
         input.value = labelCentroCustos(item.id || '');
         limparSugestoesAutocomplete('listaResultadosCentroCustosT');
+        limparErroVinculoEmpenho();
+        atualizarResumoSelecaoVinculo();
     }
 
     function selecionarUGVinculo(item) {
@@ -1259,25 +1417,42 @@
         hidden.value = item.id || '';
         input.value = labelUG(item.id || '');
         limparSugestoesAutocomplete('listaResultadosUGT');
+        limparErroVinculoEmpenho();
+        atualizarResumoSelecaoVinculo();
     }
 
-    function renderizarSugestoesVinculo(listaId, itens, onSelect, mensagemVazio) {
+    function renderizarSugestoesVinculo(listaId, itens, onSelect, mensagemVazio, termo, totalResultados) {
         const lista = document.getElementById(listaId);
         if (!lista) return;
+        const estado = estadoAutocompleteVinculo[listaId];
+        if (estado) {
+            estado.itens = itens.slice();
+            estado.activeIndex = -1;
+        }
         lista.innerHTML = '';
+        const info = document.createElement('li');
+        info.style.padding = '8px 10px';
+        info.style.color = '#666';
+        info.style.fontSize = '11px';
+        info.textContent = totalResultados > itens.length
+            ? `Mostrando ${itens.length} de ${totalResultados} resultados. Refine para filtrar mais.`
+            : `${itens.length} resultado(s).`;
+        if (itens.length) lista.appendChild(info);
         if (!itens.length) {
             lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">' + mensagemVazio + '</li>';
             return;
         }
         itens.forEach(item => {
             const li = document.createElement('li');
-            li.textContent = item.label || '-';
+            li.setAttribute('data-opcao', '1');
+            li.innerHTML = destacarTrecho(item.label || '-', termo);
             li.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 onSelect(item.raw);
             });
             lista.appendChild(li);
         });
+        atualizarSelecaoVisualLista(listaId);
     }
 
     function mostrarSugestoesCentroCustosVinculo() {
@@ -1288,20 +1463,20 @@
         const termo = removerAcentos(String(input.value || '').toLowerCase()).trim();
         lista.innerHTML = '';
         if (termo.length < 3) {
-            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres.</li>';
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres. Dica: busque primeiro pelo código.</li>';
             return;
         }
 
-        const itens = (listaCentroCustos || [])
+        const filtrados = (listaCentroCustos || [])
             .map(c => ({
                 raw: c,
                 label: (c.codigo || '-') + ' - ' + (c.descricao || c.aplicacao || '-'),
                 busca: removerAcentos(((c.codigo || '') + ' ' + (c.descricao || c.aplicacao || '')).toLowerCase())
             }))
-            .filter(c => c.busca.includes(termo))
-            .slice(0, 20);
+            .filter(c => c.busca.includes(termo));
+        const itens = filtrados.slice(0, 20);
 
-        renderizarSugestoesVinculo('listaResultadosCentroCustosT', itens, selecionarCentroCustosVinculo, 'Nenhum Centro de Custos encontrado.');
+        renderizarSugestoesVinculo('listaResultadosCentroCustosT', itens, selecionarCentroCustosVinculo, 'Nenhum Centro de Custos encontrado. Tente código parcial.', termo, filtrados.length);
     }
 
     function mostrarSugestoesUGVinculo() {
@@ -1312,20 +1487,20 @@
         const termo = removerAcentos(String(input.value || '').toLowerCase()).trim();
         lista.innerHTML = '';
         if (termo.length < 3) {
-            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres.</li>';
+            lista.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Digite ao menos 3 caracteres. Dica: busque primeiro pelo código.</li>';
             return;
         }
 
-        const itens = (listaUG || [])
+        const filtrados = (listaUG || [])
             .map(u => ({
                 raw: u,
                 label: (u.codigo || '-') + ' - ' + (u.nome || '-'),
                 busca: removerAcentos(((u.codigo || '') + ' ' + (u.nome || '')).toLowerCase())
             }))
-            .filter(u => u.busca.includes(termo))
-            .slice(0, 20);
+            .filter(u => u.busca.includes(termo));
+        const itens = filtrados.slice(0, 20);
 
-        renderizarSugestoesVinculo('listaResultadosUGT', itens, selecionarUGVinculo, 'Nenhuma UG encontrada.');
+        renderizarSugestoesVinculo('listaResultadosUGT', itens, selecionarUGVinculo, 'Nenhuma UG encontrada. Tente código parcial.', termo, filtrados.length);
     }
 
     function configurarAutocompleteCentroCustosEUG() {
@@ -1338,6 +1513,7 @@
                 if (hidden) hidden.value = '';
                 mostrarSugestoesCentroCustosVinculo();
             }, 350));
+            ccInput.addEventListener('keydown', (evt) => navegarSugestoesVinculo(evt, 'listaResultadosCentroCustosT', selecionarCentroCustosVinculo));
             ccInput.addEventListener('focus', () => { if ((ccInput.value || '').trim().length >= 3) mostrarSugestoesCentroCustosVinculo(); });
             ccInput.addEventListener('blur', () => {
                 setTimeout(() => {
@@ -1354,6 +1530,7 @@
                 if (hidden) hidden.value = '';
                 mostrarSugestoesUGVinculo();
             }, 350));
+            ugInput.addEventListener('keydown', (evt) => navegarSugestoesVinculo(evt, 'listaResultadosUGT', selecionarUGVinculo));
             ugInput.addEventListener('focus', () => { if ((ugInput.value || '').trim().length >= 3) mostrarSugestoesUGVinculo(); });
             ugInput.addEventListener('blur', () => {
                 setTimeout(() => {
@@ -1367,6 +1544,32 @@
         sincronizarCampoBuscaUG();
     }
 
+    function obterMotivoBloqueioEdicaoProcessamento() {
+        if (!tcSalvo()) return '';
+        if (!usuarioPodeEditarTC()) return 'Perfil sem permissão para editar vínculos ou TC em status não editável.';
+        if (abaEmEdicao !== 1) return 'Clique em "Editar Processamento" para alterar vínculos.';
+        if (salvandoApenasAba) return 'Aguarde o término da operação em andamento.';
+        return '';
+    }
+
+    function existeEdicaoEmpenhoPendente() {
+        const idx = indiceEmpenhoEditando;
+        if (idx === null || idx === undefined) return false;
+        const atual = empenhosDaNotaAtual[idx];
+        if (!atual) return false;
+        const valorInput = document.getElementById('vinculoValor')?.value || '';
+        const valorNum = typeof valorMoedaParaNumero === 'function'
+            ? valorMoedaParaNumero(valorInput)
+            : (parseFloat(String(valorInput).replace(/\./g, '').replace(',', '.')) || 0);
+        const ccId = (document.getElementById('vinculoCentroCustos')?.value || '').trim();
+        const ugId = (document.getElementById('vinculoUG')?.value || '').trim();
+        return (
+            Number(atual.valorVinculado || 0) !== Number(valorNum || 0) ||
+            String(atual.centroCustosId || '').trim() !== ccId ||
+            String(atual.ugId || '').trim() !== ugId
+        );
+    }
+
     function desenharEmpenhosNota() {
         const tbody = document.getElementById('tbodyEmpenhosNota');
         if (!tbody) return;
@@ -1374,6 +1577,7 @@
         empenhosDaNotaAtual.forEach((v, i) => {
             const tr = document.createElement('tr');
             const processamentoEditavel = podeEditarAba(1);
+            const motivoBloqueio = processamentoEditavel ? '' : obterMotivoBloqueioEdicaoProcessamento();
             tr.innerHTML = `<td title="NE: ${escapeHTML(v.numEmpenho || '')} | PTRES: ${escapeHTML(v.ptres || '-')} | FR: ${escapeHTML(v.fr || '-')}">${escapeHTML(typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(v.numEmpenho) : (v.numEmpenho || '-'))}</td>
                 <td>${escapeHTML(v.nd || '-')}</td>
                 <td>${escapeHTML(v.subelemento || '-')}</td>
@@ -1381,22 +1585,35 @@
                 <td title="${escapeHTML(labelCentroCustos(v.centroCustosId))}">${escapeHTML((labelCentroCustos(v.centroCustosId) || '-').substring(0, 25))}${(labelCentroCustos(v.centroCustosId) || '').length > 25 ? '...' : ''}</td>
                 <td title="${escapeHTML(labelUG(v.ugId))}">${escapeHTML((labelUG(v.ugId) || '-').substring(0, 25))}${(labelUG(v.ugId) || '').length > 25 ? '...' : ''}</td>
                 <td>
-                    <button type="button" class="btn-icon btn-editar-ne" data-index="${i}" title="Editar" ${processamentoEditavel ? '' : 'disabled'}>✏️</button>
-                    <button type="button" class="btn-icon btn-rm-ne" data-index="${i}" title="Remover" ${processamentoEditavel ? '' : 'disabled'}>🗑️</button>
+                    <button type="button" class="btn-icon btn-editar-ne ${processamentoEditavel ? '' : 'tc-btn-bloqueado'}" aria-label="Editar vínculo de NE" data-index="${i}" title="${escapeHTML(processamentoEditavel ? 'Editar vínculo' : motivoBloqueio)}" ${processamentoEditavel ? '' : 'disabled'}>✏️</button>
+                    <button type="button" class="btn-icon btn-rm-ne ${processamentoEditavel ? '' : 'tc-btn-bloqueado'}" aria-label="Excluir vínculo de NE" data-index="${i}" title="${escapeHTML(processamentoEditavel ? 'Excluir vínculo' : motivoBloqueio)}" ${processamentoEditavel ? '' : 'disabled'}>🗑️</button>
                 </td>`;
             tbody.appendChild(tr);
         });
 
-        tbody.querySelectorAll('.btn-editar-ne').forEach(btn => btn.addEventListener('click', function() {
+        tbody.querySelectorAll('.btn-editar-ne').forEach(btn => btn.addEventListener('click', async function() {
             if (!podeEditarAba(1)) return;
+            if (existeEdicaoEmpenhoPendente()) {
+                const descartar = await modalTrocaEdicaoEmpenhoPromessa();
+                if (!descartar) return;
+            }
             editarItemEmpenhoNaNota(parseInt(this.getAttribute('data-index'), 10));
         }));
-        tbody.querySelectorAll('.btn-rm-ne').forEach(btn => btn.addEventListener('click', function() {
+        tbody.querySelectorAll('.btn-rm-ne').forEach(btn => btn.addEventListener('click', async function() {
             if (!podeEditarAba(1)) return;
-            empenhosDaNotaAtual.splice(parseInt(this.getAttribute('data-index'), 10), 1);
+            const idx = parseInt(this.getAttribute('data-index'), 10);
+            const item = empenhosDaNotaAtual[idx] || {};
+            if (String(item.lf || '').trim() || String(item.pf || '').trim()) {
+                exibirErroVinculoEmpenho('Não é possível excluir este vínculo porque já possui LF/PF associado. Remova o vínculo financeiro antes de excluir a NE.', 'vinculoValor');
+                return;
+            }
+            const confirmado = await modalExcluirVinculoEmpenhoPromessa(item);
+            if (!confirmado) return;
+            empenhosDaNotaAtual.splice(idx, 1);
             podeCancelarUltimaInclusaoEmpenhoNota = false;
             const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
             if (btnUndo) btnUndo.style.display = 'none';
+            limparErroVinculoEmpenho();
             desenharEmpenhosNota();
             atualizarTotaisEmpenhosNota();
         }));
@@ -1799,6 +2016,8 @@
         const ug = document.getElementById('vinculoUG');
         if (ug) ug.value = '';
         sincronizarCampoBuscaUG();
+        atualizarResumoSelecaoVinculo();
+        limparErroVinculoEmpenho();
         atualizarBotaoAdicionarEmpenhoNaNota();
         atualizarBloqueioBotoesPrincipais();
     }
@@ -1853,6 +2072,7 @@
         const ug = document.getElementById('vinculoUG');
         if (ug) ug.value = v.ugId || '';
         sincronizarCampoBuscaUG();
+        limparErroVinculoEmpenho();
 
         podeCancelarUltimaInclusaoEmpenhoNota = false;
         const btnUndo = document.getElementById('btnCancelarUltimaInclusaoEmpenhoNota');
@@ -2361,8 +2581,12 @@
                 'PTRES: ' + escapeHTML(e.ptres || '-') + ' | ' +
                 'FR: ' + escapeHTML(e.fr || '-');
 
-            li.addEventListener('mousedown', (ev) => {
+            li.addEventListener('mousedown', async (ev) => {
                 ev.preventDefault();
+                if (existeEdicaoEmpenhoPendente()) {
+                    const descartar = await modalTrocaEdicaoEmpenhoPromessa();
+                    if (!descartar) return;
+                }
                 empenhoTemporarioSelecionado = e;
                 document.getElementById('detalhesVinculoEmpenho').style.display = 'block';
                 document.getElementById('empenhoSelecionadoTexto').textContent =
@@ -2378,6 +2602,7 @@
                 const ug = document.getElementById('vinculoUG');
                 if (ug) ug.value = '';
                 sincronizarCampoBuscaUG();
+                limparErroVinculoEmpenho();
                 // Em modo de seleção/novo item: desfaz qualquer edição anterior e esconde "cancelar inclusão".
                 indiceEmpenhoEditando = null;
                 podeCancelarUltimaInclusaoEmpenhoNota = false;
@@ -2428,20 +2653,21 @@
     }
 
     window.adicionarEmpenhoNaNota = function() {
+        limparErroVinculoEmpenho();
         const editando = (indiceEmpenhoEditando !== null && indiceEmpenhoEditando !== undefined);
         const nd = (document.getElementById('vinculoND')?.value || '').trim();
         const subelemento = (document.getElementById('vinculoSubelemento')?.value || '').trim();
         const valorInput = document.getElementById('vinculoValor')?.value;
         const centroCustosId = (document.getElementById('vinculoCentroCustos')?.value || '').trim();
         const ugId = (document.getElementById('vinculoUG')?.value || '').trim();
-        if (!/^\d{2}$/.test(subelemento)) return alert("Subelemento deve ter exatamente 2 dígitos numéricos.");
-        if (!valorInput) return alert("Informe o valor utilizado.");
+        if (!/^\d{2}$/.test(subelemento)) return exibirErroVinculoEmpenho("Subelemento deve ter exatamente 2 dígitos numéricos.", 'vinculoSubelemento');
+        if (!valorInput) return exibirErroVinculoEmpenho("Informe o valor utilizado.", 'vinculoValor');
         const valorNum = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(valorInput) : (parseFloat(String(valorInput).replace(/\./g,'').replace(',','.')) || 0);
-        if (valorNum < 0.01) return alert("Valor utilizado deve ser no mínimo R$ 0,01.");
+        if (valorNum < 0.01) return exibirErroVinculoEmpenho("Valor utilizado deve ser no mínimo R$ 0,01.", 'vinculoValor');
         const valorTC = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorNotaFiscal')?.value) : (parseFloat(document.getElementById('valorNotaFiscal')?.value) || 0);
-        if (valorTC > 0 && valorNum > valorTC) return alert("Valor utilizado não pode ser maior que o valor do TC (R$ " + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorTC) : valorTC.toFixed(2)) + ").");
-        if (!centroCustosId) return alert("Selecione o Centro de Custos.");
-        if (!ugId) return alert("Selecione a UG Beneficiária.");
+        if (valorTC > 0 && valorNum > valorTC) return exibirErroVinculoEmpenho("Valor utilizado não pode ser maior que o valor do TC (R$ " + (typeof formatarMoedaBR === 'function' ? formatarMoedaBR(valorTC) : valorTC.toFixed(2)) + ").", 'vinculoValor');
+        if (!centroCustosId) return exibirErroVinculoEmpenho("Selecione o Centro de Custos.", 'vinculoCentroCustosBusca');
+        if (!ugId) return exibirErroVinculoEmpenho("Selecione a UG Beneficiária.", 'vinculoUGBusca');
 
         // Modo edição: atualiza o item existente (valor, centro de custos, UG).
         if (editando) {
@@ -2461,9 +2687,9 @@
             return;
         }
 
-        if (!empenhoTemporarioSelecionado) return alert("Selecione uma NE na busca.");
+        if (!empenhoTemporarioSelecionado) return exibirErroVinculoEmpenho("Selecione uma NE na busca.", 'buscaEmpenhoT');
         const numEmp = (empenhoTemporarioSelecionado.numEmpenho || empenhoTemporarioSelecionado.numNE || '').trim();
-        if (!numEmp) return alert("NE inválida. Selecione novamente pela busca.");
+        if (!numEmp) return exibirErroVinculoEmpenho("NE inválida. Selecione novamente pela busca.", 'buscaEmpenhoT');
         empenhosDaNotaAtual.push({
             numEmpenho: numEmp,
             ptres: empenhoTemporarioSelecionado.ptres || '',
@@ -2779,7 +3005,7 @@
                 novoStatus = 'Rascunho';
             } else if (statusAtual === 'Em Processamento') {
                 const sim = await modalEncaminharStatusPromessa({
-                    texto: 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica as NEs vinculadas (subelemento, valores, centro de custos e UG).'
+                    texto: montarResumoPreEncaminhamentoLiquidacao({ empenhosVinculados: empenhosDaNotaAtual })
                 });
                 if (sim) {
                     const vEmp = validarPreRequisitosEncaminharTC({ empenhosVinculados: empenhosDaNotaAtual }, 'Em Liquidação');
@@ -2958,7 +3184,7 @@
         const statusAtual = t?.status || 'Rascunho';
         const destino = statusAtual === 'Em Processamento' ? 'Em Liquidação' : 'Em Processamento';
         const texto = destino === 'Em Liquidação'
-            ? 'Deseja enviar este título para "Em Liquidação"? Ao confirmar, o sistema verifica as NEs vinculadas (subelemento, valores, centro de custos e UG).'
+            ? montarResumoPreEncaminhamentoLiquidacao(t)
             : 'Deseja enviar este título para "Em Processamento"? Ao confirmar, o sistema verifica os dados básicos e a OI de origem.';
         const sim = await modalEncaminharStatusPromessa({ texto });
         if (!sim) return;
