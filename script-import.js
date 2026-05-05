@@ -82,64 +82,29 @@
             }
             mostrarLoading();
             try {
-                const data = await readFileAsArrayBuffer(file);
-                const wb = XLSX.read(data, { type: 'array' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
-                const mapDedEncPorChave = {};
-                base.forEach(function(d) {
-                    const chaveBase = String((d.codigo || '') + '|' + (d.tipo || '')).toLowerCase().trim();
-                    if (chaveBase && d.id) mapDedEncPorChave[chaveBase] = d.id;
-                });
-                let inseridos = 0, atualizados = 0, erros = 0;
-                for (const row of rows) {
-                    if (importAbort.aborted) break;
-                    const codigo = getVal(row, ['codigo', 'Codigo', 'Código', 'CODIGO', 'cod']);
-                    const tipo = getVal(row, ['tipo', 'Tipo', 'TIPO']) || 'DDF025';
-                    if (!codigo) { erros++; continue; }
-                    const chave = (codigo + '|' + tipo).toLowerCase();
-                    const parseNum = v => { const n = parseFloat(String(v || '0').replace(',', '.').replace(/[^\d.-]/g, '')); return isNaN(n) ? null : n; };
-                    const dados = {
-                        codigo: escapeHTML(codigo),
-                        tipo: ['DDF021','DDF025','DDR001'].includes(tipo) ? tipo : 'DDF025',
-                        descricao: escapeHTML(getVal(row, ['descricao', 'Descricao', 'desc'])),
-                        ativo: (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== '0' && (getVal(row, ['ativo', 'Ativo']) || '1').toLowerCase() !== 'nao'
-                    };
-                    if (dados.tipo === 'DDF021') {
-                        dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao', 'aliquota']));
-                        // Para DDF021 importado, replica no BD
-                        dados.codReceita = dados.codigo;
-                        dados.aliquotaTotal = dados.aliquotaPadrao;
-                    } else if (dados.tipo === 'DDF025') {
-                        dados.natRendimento = escapeHTML(getVal(row, ['natRendimento', 'NatRendimento']));
-                        dados.descRendimento = escapeHTML(getVal(row, ['descRendimento', 'DescRendimento']));
-                        dados.codReceita = escapeHTML(getVal(row, ['codReceita', 'CodReceita']));
-                        dados.aliquotaTotal = parseNum(getVal(row, ['aliquotaTotal', 'AliquotaTotal', 'total']));
-                        dados.ir = parseNum(getVal(row, ['ir', 'IR']));
-                        dados.csll = parseNum(getVal(row, ['csll', 'CSLL']));
-                        dados.cofins = parseNum(getVal(row, ['cofins', 'COFINS']));
-                        dados.pis = parseNum(getVal(row, ['pis', 'PIS']));
-                    } else if (dados.tipo === 'DDR001') {
-                        dados.aliquotaPadrao = parseNum(getVal(row, ['aliquotaPadrao', 'AliquotaPadrao']));
-                        dados.aliquotaMaxima = parseNum(getVal(row, ['aliquotaMaxima', 'AliquotaMaxima']));
-                        // Para DDR001 importado, replica no BD
-                        dados.codReceita = dados.codigo;
-                        dados.aliquotaTotal = dados.aliquotaPadrao;
-                    }
-                    const docIdExistente = mapDedEncPorChave[chave];
-                    if (docIdExistente) {
-                        await db.collection('deducoesEncargos').doc(docIdExistente).update(dados);
-                        atualizados++;
-                    } else {
-                        const ref = await db.collection('deducoesEncargos').add(dados);
-                        mapDedEncPorChave[chave] = ref.id;
-                        inseridos++;
+                const engine = window.ImportEngine;
+                const driver = window.ImportDrivers && window.ImportDrivers.deducoesEncargos;
+                if (!engine || !driver || typeof driver.run !== 'function') {
+                    throw new Error('Nucleo de importacao indisponivel para Deducoes/Encargos.');
+                }
+                const rows = await engine.parseWorkbookRows(file);
+                const detectado = engine.detectLikelyModule(rows, window.ImportDrivers || {});
+                if (detectado && detectado !== 'deducoesEncargos') {
+                    const ok = confirm('O arquivo parece pertencer ao modulo "' + detectado + '". Deseja continuar a importacao em Deducoes/Encargos mesmo assim?');
+                    if (!ok) {
+                        alert('Importacao cancelada pelo usuario.');
+                        return;
                     }
                 }
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                const report = engine.createReport();
+                await driver.run({ rows, report, importAbort });
+                const msg = (importAbort.aborted ? 'Interrompido. ' : '') + engine.formatSummary(report, {
+                    title: 'Importacao de Deducoes/Encargos concluida',
+                    maxErrors: 20
+                });
+                alert(msg);
                 await salvarUltimoImport('deducoesEncargos');
-            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            } catch (err) { alert('Erro ao tentar carregar dados: ' + (err.message || err)); }
             finally { esconderLoading(); e.target.value = ''; }
         });
     }
@@ -158,67 +123,29 @@
             }
             mostrarLoading();
             try {
-                const data = await readFileAsArrayBuffer(file);
-                const wb = XLSX.read(data, { type: 'array' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const mapaContratosPorNumero = {};
-                (typeof baseContratos !== 'undefined' ? baseContratos : []).forEach(function(c) {
-                    const chave = String((c.numContrato || '')).toLowerCase().trim();
-                    if (chave && c.id) mapaContratosPorNumero[chave] = c.id;
-                });
-                let inseridos = 0, atualizados = 0, duplicados = 0, erros = 0;
-                for (const row of rows) {
-                    if (importAbort.aborted) break;
-                    const numContrato = getVal(row, ['numContrato', 'NumContrato', 'Instrumento', 'instrumento', 'numero', 'Numero']);
-                    if (!numContrato) { erros++; continue; }
-                    const numNorm = numContrato.toLowerCase();
-                    const valorRaw = getVal(row, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
-                    const numVal = parseValorMonetarioBR(valorRaw);
-                    const cnpjFornecedorRaw = getVal(row, [
-                        'cnpjFornecedor', 'cnpj_fornecedor', 'CNPJ_FORNECEDOR', 'CNPJFornecedor', 'cnpjFornecedor'
-                    ]);
-                    const nomeFornecedorRaw = getVal(row, [
-                        'nomeFornecedor', 'nome_fornecedor', 'NOME_FORNECEDOR', 'NomeFornecedor', 'nomeFornecedor',
-                        'nome', 'Nome', 'FornecedorNome'
-                    ]);
-
-                    let cnpjFornecedor = normalizarCNPJ(cnpjFornecedorRaw);
-                    let nomeFornecedor = nomeFornecedorRaw || '';
-
-                    // legado: coluna única "fornecedor" (CNPJ - Nome)
-                    if (!cnpjFornecedor || !nomeFornecedor) {
-                        const fornecedorRaw = getVal(row, ['fornecedor', 'Fornecedor']);
-                        const parsed = extrairCnpjNomeFornecedor(fornecedorRaw);
-                        cnpjFornecedor = normalizarCNPJ(parsed.cnpjFornecedor);
-                        nomeFornecedor = parsed.nomeFornecedor;
-                    }
-                    const dados = {
-                        idContrato: escapeHTML(getVal(row, ['idContrato', 'IdContrato', 'ID', 'id'])),
-                        numContrato: escapeHTML(numContrato),
-                        situacao: escapeHTML(getVal(row, ['situacao', 'Situacao', 'situação'])),
-                        cnpjFornecedor: escapeHTML(normalizarCNPJ(cnpjFornecedor)),
-                        nomeFornecedor: escapeHTML(nomeFornecedor),
-                        nup: escapeHTML(getVal(row, ['nup', 'NUP', 'Nup'])),
-                        dataInicio: escapeHTML(getVal(row, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio'])),
-                        dataFim: escapeHTML(getVal(row, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim'])),
-                        valorContrato: numVal,
-                        deducoesPermitidas: []
-                    };
-                    const docIdExistente = mapaContratosPorNumero[numNorm];
-                    if (docIdExistente) {
-                        await db.collection('contratos').doc(docIdExistente).update(dados);
-                        atualizados++;
-                        duplicados++;
-                    } else {
-                        const ref = await db.collection('contratos').add(dados);
-                        mapaContratosPorNumero[numNorm] = ref.id;
-                        inseridos++;
+                const engine = window.ImportEngine;
+                const driver = window.ImportDrivers && window.ImportDrivers.contratos;
+                if (!engine || !driver || typeof driver.run !== 'function') {
+                    throw new Error('Nucleo de importacao indisponivel para Contratos.');
+                }
+                const rows = await engine.parseWorkbookRows(file);
+                const detectado = engine.detectLikelyModule(rows, window.ImportDrivers || {});
+                if (detectado && detectado !== 'contratos') {
+                    const ok = confirm('O arquivo parece pertencer ao modulo "' + detectado + '". Deseja continuar a importacao em Contratos mesmo assim?');
+                    if (!ok) {
+                        alert('Importacao cancelada pelo usuario.');
+                        return;
                     }
                 }
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Duplicados ' + duplicados + '; Erros ' + erros);
+                const report = engine.createReport();
+                await driver.run({ rows, report, importAbort });
+                const msg = (importAbort.aborted ? 'Interrompido. ' : '') + engine.formatSummary(report, {
+                    title: 'Importacao de Contratos concluida',
+                    maxErrors: 20
+                });
+                alert(msg);
                 await salvarUltimoImport('contratos');
-            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            } catch (err) { alert('Erro ao tentar carregar dados: ' + (err.message || err)); }
             finally { esconderLoading(); e.target.value = ''; }
         });
     }
@@ -251,65 +178,29 @@
             }
             mostrarLoading();
             try {
-                const data = await readFileAsArrayBuffer(file);
-                const wb = XLSX.read(data, { type: 'array' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const codigosExistentes = new Set((typeof baseFornecedores !== 'undefined' ? baseFornecedores : [])
-                    .map(function(f) { return String((f.codigoNumerico || '')).toLowerCase().trim(); }));
-
-                let inseridos = 0, duplicados = 0, erros = 0;
-                for (const row of rows) {
-                    if (importAbort.aborted) break;
-                    var rowNorm = {};
-                    Object.keys(row).forEach(function(k) {
-                        var kNorm = (k.replace(/^\ufeff/, '').trim() || k);
-                        rowNorm[kNorm] = row[k];
-                    });
-
-                    var codigo = getVal(rowNorm, ['codigo', 'Código', 'CPF/CNPJ', 'CpfCnpj', 'cpf_cnpj', 'cnpj_cpf', 'cpf', 'cnpj']);
-                    var codigoNumerico = String(codigo || '').replace(/\D/g, '').trim();
-                    if (!codigoNumerico) { erros++; continue; }
-
-                    const codigoNorm = codigoNumerico.toLowerCase();
-                    if (codigosExistentes.has(codigoNorm)) { duplicados++; erros++; continue; }
-
-                    var tipoPessoa = getVal(rowNorm, ['tipoPessoa', 'Tipo Pessoa', 'Tipo de Pessoa', 'tipopessoa', 'pj/pf']);
-                    tipoPessoa = String(tipoPessoa || '').toUpperCase();
-                    if (tipoPessoa.indexOf('FIS') >= 0 || tipoPessoa === 'CPF') tipoPessoa = 'FISICA';
-                    else if (tipoPessoa.indexOf('JUR') >= 0 || tipoPessoa === 'CNPJ') tipoPessoa = 'JURIDICA';
-                    else tipoPessoa = (codigoNumerico.length === 11 ? 'FISICA' : 'JURIDICA');
-
-                    var optanteSimplesRaw = getVal(rowNorm, ['optanteSimples', 'Optante de Simples', 'Optante Simples', 'simplesNacional', 'Simples Nacional']);
-                    var optanteSimplesNorm = String(optanteSimplesRaw || '').trim().toLowerCase();
-                    var optanteSimples = false;
-                    if (optanteSimplesNorm) {
-                        optanteSimples = ['sim', 's', 'true', '1', 'yes', 'y'].indexOf(optanteSimplesNorm) >= 0;
-                    }
-
-                    const dados = {
-                        tipoPessoa: escapeHTML(tipoPessoa),
-                        codigo: escapeHTML(codigo),
-                        codigoNumerico: escapeHTML(codigoNumerico),
-                        nome: escapeHTML(getVal(rowNorm, ['nome', 'Nome', 'razaoSocial', 'Razao Social', 'Fornecedor'])),
-                        matrizFilial: escapeHTML(getVal(rowNorm, ['matrizFilial', 'Matriz ou Filial', 'Matriz/Filial'])),
-                        contato: escapeHTML(getVal(rowNorm, ['contato', 'Contato'])),
-                        telefone: escapeHTML(getVal(rowNorm, ['telefone', 'Telefone', 'fone', 'Fone'])),
-                        email: escapeHTML(getVal(rowNorm, ['email', 'E-mail', 'Email'])),
-                        situacaoCadastral: escapeHTML(getVal(rowNorm, ['situacaoCadastral', 'Situação Cadastral', 'Situacao Cadastral', 'situacao']) || 'ATIVO'),
-                        optanteSimples: optanteSimples,
-                        endereco: escapeHTML(getVal(rowNorm, ['endereco', 'Endereço', 'Endereco'])),
-                        ativo: true
-                    };
-
-                    await db.collection('fornecedores').add(dados);
-                    codigosExistentes.add(codigoNorm);
-                    inseridos++;
+                const engine = window.ImportEngine;
+                const driver = window.ImportDrivers && window.ImportDrivers.fornecedores;
+                if (!engine || !driver || typeof driver.run !== 'function') {
+                    throw new Error('Nucleo de importacao indisponivel para Fornecedores.');
                 }
-                const atualizados = 0;
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                const rows = await engine.parseWorkbookRows(file);
+                const detectado = engine.detectLikelyModule(rows, window.ImportDrivers || {});
+                if (detectado && detectado !== 'fornecedores') {
+                    const ok = confirm('O arquivo parece pertencer ao modulo "' + detectado + '". Deseja continuar a importacao em Fornecedores mesmo assim?');
+                    if (!ok) {
+                        alert('Importacao cancelada pelo usuario.');
+                        return;
+                    }
+                }
+                const report = engine.createReport();
+                await driver.run({ rows, report, importAbort });
+                const msg = (importAbort.aborted ? 'Interrompido. ' : '') + engine.formatSummary(report, {
+                    title: 'Importacao de Fornecedores concluida',
+                    maxErrors: 20
+                });
+                alert(msg);
                 await salvarUltimoImport('fornecedores');
-            } catch (err) { alert('Erro ao tentar carregar dados.'); }
+            } catch (err) { alert('Erro ao tentar carregar dados: ' + (err.message || err)); }
             finally { esconderLoading(); e.target.value = ''; }
         });
     }

@@ -41,7 +41,7 @@
     /** Ano do exercício na lista (`'todos'` ou `'2026'`). Padrão: ano corrente. */
     let filtroAnoExercicioTitulos = String(new Date().getFullYear());
     let filtroAnoTitulosListenerOk = false;
-    let estadoOrdenacao = { coluna: 'idProc', direcao: 'asc' };
+    let estadoOrdenacao = { coluna: 'criado_em', direcao: 'desc' };
     let unsubscribeTitulos = null;
     let estadoAutocompleteVinculo = {
         listaResultadosCentroCustosT: { itens: [], activeIndex: -1 },
@@ -561,6 +561,23 @@
         });
     }
 
+    function obterTimestampEmMs(valor) {
+        if (!valor) return 0;
+        if (typeof valor.toMillis === 'function') return Number(valor.toMillis()) || 0;
+        if (typeof valor.seconds === 'number') {
+            const nanos = typeof valor.nanoseconds === 'number' ? valor.nanoseconds : 0;
+            return (valor.seconds * 1000) + Math.floor(nanos / 1000000);
+        }
+        if (valor instanceof Date) return Number(valor.getTime()) || 0;
+        const parsed = Date.parse(valor);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    function extrairNumeroIdProc(idProc) {
+        const match = String(idProc || '').match(/(\d+)$/);
+        return match ? (parseInt(match[1], 10) || 0) : 0;
+    }
+
     function titulosFiltrados() {
         let lista = baseTitulos.map(t => ({ ...t, status: t.status || 'Rascunho' }));
         if (!incluirInativos) {
@@ -587,6 +604,16 @@
         }
         const { coluna, direcao } = estadoOrdenacao;
         lista.sort((a, b) => {
+            if (coluna === 'criado_em') {
+                const tsA = obterTimestampEmMs(a.criado_em);
+                const tsB = obterTimestampEmMs(b.criado_em);
+                if (tsA !== tsB) return direcao === 'asc' ? tsA - tsB : tsB - tsA;
+
+                // Fallback para itens legados sem timestamp de criação.
+                const procA = extrairNumeroIdProc(a.idProc);
+                const procB = extrairNumeroIdProc(b.idProc);
+                if (procA !== procB) return direcao === 'asc' ? procA - procB : procB - procA;
+            }
             let va = a[coluna] != null ? String(a[coluna]).toLowerCase() : '';
             let vb = b[coluna] != null ? String(b[coluna]).toLowerCase() : '';
             if (coluna === 'valorNotaFiscal') { va = Number(a.valorNotaFiscal) || 0; vb = Number(b.valorNotaFiscal) || 0; return direcao === 'asc' ? va - vb : vb - va; }
@@ -796,16 +823,28 @@
         atualizarTabelaTitulos();
     }));
 
-    async function gerarNovoIDProcGlobal() {
+    async function gerarNovoIDProcGlobal(tx) {
         const seqRef = db.collection('contadores').doc('titulos_proc_global');
-        const proximoNumero = await db.runTransaction(async (tx) => {
-            const snap = await tx.get(seqRef);
-            const numeroPersistido = snap.exists ? (parseInt(snap.data().ultimoNumero, 10) || 0) : 0;
-            const next = numeroPersistido + 1;
-            tx.set(seqRef, { ultimoNumero: next, atualizadoEmMs: Date.now() }, { merge: true });
-            return next;
-        });
+        const snap = await tx.get(seqRef);
+        const numeroPersistido = snap.exists ? (parseInt(snap.data().ultimoNumero, 10) || 0) : 0;
+        const proximoNumero = numeroPersistido + 1;
+        tx.set(seqRef, { ultimoNumero: proximoNumero, atualizadoEmMs: Date.now() }, { merge: true });
         return 'PROC-' + String(proximoNumero).padStart(3, '0');
+    }
+
+    async function criarTituloComIdProcSequencial(dadosSanitizadosBase) {
+        const docRef = db.collection('titulos').doc();
+        const resultado = await db.runTransaction(async (tx) => {
+            const idProcGerado = await gerarNovoIDProcGlobal(tx);
+            const dadosParaCriar = {
+                ...dadosSanitizadosBase,
+                idProc: idProcGerado,
+                criado_em: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            tx.set(docRef, dadosParaCriar);
+            return { docId: docRef.id, idProc: idProcGerado };
+        });
+        return resultado;
     }
 
     window.abrirFormularioTitulo = function() {
@@ -2945,9 +2984,8 @@
 
         const anoTCVal = (document.getElementById('anoTC')?.value || '').trim() || String(new Date().getFullYear());
         const idProcInformado = (document.getElementById('idProc').value || '').trim();
-        const idProcParaSalvar = idProcInformado || await gerarNovoIDProcGlobal();
         const dados = {
-            idProc: escapeHTML(idProcParaSalvar),
+            idProc: escapeHTML(idProcInformado),
             ano: escapeHTML(anoTCVal),
             ug: '741000',
             tipoTC: (document.getElementById('tipoTC')?.value || '').trim(),
@@ -3081,9 +3119,9 @@
                 dadosSanitizados.status = dadosSanitizados.status || 'Rascunho';
                 dadosSanitizados.historico = [histEntry];
                 dadosSanitizados.historicoStatus = [histEntry];
-                dadosSanitizados.criado_em = firebase.firestore.FieldValue.serverTimestamp();
-                const ref = await db.collection('titulos').add(dadosSanitizados);
-                docId = ref.id;
+                const criado = await criarTituloComIdProcSequencial(dadosSanitizados);
+                docId = criado.docId;
+                dadosSanitizados.idProc = criado.idProc;
             } else {
                 const doc = await db.collection('titulos').doc(fbID).get();
                 const hist = obterHistorico(doc.data() || {});
