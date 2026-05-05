@@ -19,7 +19,7 @@
         .menu-link-externo { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px; }
         .menu-link-externo:hover { color: #5dade2; }
         .menu-btn.emdesevolvimento { opacity: 0.75; cursor: pointer; }
-        .topbar-config { cursor: pointer; padding: 4px 8px; margin-right: 8px; border-radius: 4px; }
+        .topbar-config { cursor: pointer; padding: 4px 8px; margin-right: 8px; border-radius: 4px; text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
         .topbar-config:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
@@ -38,8 +38,8 @@
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span class="topbar-config" onclick="location.href='conta.html'" title="A minha conta — dados, tema e senha">⚙️</span>
-            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+            <a href="conta.html" class="topbar-config" title="A minha conta — dados, tema e senha" aria-label="Minha conta — dados, tema e senha"><span aria-hidden="true">⚙️</span></a>
+            <button type="button" class="topbar-sair" onclick="fazerLogout()">🚪 Sair</button>
         </div>
     </header>
 

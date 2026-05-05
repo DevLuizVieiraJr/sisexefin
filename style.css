@@ -8,10 +8,63 @@ body { background-color: #ecf0f5; color: #333; display: flex; flex-direction: co
 .topbar-logo { font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 10px;}
 .topbar-user { font-size: 13px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
 .topbar-user .topbar-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.topbar-user .topbar-voltar { cursor: pointer; padding: 4px 10px; background: rgba(255,255,255,0.15); border-radius: 4px; }
-.topbar-user .topbar-voltar:hover { background: rgba(255,255,255,0.25); }
-.topbar-user .topbar-sair { cursor: pointer; color: #ff6b6b; padding: 4px 10px; }
-.topbar-user .topbar-sair:hover { color: #ff8787; }
+.topbar-user a.topbar-voltar,
+.topbar-user button.topbar-voltar {
+    cursor: pointer;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+    border: none;
+    font: inherit;
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+.topbar-user a.topbar-voltar:hover,
+.topbar-user button.topbar-voltar:hover { background: rgba(255,255,255,0.25); }
+.topbar-user button.topbar-sair {
+    cursor: pointer;
+    color: #ff6b6b;
+    padding: 4px 10px;
+    border: none;
+    font: inherit;
+    background: transparent;
+    border-radius: 4px;
+}
+.topbar-user button.topbar-sair:hover { color: #ff8787; }
+
+/* Gatilho mobile do menu (injetado por script.js) — oculto no desktop */
+.topbar-menu-trigger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    color: inherit;
+    font-size: 18px;
+    cursor: pointer;
+}
+.topbar-menu-trigger:hover { background: rgba(255,255,255,0.25); }
+
+/* Foco visível — topbar e navegação lateral */
+.topbar a:focus-visible,
+.topbar button:focus-visible:not(:disabled),
+.topbar-menu-trigger:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+.sidebar .nav-link:focus-visible,
+.sidebar .sidebar-toggle:focus-visible {
+    outline: 2px solid #5dade2;
+    outline-offset: -2px;
+}
 
 /* Layout Principal - compensar topbar fixa */
 body { padding-top: 50px; }
@@ -75,6 +128,35 @@ body { padding-top: 50px; }
 .sidebar-flyout-tooltip.visivel {
     opacity: 1;
     visibility: visible;
+}
+
+/* Toast — item de menu em desenvolvimento */
+.sisexefin-menu-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 12px 16px;
+    background: #2c3e50;
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    font-size: 14px;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    text-align: center;
+}
+.sisexefin-menu-toast.visivel {
+    opacity: 1;
+    visibility: visible;
+}
+[data-theme="dark"] .sisexefin-menu-toast {
+    background: #1e232d;
+    border: 1px solid #3d4454;
 }
 
 /* Compatibilidade: sidebar antiga aponta para main-sidebar */
@@ -613,4 +695,100 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
 }
 [data-theme="dark"] .conta-form-msg-ok {
     color: #58d68d;
+}
+
+/* Topbar / foco no tema escuro */
+[data-theme="dark"] .topbar a:focus-visible,
+[data-theme="dark"] .topbar button:focus-visible:not(:disabled),
+[data-theme="dark"] .topbar-menu-trigger:focus-visible {
+    outline-color: #7eb8e8;
+}
+
+/* ========== Layout mobile: drawer do menu lateral + backdrop ========== */
+@media (max-width: 768px) {
+    .topbar {
+        padding: 0 12px;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        min-height: 50px;
+        height: auto;
+    }
+    .topbar-logo {
+        font-size: 14px;
+        flex: 1;
+        min-width: 0;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+    .topbar-user {
+        gap: 8px 10px;
+        font-size: 12px;
+        justify-content: flex-end;
+        flex: 1 1 100%;
+    }
+    .topbar-menu-trigger {
+        display: inline-flex;
+    }
+
+    .sidebar-drawer-backdrop {
+        display: none;
+        position: fixed;
+        top: 50px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1045;
+        background: rgba(0, 0, 0, 0.45);
+    }
+    body.sidebar-drawer-open .sidebar-drawer-backdrop {
+        display: block;
+    }
+
+    #sidebar {
+        position: fixed;
+        top: 50px;
+        left: 0;
+        bottom: 0;
+        flex: 0 0 0;
+        overflow: visible;
+        width: min(280px, 88vw);
+        min-height: 0 !important;
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        box-shadow: none;
+    }
+    #sidebar.colapsado {
+        width: min(280px, 88vw);
+    }
+    body.sidebar-drawer-open #sidebar {
+        transform: translateX(0);
+        box-shadow: 4px 0 18px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Com largura estreita, modo "colapsado" do desktop não deve esconder textos no drawer */
+    #sidebar.colapsado .nav-link > p,
+    #sidebar.colapsado .nav-link .right {
+        display: flex !important;
+    }
+    #sidebar.colapsado .brand-link .brand-text {
+        display: inline !important;
+    }
+    #sidebar.colapsado .sidebar-toggle .sidebar-toggle-text {
+        display: inline !important;
+    }
+    #sidebar.colapsado .nav-item.has-treeview:not(.menu-open) > .nav-treeview {
+        display: none !important;
+    }
+    #sidebar.colapsado .nav-item.has-treeview.menu-open > .nav-treeview {
+        display: block !important;
+    }
+
+    .app-container {
+        min-height: calc(100vh - 50px);
+    }
+    .app-container > .content {
+        width: 100%;
+        max-width: 100%;
+    }
 }

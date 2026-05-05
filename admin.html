@@ -26,8 +26,8 @@
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span class="topbar-voltar" onclick="location.href='dashboard.html'">⬅ Voltar</span>
-            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+            <a href="dashboard.html" class="topbar-voltar">⬅ Voltar</a>
+            <button type="button" class="topbar-sair" onclick="fazerLogout()">🚪 Sair</button>
         </div>
     </header>
 

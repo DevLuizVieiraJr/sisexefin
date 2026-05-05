@@ -198,6 +198,23 @@
             tip.classList.remove('visivel');
         }
 
+        function showFlyoutFromEventTarget(e) {
+            if (!sidebar.classList.contains('colapsado')) {
+                hideFlyout();
+                return;
+            }
+            var alvo = alvoFlyoutMenuRecolhido(sidebar, e.target);
+            if (!alvo) {
+                hideFlyout();
+                return;
+            }
+            if (alvo.classList.contains('sidebar-toggle')) {
+                showFlyout(alvo, 'Mostrar menu');
+                return;
+            }
+            showFlyout(alvo, textoRotuloSidebar(alvo));
+        }
+
         function showFlyout(anchor, text) {
             if (!text) { hideFlyout(); return; }
             tip.textContent = text;
@@ -214,30 +231,50 @@
             });
         }
 
-        sidebar.addEventListener('mouseover', function(e) {
-            if (!sidebar.classList.contains('colapsado')) {
-                hideFlyout();
-                return;
-            }
-            var alvo = alvoFlyoutMenuRecolhido(sidebar, e.target);
-            if (!alvo) {
-                hideFlyout();
-                return;
-            }
-            if (alvo.classList.contains('sidebar-toggle')) {
-                showFlyout(alvo, 'Mostrar menu');
-                return;
-            }
-            showFlyout(alvo, textoRotuloSidebar(alvo));
-        });
+        sidebar.addEventListener('mouseover', showFlyoutFromEventTarget);
 
         sidebar.addEventListener('mouseleave', function() {
             hideFlyout();
         });
 
+        sidebar.addEventListener('focusin', function(e) {
+            showFlyoutFromEventTarget(e);
+        });
+
+        sidebar.addEventListener('focusout', function() {
+            requestAnimationFrame(function() {
+                if (!sidebar.contains(document.activeElement)) hideFlyout();
+            });
+        });
+
         new MutationObserver(function() {
             if (!sidebar.classList.contains('colapsado')) hideFlyout();
         }).observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    function mostrarAvisoItemEmDesenvolvimento(mensagem) {
+        var texto = mensagem || 'Esta funcionalidade ainda está em desenvolvimento.';
+        var el = document.getElementById('sisexefin-menu-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'sisexefin-menu-toast';
+            el.className = 'sisexefin-menu-toast';
+            el.setAttribute('role', 'alert');
+            el.setAttribute('aria-live', 'polite');
+            document.body.appendChild(el);
+        }
+        el.textContent = texto;
+        el.classList.add('visivel');
+        clearTimeout(mostrarAvisoItemEmDesenvolvimento._t);
+        mostrarAvisoItemEmDesenvolvimento._t = setTimeout(function() {
+            el.classList.remove('visivel');
+        }, 4500);
+    }
+
+    function fecharDrawerMobileSeAberto() {
+        if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 768px)').matches) return;
+        document.body.classList.remove('sidebar-drawer-open');
+        if (typeof window.updateSidebarChrome === 'function') window.updateSidebarChrome();
     }
 
     function detectarPaginaAtiva() {
@@ -277,7 +314,8 @@
         if (!ul) return;
 
         ul.className = 'nav nav-pills nav-sidebar flex-column';
-        ul.setAttribute('role', 'menu');
+        ul.id = 'sisexefin-nav-principal';
+        ul.setAttribute('aria-label', 'Menu principal');
         ul.innerHTML = MENU_HTML;
 
         const ativo = detectarPaginaAtiva();
@@ -310,7 +348,19 @@
         });
 
         ul.addEventListener('click', function(e) {
-            if (e.target.closest('a.emdesevolvimento')) e.preventDefault();
+            var dev = e.target.closest('a.emdesevolvimento');
+            if (dev) {
+                e.preventDefault();
+                mostrarAvisoItemEmDesenvolvimento(dev.getAttribute('title'));
+            }
+        });
+
+        sidebar.addEventListener('click', function(e) {
+            var a = e.target.closest('a.nav-link');
+            if (!a || a.getAttribute('data-toggle') === 'tree') return;
+            var href = a.getAttribute('href') || '';
+            if (href === '#' || a.classList.contains('emdesevolvimento')) return;
+            fecharDrawerMobileSeAberto();
         });
 
         // Toggle treeview ao clicar + persistir estado

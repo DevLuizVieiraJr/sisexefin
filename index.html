@@ -65,8 +65,9 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
-        #form-login .btn-recuperar {
-            margin-top: 2px;
+        .recuperar-wrap {
+            text-align: center;
+            margin-top: 12px;
         }
         .btn-login {
             width: 100%; 
@@ -88,21 +89,37 @@
             cursor: not-allowed;
         }
         .btn-recuperar {
-            width: 100%;
-            padding: 10px 12px;
-            margin: -2px 0 14px;
-            border: 1px solid #2a81b8;
-            background: #eef6fc;
-            color: #1e5f8a;
-            border-radius: 4px;
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+            border: none;
+            padding: 4px 8px;
+            margin: 0;
+            font: inherit;
             font-size: 14px;
             font-weight: 600;
+            color: #1e5f8a;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            width: auto;
+            max-width: 100%;
+            word-break: break-word;
+            text-align: center;
+            transition: color 0.15s;
         }
-        .btn-recuperar:hover {
-            background: #e3f0fa;
-            border-color: #1e5f8a;
+        .btn-recuperar:hover,
+        .btn-recuperar:focus-visible {
+            text-decoration: underline;
+        }
+        .btn-recuperar:focus-visible {
+            outline: 2px solid #2a81b8;
+            outline-offset: 2px;
+        }
+        .btn-recuperar:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
         }
         .btn-google {
             width: 100%;
@@ -202,8 +219,10 @@
                     <label for="senha">Senha</label>
                     <input type="password" id="senha" class="form-input" placeholder="Sua senha" required autocomplete="current-password">
                 </div>
-                <button type="button" id="btn-recuperar" class="btn-recuperar">Esqueci minha senha</button>
                 <button type="submit" id="btn-entrar" class="btn-login">Entrar no Sistema</button>
+                <div class="recuperar-wrap">
+                    <button type="button" id="btn-recuperar" class="btn-recuperar">Esqueci minha senha</button>
+                </div>
             </form>
 
             <div class="divisor">ou</div>

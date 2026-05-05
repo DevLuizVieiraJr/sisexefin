@@ -601,7 +601,7 @@
         });
     }
 
-    // --- IMPORT CENTRO DE CUSTOS (chave única: codigo) ---
+    // --- IMPORT CENTRO DE CUSTOS (novo fluxo com nucleo + driver) ---
     const fileImportCentroCustos = document.getElementById('fileImportCentroCustos');
     if (fileImportCentroCustos) {
         fileImportCentroCustos.addEventListener('change', async function(e) {
@@ -615,55 +615,31 @@
                 window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
             }
             try {
-                const data = await readFileAsArrayBuffer(file);
-                const wb = XLSX.read(data, { type: 'array' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const baseCC = typeof baseCentroCustos !== 'undefined' ? baseCentroCustos : [];
-                const mapCentroCustosPorCodigo = {};
-
-                baseCC.forEach(function(item) {
-                    var codigoBase = String(item.codigo || '').trim().toLowerCase();
-                    if (codigoBase && item.id) mapCentroCustosPorCodigo[codigoBase] = item.id;
-                });
-
-                var inseridos = 0, atualizados = 0, erros = 0;
-                for (var i = 0; i < rows.length; i++) {
-                    if (importAbort.aborted) break;
-                    var row = rows[i];
-                    var rowNorm = {};
-                    Object.keys(row).forEach(function(k) {
-                        rowNorm[(k.replace(/^\ufeff/, '') || k).trim()] = row[k];
-                    });
-
-                    var codigo = getVal(rowNorm, ['Código', 'Codigo', 'codigo', 'CODIGO']);
-                    if (!codigo) { erros++; continue; }
-
-                    var aplicacao = getVal(rowNorm, ['Aplicação', 'Aplicacao', 'aplicacao', 'APLICACAO']);
-                    var descricao = getVal(rowNorm, ['Descrição', 'Descricao', 'descricao', 'DESCRICAO']);
-                    var codigoNorm = String(codigo).trim().toLowerCase();
-                    var dados = {
-                        codigo: escapeHTML(String(codigo).trim()),
-                        aplicacao: escapeHTML(aplicacao),
-                        descricao: escapeHTML(descricao),
-                        ativo: true
-                    };
-
-                    var docId = mapCentroCustosPorCodigo[codigoNorm];
-                    if (docId) {
-                        await db.collection('centroCustos').doc(docId).update(dados);
-                        atualizados++;
-                    } else {
-                        var refCC = await db.collection('centroCustos').add(dados);
-                        mapCentroCustosPorCodigo[codigoNorm] = refCC.id;
-                        inseridos++;
+                const engine = window.ImportEngine;
+                const driver = window.ImportDrivers && window.ImportDrivers.centroCustos;
+                if (!engine || !driver || typeof driver.run !== 'function') {
+                    throw new Error('Nucleo de importacao indisponivel para Centro de Custos.');
+                }
+                const rows = await engine.parseWorkbookRows(file);
+                const detectado = engine.detectLikelyModule(rows, window.ImportDrivers || {});
+                if (detectado && detectado !== 'centroCustos') {
+                    const ok = confirm('O arquivo parece pertencer ao modulo "' + detectado + '". Deseja continuar a importacao em Centro de Custos mesmo assim?');
+                    if (!ok) {
+                        alert('Importacao cancelada pelo usuario.');
+                        return;
                     }
                 }
+                const report = engine.createReport();
+                await driver.run({ rows, report, importAbort });
 
-                alert((importAbort.aborted ? 'Interrompido. ' : '') + 'Importados ' + inseridos + '; Atualizados ' + atualizados + '; Erros ' + erros);
+                const msg = (importAbort.aborted ? 'Interrompido. ' : '') + engine.formatSummary(report, {
+                    title: 'Importacao de Centro de Custos concluida',
+                    maxErrors: 20
+                });
+                alert(msg);
                 await salvarUltimoImport('centroCustos');
             } catch (err) {
-                alert('Erro ao tentar carregar dados.');
+                alert('Erro ao tentar carregar dados: ' + (err.message || err));
             } finally {
                 esconderLoading();
                 e.target.value = '';

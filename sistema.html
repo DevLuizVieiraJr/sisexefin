@@ -49,13 +49,13 @@
     <header class="topbar">
         <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin - Sistema de Execução Financeira</div>
         <div class="topbar-user">
-            <span class="topbar-voltar" onclick="location.href='dashboard.html'" style="margin-right:15px;">⬅ Dashboard</span>
+            <a href="dashboard.html" class="topbar-voltar">⬅ Dashboard</a>
             <span id="nomeUsuarioLogado" class="topbar-item">👤 Carregando...</span>
             <div id="containerSeletorPerfil" class="topbar-item" >
                 <label style="font-size: 12px;">Perfil:</label>
                 <select id="seletorPerfilAtivo" onchange="trocarPerfil(this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 3px; background: rgba(255,255,255,0.9); color: #333;"></select>
             </div>
-            <span class="topbar-sair" onclick="fazerLogout()">🚪 Sair</span>
+            <button type="button" class="topbar-sair" onclick="fazerLogout()">🚪 Sair</button>
         </div>
     </header>
 
@@ -969,6 +969,8 @@
     <script src="script-centrocustos.js"></script>
     <script src="script-ug.js"></script>
     <script src="script-fornecedores.js"></script>
+    <script src="import-engine.js"></script>
+    <script src="import-drivers.js"></script>
     <script src="script-import.js"></script>
     <script src="script-np.js"></script>
     <script src="pwa-register.js"></script>
