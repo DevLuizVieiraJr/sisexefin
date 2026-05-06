@@ -264,6 +264,11 @@
         }, onErr));
         unsubscribers.push(db.collection('fornecedores').onSnapshot(snap => {
             baseFornecedores = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Reidrata exibição do fornecedor quando o snapshot chegar após abrir a edição.
+            try {
+                const cnpjSel = normalizarCNPJ(document.getElementById('fornecedorValor')?.value || '');
+                if (cnpjSel) selecionarFornecedorPorCnpj(cnpjSel);
+            } catch (e) {}
             aoReceberSnapshot();
         }, onErr));
 
@@ -2321,7 +2326,7 @@
         const input = document.getElementById('buscaFornecedorT');
         if (input) {
             input.value = fornecedorObj ? fornecedorDisplay(fornecedorObj) : (cnpjN ? cnpjN : '');
-            input.readOnly = true;
+            input.readOnly = !!fornecedorObj;
         }
 
         const btn = document.getElementById('limparFornecedorBtn');
@@ -2934,13 +2939,20 @@
     document.getElementById('formTitulo')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         const fbID = document.getElementById('editIndexTitulo').value;
-        const statusAtual = fbID !== '-1' ? (baseTitulos.find(x => x.id === fbID)?.status || 'Rascunho') : 'Rascunho';
+        const tituloAtual = fbID !== '-1' ? baseTitulos.find(x => x.id === fbID) : null;
+        const statusAtual = tituloAtual?.status || 'Rascunho';
 
         const dataExefin = (document.getElementById('dataExefin').value || '').trim();
         const numTC = (document.getElementById('numTC').value || '').trim();
         const fornecedorCnpj = normalizarCNPJ((document.getElementById('fornecedorValor').value || document.getElementById('buscaFornecedorT')?.value || '').trim());
         const fornecedorObj = fornecedorCnpj ? obterFornecedorPorCnpj(fornecedorCnpj) : null;
-        const fornecedorNome = fornecedorObj ? (fornecedorObj.nome || fornecedorObj.nomeFornecedor || '') : '';
+        const fornecedorInputTexto = String(document.getElementById('buscaFornecedorT')?.value || '').trim();
+        const fornecedorNomeInput = fornecedorInputTexto.includes(' - ')
+            ? fornecedorInputTexto.split(' - ').slice(1).join(' - ').trim()
+            : '';
+        const fornecedorNome = fornecedorObj
+            ? (fornecedorObj.nome || fornecedorObj.nomeFornecedor || '')
+            : (String(tituloAtual?.fornecedorNome || '').trim() || fornecedorNomeInput);
         const contratoId = document.getElementById('contratoIdSelecionado').value || '';
         const contratoSel = baseContratos.find(c => c.id === contratoId);
         const instrumento = contratoSel ? (contratoSel.numContrato || contratoSel.instrumento || '') : '';
@@ -2970,14 +2982,6 @@
         }
 
         const valorContratoNum = contratoSel && contratoSel.valorContrato ? (parseFloat(contratoSel.valorContrato) || 0) : 0;
-
-        if (statusAtual === 'Em Liquidação') {
-            const npVal = (document.getElementById('np')?.value || '').trim();
-            if (!npVal) {
-                alert("NP (Nota de Pagamento) é obrigatória para salvar quando o TC está em Liquidação.");
-                return;
-            }
-        }
 
         // Garanto que o modelo interno persista sempre `subelemento` (legado: subitem).
         normalizarEmpenhosDaNotaAtualSubelemento();
