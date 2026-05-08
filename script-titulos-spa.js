@@ -663,11 +663,18 @@
                     const podeTramitar = typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
                     if (podeTramitar && status === 'Rascunho') {
                         acoes += `<button type="button" class="btn-icon btn-encaminhar-processamento-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Processamento">➡️</button>`;
-                        acoes += `<button type="button" class="btn-icon btn-devolver-titulo" data-id="${escapeHTML(t.id)}" title="Devolver TC">↩</button>`;
                     }
                     if (podeTramitar && status === 'Em Processamento') {
                         acoes += `<button type="button" class="btn-icon btn-encaminhar-liquidacao-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Liquidação">➡️</button>`;
+                    }
+                    if (podeTramitar && (status === 'Rascunho' || status === 'Em Processamento' || status === 'Em Liquidação')) {
                         acoes += `<button type="button" class="btn-icon btn-devolver-titulo" data-id="${escapeHTML(t.id)}" title="Devolver TC">↩</button>`;
+                    }
+                    if (podeTramitar && status === 'Em Liquidação') {
+                        acoes += `<button type="button" class="btn-icon btn-retornar-processamento-titulo" data-id="${escapeHTML(t.id)}" title="Retornar para Em Processamento">⏪</button>`;
+                    }
+                    if (podeTramitar && status === 'Liquidado') {
+                        acoes += `<button type="button" class="btn-icon btn-retornar-liquidacao-titulo" data-id="${escapeHTML(t.id)}" title="Retornar para Em Liquidação">⏪</button>`;
                     }
                     if (status === 'Devolvido') {
                         acoes += `<button type="button" class="btn-icon btn-nova-entrada-titulo" data-id="${escapeHTML(t.id)}" title="Dar nova entrada">↪</button>`;
@@ -747,6 +754,16 @@
             if (!id) return;
             abrirModalDevolucao([id]);
         }));
+        tbody.querySelectorAll('.btn-retornar-processamento-titulo').forEach(btn => btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            await executarRetornoStatus([id], 'Em Liquidação', 'Em Processamento', false);
+        }));
+        tbody.querySelectorAll('.btn-retornar-liquidacao-titulo').forEach(btn => btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            await executarRetornoStatus([id], 'Liquidado', 'Em Liquidação', false);
+        }));
         tbody.querySelectorAll('.btn-nova-entrada-titulo').forEach(btn => btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-id');
             if (!id) return;
@@ -775,6 +792,7 @@
         const count = document.getElementById('countSelecionados');
         const btnNovaEntradaBloco = document.getElementById('btnNovaEntradaBloco');
         const btnEncaminharBloco = document.getElementById('btnEncaminharBloco');
+        const btnRetornarBloco = document.getElementById('btnRetornarBloco');
         const btnDevolverBloco = document.getElementById('btnDevolverBloco');
         if (container && count) {
             const n = titulosSelecionados.size;
@@ -784,13 +802,21 @@
             const todosDevolvidos = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Devolvido');
             const todosRascunho = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Rascunho');
             const todosEmProcessamento = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Em Processamento');
+            const todosEmLiquidacao = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Em Liquidação');
+            const todosLiquidados = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Liquidado');
             const podeTramitar = usuarioPodeTramitarTC();
             if (btnNovaEntradaBloco) btnNovaEntradaBloco.style.display = (todosDevolvidos && selecionados.length > 1) ? 'inline-block' : 'none';
             if (btnEncaminharBloco) {
                 btnEncaminharBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento)) ? 'inline-block' : 'none';
                 btnEncaminharBloco.textContent = todosRascunho ? '➡️ Encaminhar para Processamento em Bloco' : '➡️ Enviar para Liquidação em Bloco';
             }
-            if (btnDevolverBloco) btnDevolverBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento)) ? 'inline-block' : 'none';
+            if (btnRetornarBloco) {
+                btnRetornarBloco.style.display = (podeTramitar && (todosEmLiquidacao || todosLiquidados)) ? 'inline-block' : 'none';
+                btnRetornarBloco.textContent = todosEmLiquidacao
+                    ? '↩ Retornar para Em Processamento em Bloco'
+                    : (todosLiquidados ? '↩ Retornar para Em Liquidação em Bloco' : '↩ Retornar status em Bloco');
+            }
+            if (btnDevolverBloco) btnDevolverBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento || todosEmLiquidacao)) ? 'inline-block' : 'none';
         }
     }
 
@@ -1237,13 +1263,17 @@
         atualizarBotoesFormulario(status, tcSalvo);
     }
 
-    /** Mostra/oculta Enviar para Processamento, Devolver, Dar nova entrada */
+    /** Mostra/oculta ações principais do formulário */
     function atualizarBotoesFormulario(status, tcSalvo) {
+        const btnRetornarProcessamento = document.getElementById('btnRetornarProcessamento');
+        const btnRetornarLiquidacao = document.getElementById('btnRetornarLiquidacao');
         const btnDevolver = document.getElementById('btnDevolver');
         const btnEnviar = document.getElementById('btnEnviarProcessamento');
         const btnNovaEntrada = document.getElementById('btnDarNovaEntrada');
         const podeTramitar = usuarioPodeTramitarTC();
-        if (btnDevolver) btnDevolver.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento')) ? 'inline-block' : 'none';
+        if (btnRetornarProcessamento) btnRetornarProcessamento.style.display = (tcSalvo && podeTramitar && status === 'Em Liquidação') ? 'inline-block' : 'none';
+        if (btnRetornarLiquidacao) btnRetornarLiquidacao.style.display = (tcSalvo && podeTramitar && status === 'Liquidado') ? 'inline-block' : 'none';
+        if (btnDevolver) btnDevolver.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento' || status === 'Em Liquidação')) ? 'inline-block' : 'none';
         if (btnEnviar) {
             btnEnviar.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento')) ? 'inline-block' : 'none';
             btnEnviar.textContent = status === 'Em Processamento' ? '➡️ Encaminhar para Liquidação' : '➡️ Encaminhar para Processamento';
@@ -2064,7 +2094,7 @@
 
     function atualizarBloqueioBotoesPrincipais() {
         const bloqueado = (tcSalvo() && abaEmEdicao !== null) || caixaVinculoEmpenhoAberta();
-        ['btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento', 'btnSalvarTitulo', 'btnCancelarTitulo'].forEach(id => {
+        ['btnRetornarProcessamento', 'btnRetornarLiquidacao', 'btnDevolver', 'btnDarNovaEntrada', 'btnEnviarProcessamento', 'btnSalvarTitulo', 'btnCancelarTitulo'].forEach(id => {
             const btn = document.getElementById(id);
             if (!btn) return;
             btn.disabled = bloqueado;
@@ -3107,7 +3137,7 @@
                     dados.status = 'Em Processamento';
                     novoStatus = dados.status;
                 }
-            } else if (statusAtual === 'Em Liquidação' && npPreenchida) {
+            } else if (statusAtual === 'Em Liquidação' && npPreenchida && indiceAbaAtiva === 2) {
                 const sim = await modalEncaminharStatusPromessa({
                     texto: 'Deseja enviar este título para "Liquidado"? Ao confirmar, o sistema grava a NP e registra a liquidação concluída.'
                 });
@@ -3293,6 +3323,18 @@
         }
     });
 
+    document.getElementById('btnRetornarProcessamento')?.addEventListener('click', async function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1' || !fbID) return alert("Salve o TC primeiro.");
+        await executarRetornoStatus([fbID], 'Em Liquidação', 'Em Processamento', false);
+    });
+
+    document.getElementById('btnRetornarLiquidacao')?.addEventListener('click', async function() {
+        const fbID = document.getElementById('editIndexTitulo').value;
+        if (fbID === '-1' || !fbID) return alert("Salve o TC primeiro.");
+        await executarRetornoStatus([fbID], 'Liquidado', 'Em Liquidação', false);
+    });
+
     document.getElementById('btnCancelarTitulo')?.addEventListener('click', function() {
         if (tentarSairComPendencia(() => voltarParaListaTitulos())) return;
         const fbID = document.getElementById('editIndexTitulo').value;
@@ -3328,6 +3370,78 @@
         if (fbID === '-1') return alert("Salve o TC primeiro.");
         abrirModalDevolucao([fbID]);
     });
+
+    async function executarRetornoStatus(ids, origemEsperada, destino, emBloco) {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        const listaIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+        if (!listaIds.length) return alert('Selecione ao menos um TC.');
+        const n = listaIds.length;
+        const texto = n > 1
+            ? `Tem certeza que deseja retornar ${n} TC(s) de "${origemEsperada}" para "${destino}"?`
+            : `Tem certeza que deseja retornar este TC de "${origemEsperada}" para "${destino}"?`;
+        const confirmar = await modalEncaminharStatusPromessa({
+            tituloModal: `Retornar para ${destino}`,
+            texto
+        });
+        if (!confirmar) return;
+        const motivo = (prompt('Informe o motivo do retorno (opcional):') || '').trim();
+        mostrarLoading();
+        const falhas = [];
+        let okCount = 0;
+        try {
+            for (const id of listaIds) {
+                const snap = await db.collection('titulos').doc(id).get();
+                if (!snap.exists) {
+                    falhas.push(`${id}: TC não encontrado.`);
+                    continue;
+                }
+                const tc = snap.data() || {};
+                const statusAtual = tc.status || 'Rascunho';
+                if (statusAtual !== origemEsperada) {
+                    falhas.push(`${tc.idProc || id}: status atual "${statusAtual}" não permite retorno para "${destino}".`);
+                    continue;
+                }
+                const hist = obterHistorico(tc);
+                const info = [
+                    motivo ? `Motivo: ${motivo}` : '',
+                    emBloco ? 'Operação em bloco' : ''
+                ].filter(Boolean).join(' | ');
+                hist.push(construirEntradaHistorico({
+                    status: destino,
+                    evento: `Retorno de status (${origemEsperada} -> ${destino})`,
+                    acao: `Retornado para ${destino} por`,
+                    info,
+                    aba: null
+                }));
+                await db.collection('titulos').doc(id).update({
+                    status: destino,
+                    historico: hist,
+                    historicoStatus: hist,
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                okCount++;
+            }
+            if (okCount > 0) {
+                if (emBloco) {
+                    titulosSelecionados.clear();
+                    atualizarUIselecao();
+                    atualizarTabelaTitulos();
+                } else {
+                    voltarParaListaTitulos();
+                }
+            }
+            let msg = `${okCount} TC(s) retornado(s) para "${destino}".`;
+            if (falhas.length) {
+                msg += `\n\nNão retornados (${falhas.length}):\n- ` + falhas.slice(0, 12).join('\n- ');
+                if (falhas.length > 12) msg += `\n- ... e mais ${falhas.length - 12}.`;
+            }
+            alert(msg);
+        } catch (err) {
+            alert('Erro ao retornar status: ' + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
+    }
 
     window.limparOIDestino = function() {
         document.getElementById('oiDestinoId').value = '';
@@ -3369,7 +3483,7 @@
                 const t = baseTitulos.find(x => x.id === fbID);
                 if (!t) continue;
                 const statusAtual = t.status || 'Rascunho';
-                if (!(statusAtual === 'Rascunho' || statusAtual === 'Em Processamento')) continue;
+                if (!(statusAtual === 'Rascunho' || statusAtual === 'Em Processamento' || statusAtual === 'Em Liquidação')) continue;
                 const entradaSaida = Array.isArray(t?.entradaSaida) ? [...t.entradaSaida] : [];
                 entradaSaida.push({ tipo: 'saida', nome: nome || null, oiDestino: oiDestinoId, dataDevolucao: dataDev, dataHoraDevolucao: dataHoraDev });
                 const hist = obterHistorico(t || {});
@@ -3382,7 +3496,7 @@
                 ].filter(Boolean).join(' | ');
                 hist.push(construirEntradaHistorico({
                     status: 'Devolvido',
-                    evento: 'Devolução de TC',
+                    evento: 'Devolução física para OI',
                     acao: 'Devolvido por',
                     info,
                     aba: null
@@ -3395,7 +3509,7 @@
                     editado_em: firebase.firestore.FieldValue.serverTimestamp()
                 });
             }
-            alert(ids.length > 1 ? "TCs devolvidos em bloco." : "TC devolvido.");
+            alert(ids.length > 1 ? "TCs devolvidos fisicamente em bloco." : "TC devolvido fisicamente.");
             if (ids.length === 1) voltarParaListaTitulos();
             else {
                 titulosSelecionados.clear();
@@ -4149,14 +4263,35 @@
         }
     });
 
+    document.getElementById('btnRetornarBloco')?.addEventListener('click', async function() {
+        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        const ids = Array.from(titulosSelecionados);
+        if (!ids.length) return alert("Selecione ao menos um TC.");
+        const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const todosEmLiquidacao = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Liquidação');
+        const todosLiquidados = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Liquidado');
+        if (!todosEmLiquidacao && !todosLiquidados) {
+            return alert('Para retorno em bloco, selecione apenas TCs em Em Liquidação ou apenas em Liquidado.');
+        }
+        if (todosEmLiquidacao) {
+            await executarRetornoStatus(ids, 'Em Liquidação', 'Em Processamento', true);
+            return;
+        }
+        await executarRetornoStatus(ids, 'Liquidado', 'Em Liquidação', true);
+    });
+
     document.getElementById('btnDevolverBloco')?.addEventListener('click', function() {
         if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
         if (!ids.length) return alert("Selecione ao menos um TC.");
         const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
-        const todosRascunho = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Rascunho');
-        const todosEmProcessamento = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Processamento');
-        if (!todosRascunho && !todosEmProcessamento) return alert('Para devolução em bloco, selecione apenas TCs em Rascunho ou apenas em Em Processamento.');
+        const todosPermitidosDevolucaoFisica = titulosSel.length > 0 && titulosSel.every(t => {
+            const st = t.status || 'Rascunho';
+            return st === 'Rascunho' || st === 'Em Processamento' || st === 'Em Liquidação';
+        });
+        if (!todosPermitidosDevolucaoFisica) {
+            return alert('Para devolução física em bloco, selecione apenas TCs em Rascunho, Em Processamento ou Em Liquidação.');
+        }
         abrirModalDevolucao(ids);
     });
 

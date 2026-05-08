@@ -144,7 +144,8 @@
                     <strong>Selecionados: <span id="countSelecionados">0</span></strong>
                     <button type="button" id="btnNovaEntradaBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">↪ Dar nova entrada em Bloco</button>
                     <button type="button" id="btnEncaminharBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">➡️ Encaminhar em Bloco</button>
-                    <button type="button" id="btnDevolverBloco" class="btn-default btn-small" style="display:none; color:#e74c3c;">↩ Devolver em Bloco</button>
+                    <button type="button" id="btnRetornarBloco" class="btn-default btn-small" style="display:none;">↩ Retornar status em Bloco</button>
+                    <button type="button" id="btnDevolverBloco" class="btn-default btn-small" style="display:none; color:#e74c3c;">↩ Devolver TC em Bloco</button>
                 </div>
                 <table id="tabelaTitulos" class="tabela-gov">
                     <thead>
@@ -414,6 +415,8 @@
                     </div>
 
                     <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <button type="button" id="btnRetornarProcessamento" class="btn-default" style="display:none;" data-permission="tramitarTC">↩ Retornar para Em Processamento</button>
+                        <button type="button" id="btnRetornarLiquidacao" class="btn-default" style="display:none;" data-permission="tramitarTC">↩ Retornar para Em Liquidação</button>
                         <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;" data-permission="tramitarTC">↩ Devolver TC</button>
                         <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;">↪ Dar nova entrada</button>
                         <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;" data-permission="tramitarTC">➡️ Encaminhar</button>
@@ -440,9 +443,9 @@
     <!-- Modal: Devolver TC -->
     <div id="modalDevolver" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="text-align:left; max-width:400px;">
-            <h3 style="margin-bottom:15px; color:#e74c3c;">Devolução de TC</h3>
-            <p style="margin-bottom:15px; font-size:13px;">Confirma a devolução? Informe os dados abaixo:</p>
-            <div class="form-group"><label>Motivo da devolução (obrigatório):</label><textarea id="devolverMotivo" rows="3" placeholder="Informe o motivo da rejeição/devolução..." required></textarea></div>
+            <h3 style="margin-bottom:15px; color:#e74c3c;">Devolução física de TC para OI</h3>
+            <p style="margin-bottom:15px; font-size:13px;">Confirma a devolução física do TC para a OI de destino? Informe os dados abaixo:</p>
+            <div class="form-group"><label>Motivo da devolução (obrigatório):</label><textarea id="devolverMotivo" rows="3" placeholder="Informe o motivo da devolução física..." required></textarea></div>
             <div class="form-group"><label>Nome do Recebedor (opcional):</label><input type="text" id="devolverNome" placeholder="Nome de quem recebeu"></div>
             <div class="form-group"><label>Data/hora da devolução:</label><input type="datetime-local" id="devolverDataHora"></div>
             <div class="form-group" style="position:relative;">
