@@ -538,6 +538,52 @@
         });
     }
 
+    // --- IMPORT UNIDADES GESTORAS (novo fluxo com nucleo + driver) ---
+    const fileImportUg = document.getElementById('fileImportUg');
+    if (fileImportUg) {
+        fileImportUg.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!verificarAdmin()) { e.target.value = ''; return; }
+            mostrarLoading();
+
+            const importAbort = { aborted: false };
+            if (typeof window.__setLoadingAbortFn === 'function') {
+                window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
+            }
+            try {
+                const engine = window.ImportEngine;
+                const driver = window.ImportDrivers && window.ImportDrivers.unidadesGestoras;
+                if (!engine || !driver || typeof driver.run !== 'function') {
+                    throw new Error('Nucleo de importacao indisponivel para Unidade Gestora.');
+                }
+                const rows = await engine.parseWorkbookRows(file);
+                const detectado = engine.detectLikelyModule(rows, window.ImportDrivers || {});
+                if (detectado && detectado !== 'unidadesGestoras') {
+                    const ok = confirm('O arquivo parece pertencer ao modulo "' + detectado + '". Deseja continuar a importacao em Unidade Gestora mesmo assim?');
+                    if (!ok) {
+                        alert('Importacao cancelada pelo usuario.');
+                        return;
+                    }
+                }
+                const report = engine.createReport();
+                await driver.run({ rows, report, importAbort });
+
+                const msg = (importAbort.aborted ? 'Interrompido. ' : '') + engine.formatSummary(report, {
+                    title: 'Importacao de Unidade Gestora concluida',
+                    maxErrors: 20
+                });
+                alert(msg);
+                await salvarUltimoImport('unidadesGestoras');
+            } catch (err) {
+                alert('Erro ao tentar carregar dados: ' + (err.message || err));
+            } finally {
+                esconderLoading();
+                e.target.value = '';
+            }
+        });
+    }
+
     // --- IMPORT LF/PF (Liquidação Financeira): se LF não existe insere; se existe atualiza apenas Situação, PF, Última Atualização
     const fileImportLfPf = document.getElementById('fileImportLfPf');
     if (fileImportLfPf) {

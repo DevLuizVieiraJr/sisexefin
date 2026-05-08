@@ -453,8 +453,13 @@ function gerarBotoesAcao(id, modulo, itemOpt) {
         return html;
     }
     if (modulo === 'deducoesEncargos') {
+        const ativo = itemOpt && itemOpt.ativo !== false;
+        const podeStatusDedEnc = permissoesEmCache.includes('dedenc_status') || permissoesEmCache.includes('acesso_admin');
+        if (permissoesEmCache.includes('dedenc_ler')) html += `<button type="button" class="btn-icon btn-visualizar-deducoesEncargos" data-id="${safeId}" title="Visualizar">👁️</button>`;
         if (permissoesEmCache.includes('dedenc_editar')) html += `<button type="button" class="btn-icon btn-editar-deducoesEncargos" data-id="${safeId}" title="Editar">✏️</button>`;
-        if (permissoesEmCache.includes('dedenc_excluir')) html += `<button type="button" class="btn-icon btn-apagar-deducoesEncargos" data-id="${safeId}" title="Excluir">🗑️</button>`;
+        if (ativo && podeStatusDedEnc) html += `<button type="button" class="btn-icon btn-inativar-deducoesEncargos" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (!ativo && podeStatusDedEnc) html += `<button type="button" class="btn-icon btn-reativar-deducoesEncargos" data-id="${safeId}" title="Reativar">✓</button>`;
+        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-deducoesEncargos-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
     if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
@@ -948,6 +953,7 @@ function atualizarUltimoImportUI(data) {
     const elNp = document.getElementById('ultimoImportNp');
     const elDedEnc = document.getElementById('ultimoImportDeducoesEncargos');
     const elCentroCustos = document.getElementById('ultimoImportCentroCustos');
+    const elUg = document.getElementById('ultimoImportUg');
     if (elLf && data.lfpf) elLf.textContent = 'Último upload: ' + formatarData(data.lfpf);
     if (elNe && data.empenhos) elNe.textContent = 'Último upload: ' + formatarData(data.empenhos);
     if (elContratos && data.contratos) elContratos.textContent = 'Último upload: ' + formatarData(data.contratos);
@@ -955,6 +961,7 @@ function atualizarUltimoImportUI(data) {
     if (elNp && data.np) elNp.textContent = 'Último upload: ' + formatarData(data.np);
     if (elDedEnc && data.deducoesEncargos) elDedEnc.textContent = 'Último upload: ' + formatarData(data.deducoesEncargos);
     if (elCentroCustos && data.centroCustos) elCentroCustos.textContent = 'Último upload: ' + formatarData(data.centroCustos);
+    if (elUg && data.unidadesGestoras) elUg.textContent = 'Último upload: ' + formatarData(data.unidadesGestoras);
 }
 window.atualizarUltimoImportUI = atualizarUltimoImportUI;
 

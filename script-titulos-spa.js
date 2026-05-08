@@ -2988,8 +2988,10 @@
 
         const anoTCVal = (document.getElementById('anoTC')?.value || '').trim() || String(new Date().getFullYear());
         const idProcInformado = (document.getElementById('idProc').value || '').trim();
+        // Evita sobrescrever idProc no Firestore quando o hidden ficou vazio após o 1º salvamento (modal).
+        const idProcParaPersistir = idProcInformado || String(tituloAtual?.idProc || '').trim();
         const dados = {
-            idProc: escapeHTML(idProcInformado),
+            idProc: escapeHTML(idProcParaPersistir),
             ano: escapeHTML(anoTCVal),
             ug: '741000',
             tipoTC: (document.getElementById('tipoTC')?.value || '').trim(),
@@ -3182,6 +3184,11 @@
 
             if (eraNovo && novoStatus === 'Rascunho') {
                 document.getElementById('editIndexTitulo').value = docId;
+                const idProcGerado = dadosSanitizados.idProc || '';
+                const idProcEl = document.getElementById('idProc');
+                if (idProcEl && idProcGerado) idProcEl.value = idProcGerado;
+                const tituloEl = document.getElementById('tituloFormTC');
+                if (tituloEl && idProcGerado) tituloEl.textContent = idProcGerado + ' - Entrada de Título de Crédito';
                 atualizarRotuloBotaoSalvarPrincipal();
                 window._modalPrimeiroSalvoDocId = docId;
                 document.getElementById('modalPrimeiroSalvo').style.display = 'flex';

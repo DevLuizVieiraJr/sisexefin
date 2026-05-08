@@ -21,6 +21,16 @@
         return { codigo, aplicacao, descricao };
     }
 
+    function normalizeUnidadesGestorasRow(row) {
+        const r = window.ImportEngine ? window.ImportEngine.normalizeRowKeys(row) : (row || {});
+        const codigo = pick(r, ['Codigo', 'Código', 'codigo', 'CODIGO']).trim();
+        const indicativoNaval = pick(r, ['Indicativo Naval', 'indicativoNaval', 'indicativo_naval', 'INDICATIVO_NAVAL']).trim();
+        const nome = pick(r, ['Nome', 'nome', 'NOME']).trim();
+        const comimsup = pick(r, ['Comimsup', 'COMIMSUP', 'comimsup']).trim();
+        const contato = pick(r, ['Contato', 'contato', 'CONTATO']).trim();
+        return { codigo, indicativoNaval, nome, comimsup, contato };
+    }
+
     function normalizarCNPJ(v) {
         return String(v || '').replace(/\D/g, '').slice(0, 14);
     }
@@ -217,6 +227,66 @@
         }
     }
 
+    async function runUnidadesGestorasImport(ctx) {
+        const report = ctx.report;
+        const rows = ctx.rows;
+        const importAbort = ctx.importAbort;
+        const baseUG = typeof baseUnidadesGestoras !== 'undefined' ? baseUnidadesGestoras : [];
+        const mapByCodigo = {};
+        baseUG.forEach((item) => {
+            const code = String(item.codigo || '').trim().toLowerCase();
+            if (code && item.id) mapByCodigo[code] = item.id;
+        });
+
+        const codigosNoArquivo = new Set();
+        rows.forEach((row) => {
+            const n = normalizeUnidadesGestorasRow(row || {});
+            const code = String(n.codigo || '').trim().toLowerCase();
+            if (code) codigosNoArquivo.add(code);
+        });
+
+        for (let i = 0; i < rows.length; i++) {
+            if (importAbort?.aborted) break;
+            const line = i + 2;
+            const n = normalizeUnidadesGestorasRow(rows[i] || {});
+            if (!n.codigo) {
+                report.ignored++;
+                report.errors.push(`Linha ${line}: campo obrigatorio "codigo" ausente.`);
+                continue;
+            }
+            const codeNorm = n.codigo.toLowerCase();
+            const comimsupNorm = String(n.comimsup || '').trim().toLowerCase();
+            if (comimsupNorm && comimsupNorm === codeNorm) {
+                report.ignored++;
+                report.errors.push(`Linha ${line}: COMIMSUP nao pode ser igual ao proprio codigo da UG.`);
+                continue;
+            }
+            if (comimsupNorm && !mapByCodigo[comimsupNorm] && !codigosNoArquivo.has(comimsupNorm)) {
+                report.ignored++;
+                report.errors.push(`Linha ${line}: COMIMSUP "${n.comimsup}" nao existe na base nem no arquivo.`);
+                continue;
+            }
+
+            const dados = {
+                codigo: escapeHTML(n.codigo),
+                indicativoNaval: escapeHTML(n.indicativoNaval),
+                nome: escapeHTML(n.nome),
+                comimsup: escapeHTML(n.comimsup),
+                contato: escapeHTML(n.contato),
+                ativo: true
+            };
+            const docId = mapByCodigo[codeNorm];
+            if (docId) {
+                await db.collection('unidadesGestoras').doc(docId).update(dados);
+                report.updated++;
+            } else {
+                const ref = await db.collection('unidadesGestoras').add(dados);
+                mapByCodigo[codeNorm] = ref.id;
+                report.inserted++;
+            }
+        }
+    }
+
     async function runContratosImport(ctx) {
         const report = ctx.report;
         const rows = ctx.rows;
@@ -279,6 +349,10 @@
         centroCustos: {
             acceptedHeaders: ['codigo', 'descricao', 'aplicacao'],
             run: runCentroCustosImport
+        },
+        unidadesGestoras: {
+            acceptedHeaders: ['codigo', 'nome', 'indicativoNaval', 'comimsup', 'contato'],
+            run: runUnidadesGestorasImport
         },
         deducoesEncargos: {
             acceptedHeaders: ['codigo', 'tipo', 'descricao', 'aliquotaPadrao', 'aliquotaTotal'],

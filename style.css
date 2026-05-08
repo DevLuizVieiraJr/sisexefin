@@ -792,3 +792,23 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
         max-width: 100%;
     }
 }
+
+/* Deduções e Encargos — listagem: registro inativo */
+#corpo-sistema tr.linha-inativa {
+    opacity: 0.55;
+}
+#corpo-sistema .badge-dedenc-inativo {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-radius: 3px;
+    background: #e74c3c;
+    color: #fff;
+    vertical-align: middle;
+}
+html[data-theme="dark"] #corpo-sistema .badge-dedenc-inativo {
+    background: #c0392b;
+}

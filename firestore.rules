@@ -97,8 +97,8 @@ service cloud.firestore {
     match /deducoesEncargos/{docId} {
       allow read: if logado() && temPermissao('dedenc_ler');
       allow create: if logado() && temPermissao('dedenc_inserir');
-      allow update: if logado() && temPermissao('dedenc_editar');
-      allow delete: if logado() && temPermissao('dedenc_excluir');
+      allow update: if logado() && (temPermissao('dedenc_editar') || temPermissao('dedenc_status') || temPermissao('acesso_admin'));
+      allow delete: if logado() && (temPermissao('dedenc_excluir') || temPermissao('acesso_admin'));
     }
 
     match /titulos/{docId} {

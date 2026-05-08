@@ -762,6 +762,7 @@
                                 <th>Cód. Receita</th>
                                 <th>Alíquota</th>
                                 <th>Aplicação</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-deducoes-encargos"></tbody>
@@ -881,6 +882,15 @@
                         <h2>Unidade Gestora (UG)</h2>
                         <button onclick="abrirFormularioUG(false)" class="btn-primary" data-permission="ug_inserir">+ Adicionar UG</button>
                     </div>
+                    <div class="toolbar">
+                        <div class="import-group">
+                            <span data-permission="ug_inserir">
+                                <button type="button" class="btn-outline" onclick="document.getElementById('fileImportUg').click()" title="Selecionar arquivo CSV ou Excel para importar">📤 Importar CSV</button>
+                                <input type="file" id="fileImportUg" accept=".csv,.xlsx,.xls" title="Selecionar arquivo" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;">
+                            </span>
+                            <span id="ultimoImportUg" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
+                        </div>
+                    </div>
                     <div class="controles-tabela">
                         <label>A exibir <select id="itensPorPaginaUG" onchange="mudarTamanhoPaginaUG()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
                         <div class="search-box"><input type="text" id="buscaTabelaUG" placeholder="Pesquisar código, nome ou contato..."></div>
@@ -890,6 +900,7 @@
                             <thead>
                                 <tr>
                                     <th class="th-sortable" onclick="ordenarTabela('ug', 'codigo')">Código <span class="sort-icon" id="sort-ug-codigo"></span></th>
+                                    <th class="th-sortable" onclick="ordenarTabela('ug', 'indicativoNaval')">Indicativo Naval <span class="sort-icon" id="sort-ug-indicativoNaval"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('ug', 'nome')">Nome da UG <span class="sort-icon" id="sort-ug-nome"></span></th>
                                     <th class="th-sortable" onclick="ordenarTabela('ug', 'comimsup')">Comimsup <span class="sort-icon" id="sort-ug-comimsup"></span></th>
                                     <th>Contato</th>
@@ -914,10 +925,15 @@
                         <input type="hidden" id="editIndexUG" value="-1">
                         <div class="form-row">
                             <div class="form-group flex-1"><label>Código da UG:</label><input type="text" id="ugCodigo" required maxlength="30"></div>
+                            <div class="form-group flex-1"><label>Indicativo Naval:</label><input type="text" id="ugIndicativoNaval" maxlength="50"></div>
                             <div class="form-group flex-2"><label>Nome da UG:</label><input type="text" id="ugNome" maxlength="150"></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Comimsup da UG:</label><input type="text" id="ugComimsup" maxlength="50"></div>
+                            <div class="form-group flex-1">
+                                <label>UG superior (COMIMSUP):</label>
+                                <input type="text" id="ugComimsup" maxlength="50" placeholder="Digite código ou nome da UG superior" autocomplete="off">
+                                <ul id="listaResultadosComimsupUG" class="autocomplete-list"></ul>
+                            </div>
                             <div class="form-group flex-1"><label>Contato da UG:</label><input type="text" id="ugContato" maxlength="100"></div>
                         </div>
                         <div class="form-row" style="margin-top:15px;">
