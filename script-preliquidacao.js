@@ -491,7 +491,7 @@
                 }
             }
             // Colunas VINC/LF/PF ficam vazias por design: serão preenchidas manualmente na impressão.
-            return [neExibicaoPdf(neFull), nd, fr || '-', '', '', '', row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
+            return [neExibicaoPdf(neFull), nd, row.subelemento, fr || '-', '', moeda(row.valor), row.centroCustos, row.ug, '', ''];
         });
     }
 
@@ -742,9 +742,9 @@
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
             ]);
             tabela(
-                ['Nota de Empenho', 'Nat. de Despesa', 'FR', 'VINC', 'LF', 'PF', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
+                ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'Centro de Custos', 'UG Beneficiária', 'LF', 'PF'],
                 rowsEmp,
-                [28, 18, 10, 10, 10, 10, 8, 18, 30, 20]
+                [12, 6, 2, 10, 3, 12, 10, 8, 12, 12]
             );
             const totalNE = consolidarEmpenhosPrincipal(titulos).reduce((s, e) => s + (Number(e.valor) || 0), 0);
             if (totalNE > 0) linhaTotalDireita('Valor total das NE (consolidado)', moeda(totalNE));
