@@ -4025,8 +4025,8 @@
                     }
                     : calcularComponentesDarf(base, aliq, obterAliquotasComponentesDarf(d));
                 return [
-                    obterNatRendDARF(d),
                     d.codReceita || d.codigo || '-',
+                    obterNatRendDARF(d),
                     moeda(base),
                     `${aliq.toFixed(2)}%`,
                     moeda(comps.valorIR),
@@ -4037,7 +4037,7 @@
                 ];
             });
             tabela(
-                ['Nat. Red.', 'Cod. Receita', 'Base de Cálculo', 'Alíquota Total', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total a deduzir'],
+                ['Cod. Receita', 'Nat. Red.', 'Base de Cálculo', 'Alíquota Total', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total a deduzir'],
                 rowsDarF,
                 [14, 14, 20, 15, 15, 15, 15, 18, 24]
             );

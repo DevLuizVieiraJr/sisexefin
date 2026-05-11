@@ -351,6 +351,7 @@
 
     function consolidarDetaCustos(titulos) {
         const map = new Map();
+        const frMap = new Map();
         (titulos || []).forEach(t => {
             (t.empenhosVinculados || []).forEach(v => {
                 const ne = ne12(v.numEmpenho);
@@ -360,11 +361,15 @@
                 const k = ne + '|' + sub + '|' + cc + '|' + ug;
                 const val = Number(v.valorVinculado) || 0;
                 map.set(k, (map.get(k) || 0) + val);
+                if (!frMap.has(k)) {
+                    const fr = String(v.fr || '').trim();
+                    if (fr) frMap.set(k, fr);
+                }
             });
         });
         return Array.from(map.entries()).map(([k, valor]) => {
             const p = k.split('|');
-            return { ne12: p[0], subelemento: p[1], centroCustos: p[2], ug: p[3], valor };
+            return { ne12: p[0], subelemento: p[1], centroCustos: p[2], ug: p[3], valor, fr: frMap.get(k) || '' };
         });
     }
 
@@ -459,6 +464,7 @@
         return deta.map(row => {
             let neFull = row.ne12;
             let nd = '-';
+            let fr = String(row.fr || '').trim();
             for (const t of titulos || []) {
                 const hit = (t.empenhosVinculados || []).find(v =>
                     ne12(v.numEmpenho) === row.ne12 && subel2(v.subelemento) === row.subelemento
@@ -467,6 +473,7 @@
                 if (hit) {
                     neFull = hit.numEmpenho || row.ne12;
                     nd = hit.nd || '-';
+                    if (!fr) fr = String(hit.fr || '').trim();
                     break;
                 }
             }
@@ -478,11 +485,13 @@
                     if (hit) {
                         neFull = hit.numEmpenho || row.ne12;
                         nd = hit.nd || '-';
+                        if (!fr) fr = String(hit.fr || '').trim();
                         break;
                     }
                 }
             }
-            return [neExibicaoPdf(neFull), nd, row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
+            // Colunas VINC/LF/PF ficam vazias por design: serão preenchidas manualmente na impressão.
+            return [neExibicaoPdf(neFull), nd, fr || '-', '', '', '', row.subelemento, moeda(row.valor), row.centroCustos, row.ug];
         });
     }
 
@@ -733,9 +742,9 @@
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
             ]);
             tabela(
-                ['Nota de Empenho', 'Nat. de Despesa', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
+                ['Nota de Empenho', 'Nat. de Despesa', 'FR', 'VINC', 'LF', 'PF', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
                 rowsEmp,
-                [34, 24, 12, 20, 44, 28]
+                [28, 18, 10, 10, 10, 10, 8, 18, 30, 20]
             );
             const totalNE = consolidarEmpenhosPrincipal(titulos).reduce((s, e) => s + (Number(e.valor) || 0), 0);
             if (totalNE > 0) linhaTotalDireita('Valor total das NE (consolidado)', moeda(totalNE));
@@ -746,7 +755,7 @@
         const itensDARF = deducoesPorTipo(titulos, 'DDF025');
 
         if (itensISS.length) {
-            tituloSecao('DEDUÇÕES — ISS');
+            tituloSecao('Dedução - ISS - DDR001');
             linhaCampos([
                 { label: 'Data vencimento (bloco)', valor: vencStr },
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
@@ -769,7 +778,7 @@
             }
         }
         if (itensINSS.length) {
-            tituloSecao('DEDUÇÕES — INSS');
+            tituloSecao('Dedução - INSS - DDF021');
             linhaCampos([
                 { label: 'Data vencimento (bloco)', valor: vencStr },
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
@@ -792,7 +801,7 @@
             }
         }
         if (itensDARF.length) {
-            tituloSecao('DEDUÇÕES — DARF');
+            tituloSecao('Dedução - DARF - DDF025');
             linhaCampos([
                 { label: 'Data vencimento (bloco)', valor: vencStr },
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
@@ -813,6 +822,7 @@
                 return [
                     d.tituloIdProc,
                     d.codReceita || '-',
+                    String(d.natRend || (d.raw && d.raw.natRendimento) || '').trim() || '-',
                     moeda(base),
                     `${aliq.toFixed(2)}%`,
                     moeda(comps.valorIR),
@@ -823,9 +833,9 @@
                 ];
             });
             tabela(
-                ['ID-PROC', 'Cod. Receita', 'Base', 'Alíq. tot.', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total'],
+                ['ID-PROC', 'Cod. Receita', 'Nat. Red.', 'Base', 'Alíq. tot.', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total'],
                 rowsDarF,
-                [16, 18, 20, 14, 14, 14, 14, 16, 18]
+                [14, 16, 14, 18, 12, 12, 12, 12, 14, 18]
             );
             if (itensDARF.length > 1) {
                 let sumDarf = 0;
