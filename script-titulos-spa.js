@@ -1797,6 +1797,55 @@
         if (!isFinite(v) || v <= 0) return 0;
         return Math.floor(v * 100) / 100;
     }
+    function arredondar2HalfUp(n) {
+        const v = Number(n || 0);
+        if (!isFinite(v) || v <= 0) return 0;
+        return Math.round(v * 100 + 1e-9) / 100;
+    }
+    function reconciliarComponentesDarf(base, aliqTotal, aliqIR, aliqCSLL, aliqCOFINS, aliqPIS) {
+        const baseN = Math.max(0, Number(base) || 0);
+        const aliqT = Math.max(0, Number(aliqTotal) || 0);
+        const totalCentavos = Math.round(baseN * aliqT + 1e-9);
+        const componentes = [
+            { chave: 'IR', aliq: Math.max(0, Number(aliqIR) || 0) },
+            { chave: 'CSLL', aliq: Math.max(0, Number(aliqCSLL) || 0) },
+            { chave: 'COFINS', aliq: Math.max(0, Number(aliqCOFINS) || 0) },
+            { chave: 'PIS', aliq: Math.max(0, Number(aliqPIS) || 0) }
+        ].map(c => {
+            const centavosBruto = baseN * c.aliq;
+            const centavosArred = Math.round(centavosBruto + 1e-9);
+            const piso = Math.floor(centavosBruto + 1e-9);
+            const residuo = centavosBruto - piso;
+            return { ...c, centavos: centavosArred, residuo };
+        });
+        const somaCentavos = componentes.reduce((s, c) => s + c.centavos, 0);
+        let diff = totalCentavos - somaCentavos;
+        if (diff !== 0) {
+            const ajustaveis = componentes.filter(c => c.aliq > 0);
+            if (ajustaveis.length > 0) {
+                const fila = ajustaveis.slice().sort((a, b) => diff > 0 ? (b.residuo - a.residuo) : (a.residuo - b.residuo));
+                const passo = diff > 0 ? 1 : -1;
+                let restantes = Math.abs(diff);
+                let i = 0;
+                let guarda = 0;
+                while (restantes > 0 && guarda < 10000) {
+                    const cand = fila[i % fila.length];
+                    if (passo > 0 || cand.centavos > 0) {
+                        cand.centavos += passo;
+                        restantes--;
+                    }
+                    i++;
+                    guarda++;
+                }
+            }
+        }
+        const valorIR = componentes[0].centavos / 100;
+        const valorCSLL = componentes[1].centavos / 100;
+        const valorCOFINS = componentes[2].centavos / 100;
+        const valorPISPASEP = componentes[3].centavos / 100;
+        const total = (componentes[0].centavos + componentes[1].centavos + componentes[2].centavos + componentes[3].centavos) / 100;
+        return { valorIR, valorCSLL, valorCOFINS, valorPISPASEP, total };
+    }
     function obterDedEncDdf025PorItem(item = {}) {
         const dedEncId = item.dedEncId || '';
         if (dedEncId) {
@@ -1845,12 +1894,20 @@
         const aliqCOFINS = Number(aliq.aliqCOFINS || 0);
         const aliqCSLL = Number(aliq.aliqCSLL || 0);
         const aliqPIS = Number(aliq.aliqPIS || 0);
-        const valorIR = truncar2(base * (aliqIR / 100));
-        const valorCOFINS = truncar2(base * (aliqCOFINS / 100));
-        const valorCSLL = truncar2(base * (aliqCSLL / 100));
-        const valorPISPASEP = truncar2(base * (aliqPIS / 100));
-        const total = truncar2(valorIR + valorCOFINS + valorCSLL + valorPISPASEP);
-        return { aliqIR, aliqCOFINS, aliqCSLL, aliqPIS, valorIR, valorCOFINS, valorCSLL, valorPISPASEP, total, fonteAliquota: aliq.fonte || 'indefinida' };
+        const aliqTotalN = Number(aliquotaTotal || 0);
+        const rec = reconciliarComponentesDarf(base, aliqTotalN, aliqIR, aliqCSLL, aliqCOFINS, aliqPIS);
+        return {
+            aliqIR,
+            aliqCOFINS,
+            aliqCSLL,
+            aliqPIS,
+            valorIR: rec.valorIR,
+            valorCOFINS: rec.valorCOFINS,
+            valorCSLL: rec.valorCSLL,
+            valorPISPASEP: rec.valorPISPASEP,
+            total: rec.total,
+            fonteAliquota: aliq.fonte || 'indefinida'
+        };
     }
     function abrirModalCalcularDeducao(permitida, editIndex = null) {
         if (!podeEditarAba(1)) {
@@ -1883,13 +1940,15 @@
             else if (tipo === 'DDR001') aliquota = Math.min(Number(dedEnc.aliquotaPadrao) || 5, Number(dedEnc.aliquotaMaxima) || 5);
         }
         const dataApuracao = edicao?.dataApuracao || ((tipo === 'DDF021' || tipo === 'DDR001') ? (document.getElementById('dataEmissao')?.value || new Date().toISOString().slice(0,10)) : (document.getElementById('dataLiquidacao')?.value || new Date().toISOString().slice(0,10)));
-        const valorCalc = truncar2(baseTC * (aliquota / 100));
         const aliquotasDarf = tipo === 'DDF025'
             ? obterAliquotasComponentesDarf({ dedEncId: permitida.dedEncId || dedEnc?.id, codigo: permitida.codigo || dedEnc?.codigo, aliquotaTotal: aliquota, aliquota })
             : null;
         const compsDarf = tipo === 'DDF025'
             ? calcularComponentesDarf(baseTC, aliquota, aliquotasDarf)
             : null;
+        const valorCalc = tipo === 'DDF025' && compsDarf
+            ? compsDarf.total
+            : truncar2(baseTC * (aliquota / 100));
         campos.innerHTML = `
             <div class="form-group"><label>Base de cálculo (R$):</label><input type="text" id="dedModalBase" value="${typeof formatarMoedaBR === 'function' ? formatarMoedaBR(baseTC) : baseTC.toFixed(2)}" data-moeda></div>
             <div class="form-group"><label>Alíquota (%):</label><input type="number" id="dedModalAliquota" step="0.01" value="${aliquota}" ${tipo === 'DDF025' ? 'readonly' : ''}></div>
@@ -1912,11 +1971,10 @@
         const recalc = () => {
             const b = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(baseInp?.value || 0) : parseFloat(String(baseInp?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
             const a = parseFloat(aliqInp?.value || 0) || 0;
-            const v = truncar2(b * (a / 100));
             const valEl = document.getElementById('dedModalValor');
-            if (valEl) valEl.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v) : v.toFixed(2);
             if (tipo === 'DDF025') {
                 const c = calcularComponentesDarf(b, a, aliquotasDarf);
+                if (valEl) valEl.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.total) : c.total.toFixed(2);
                 const elIr = document.getElementById('dedModalIR');
                 const elCof = document.getElementById('dedModalCOFINS');
                 const elCsll = document.getElementById('dedModalCSLL');
@@ -1925,6 +1983,9 @@
                 if (elCof) elCof.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorCOFINS) : c.valorCOFINS.toFixed(2);
                 if (elCsll) elCsll.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorCSLL) : c.valorCSLL.toFixed(2);
                 if (elPis) elPis.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(c.valorPISPASEP) : c.valorPISPASEP.toFixed(2);
+            } else {
+                const v = truncar2(b * (a / 100));
+                if (valEl) valEl.value = typeof formatarMoedaBR === 'function' ? formatarMoedaBR(v) : v.toFixed(2);
             }
         };
         if (baseInp) baseInp.addEventListener('input', recalc);
@@ -1939,11 +2000,13 @@
         const { permitida, dedEnc, tipo, editIndex } = deducaoModalContexto;
         const baseVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('dedModalBase')?.value || 0) : parseFloat(String(document.getElementById('dedModalBase')?.value || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
         const aliquotaVal = parseFloat(document.getElementById('dedModalAliquota')?.value || 0) || 0;
-        const valorCalc = truncar2(baseVal * (aliquotaVal / 100));
         const aliquotasDarf = tipo === 'DDF025'
             ? obterAliquotasComponentesDarf({ dedEncId: permitida.dedEncId || dedEnc?.id, codigo: permitida.codigo || dedEnc?.codigo, aliquotaTotal: aliquotaVal, aliquota: aliquotaVal })
             : null;
         const compsDarf = tipo === 'DDF025' ? calcularComponentesDarf(baseVal, aliquotaVal, aliquotasDarf) : null;
+        const valorCalc = tipo === 'DDF025' && compsDarf
+            ? compsDarf.total
+            : truncar2(baseVal * (aliquotaVal / 100));
         const dataApuracao = document.getElementById('dedModalDataApuracao')?.value || '';
         const jaExiste = (tipo === 'DDF021' || tipo === 'DDR001') && deducoesAplicadasAtual.some((d, idx) => d.tipo === tipo && idx !== editIndex);
         if (jaExiste) { alert('Já existe uma dedução ' + (tipo === 'DDF021' ? 'INSS' : 'ISS') + ' neste TC. Remova-a antes de adicionar outra.'); return; }
@@ -2794,6 +2857,12 @@
             empenhosDaNotaAtual[idx].valorVinculado = valorNum;
             empenhosDaNotaAtual[idx].centroCustosId = centroCustosId;
             empenhosDaNotaAtual[idx].ugId = ugId;
+            // Reforço de FR: se o vínculo (legado) estiver sem fr, tenta resgatar do cache local de empenhos
+            if (!String(empenhosDaNotaAtual[idx].fr || '').trim()) {
+                const numEmpAtual = String(empenhosDaNotaAtual[idx].numEmpenho || '').trim();
+                const fonte = (baseEmpenhos || []).find(e => String(e?.numEmpenho || '').trim() === numEmpAtual);
+                if (fonte && fonte.fr) empenhosDaNotaAtual[idx].fr = fonte.fr;
+            }
             // nd e subelemento são derivados da NE (não mudam aqui).
             indiceEmpenhoEditando = null;
             podeCancelarUltimaInclusaoEmpenhoNota = false;
@@ -3868,21 +3937,29 @@
 
         // 4) Empenhos vinculados
         const empenhos = t.empenhosVinculados || [];
+        const obterFRdoVinculo = (v) => {
+            const direto = String(v?.fr || '').trim();
+            if (direto) return direto;
+            const cache = Array.isArray(baseEmpenhos) ? baseEmpenhos : [];
+            const fonte = cache.find(e => String(e?.numEmpenho || '').trim() === String(v?.numEmpenho || '').trim());
+            return String(fonte?.fr || '').trim() || '-';
+        };
         if (empenhos.length) {
             tituloSecao('EMPENHOS VINCULADOS');
             tabela(
-                ['Nota de Empenho', 'Nat. de Despesa', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
+                ['Nota de Empenho', 'Nat. de Despesa', 'FR', 'Sub', 'Valor usado', 'Centro de Custos', 'UG Beneficiária'],
                 empenhos.map(v => [
                     (typeof formatarNumEmpenhoVisivel === 'function'
                         ? formatarNumEmpenhoVisivel(v.numEmpenho)
                         : (v.numEmpenho || '-')),
                     v.nd || '-',
+                    obterFRdoVinculo(v),
                     v.subelemento || '-',
                     moeda(v.valorVinculado || 0),
                     labelCC(v.centroCustosId),
                     labelUGPdf(v.ugId)
                 ]),
-                [34, 24, 12, 20, 44, 28]
+                [32, 20, 14, 10, 20, 40, 26]
             );
             const totalNE = empenhos.reduce((s, e) => s + Number(e.valorVinculado || 0), 0);
             linhaTotalDireita('Valor total das NE Vinculadas', moeda(totalNE));
@@ -3895,7 +3972,7 @@
         const itensDARF = deds.filter(d => d.tipo === 'DDF025');
 
         if (itensISS.length) {
-            tituloSecao('DEDUÇÕES - ISS');
+            tituloSecao('Dedução - ISS - DDR001');
             tabela(
                 ['Cod. Receita', 'Base de Cálculo', 'Alíquota', 'Valor a deduzir', 'Data da Apuração'],
                 itensISS.map(d => [
@@ -3909,7 +3986,7 @@
             );
         }
         if (itensINSS.length) {
-            tituloSecao('DEDUÇÕES - INSS');
+            tituloSecao('Dedução - INSS - DDF021');
             tabela(
                 ['Cod. Receita', 'Base de Cálculo', 'Alíquota', 'Valor a deduzir', 'Data da Apuração'],
                 itensINSS.map(d => [
@@ -3923,20 +4000,32 @@
             );
         }
         if (itensDARF.length) {
-            tituloSecao('DEDUÇÕES - DARF');
+            tituloSecao('Dedução - DARF - DDF025');
+            const obterNatRendDARF = (d) => {
+                const direto = String(d?.natRendimento || '').trim();
+                if (direto) return direto;
+                const cache = Array.isArray(baseDeducoesEncargos) ? baseDeducoesEncargos : [];
+                const codigo = String(d?.codigo || d?.codReceita || '').trim();
+                const fonte = cache.find(x =>
+                    (d?.dedEncId && x?.id === d.dedEncId) ||
+                    (codigo && String(x?.codigo || '').trim() === codigo && x?.tipo === 'DDF025')
+                );
+                return String(fonte?.natRendimento || '').trim() || '-';
+            };
             const rowsDarF = itensDARF.map(d => {
                 const base = Number(d.baseCalculo || t.valorNotaFiscal || 0);
                 const aliq = Number(d.aliquota || 0);
                 const comps = (d.valorIR != null || d.valorCOFINS != null || d.valorCSLL != null || d.valorPISPASEP != null)
                     ? {
-                        valorIR: truncar2(d.valorIR || 0),
-                        valorCOFINS: truncar2(d.valorCOFINS || 0),
-                        valorCSLL: truncar2(d.valorCSLL || 0),
-                        valorPISPASEP: truncar2(d.valorPISPASEP || 0),
-                        total: truncar2((d.valorIR || 0) + (d.valorCOFINS || 0) + (d.valorCSLL || 0) + (d.valorPISPASEP || 0))
+                        valorIR: Number(d.valorIR || 0),
+                        valorCOFINS: Number(d.valorCOFINS || 0),
+                        valorCSLL: Number(d.valorCSLL || 0),
+                        valorPISPASEP: Number(d.valorPISPASEP || 0),
+                        total: arredondar2HalfUp(Number(d.valorIR || 0) + Number(d.valorCOFINS || 0) + Number(d.valorCSLL || 0) + Number(d.valorPISPASEP || 0))
                     }
                     : calcularComponentesDarf(base, aliq, obterAliquotasComponentesDarf(d));
                 return [
+                    obterNatRendDARF(d),
                     d.codReceita || d.codigo || '-',
                     moeda(base),
                     `${aliq.toFixed(2)}%`,
@@ -3948,12 +4037,12 @@
                 ];
             });
             tabela(
-                ['Cod. Receita', 'Base de Cálculo', 'Alíquota Total', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total a deduzir'],
+                ['Nat. Red.', 'Cod. Receita', 'Base de Cálculo', 'Alíquota Total', 'IR', 'COFINS', 'CSLL', 'PIS/PASEP', 'Total a deduzir'],
                 rowsDarF,
-                [16, 23, 18, 17, 17, 17, 20, 22]
+                [14, 14, 20, 15, 15, 15, 15, 18, 24]
             );
             if (itensDARF.length > 1) {
-                const totalDarf = rowsDarF.reduce((s, r) => s + Number(String(r[7]).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')), 0);
+                const totalDarf = rowsDarF.reduce((s, r) => s + Number(String(r[8]).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')), 0);
                 linhaTotalDireita('Valor total DARF', moeda(totalDarf));
             }
         }
