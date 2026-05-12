@@ -75,9 +75,14 @@
                         Mostrar pré-liquidações inativas (admin)
                     </label>
                 </div>
+                <div id="containerSelecaoMultiplaPL" style="display:none; margin-bottom:12px; padding:10px; background:#e8f4f8; border-radius:4px;">
+                    <strong>Selecionados: <span id="countSelecionadosPL">0</span></strong>
+                    <button type="button" id="btnImprimirBlocoPL" class="btn-default btn-small" data-permission="preliquidacao_gerar_pdf" style="margin-left:15px;">📄 Imprimir DAuLiq em Bloco</button>
+                </div>
                 <table class="tabela-gov">
                     <thead>
                         <tr>
+                            <th style="width:40px;"><input type="checkbox" id="checkTodosPL" class="check-pl" title="Selecionar todos"></th>
                             <th>Código</th>
                             <th>Estado</th>
                             <th>Fornecedor</th>

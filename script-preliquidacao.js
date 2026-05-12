@@ -21,6 +21,7 @@
     let plDocAtual = null;
     let plSomenteLeitura = false;
     let carrinhoIds = new Set();
+    let plSelecionados = new Set();
     let fornecedorFiltroCnpj = '';
     let fornecedorFiltroNome = '';
     let modalMotivoResolver = null;
@@ -135,6 +136,118 @@
             await gerarPDFDauliq(plMerged, titulos, { incluirHistorico });
         } catch (e) {
             alert('Erro ao gerar PDF: ' + (e.message || e));
+        } finally {
+            esconderLoading();
+        }
+    }
+
+    async function gerarDauliqEmBloco(plIds) {
+        const LIMITE = 10;
+        const ids = Array.isArray(plIds) ? plIds.filter(Boolean) : [];
+        if (!ids.length) { alert('Nenhuma pré-liquidação selecionada.'); return; }
+        if (ids.length > LIMITE) {
+            alert(`Limite de ${LIMITE} DAuLiq por impressão em bloco. Você selecionou ${ids.length}.`);
+            return;
+        }
+        if (!tem('preliquidacao_gerar_pdf') && !ehAdmin()) {
+            alert('Você não tem permissão para gerar PDF de DAuLiq.');
+            return;
+        }
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            alert('Biblioteca jsPDF indisponível.');
+            return;
+        }
+        const variante = await pedirVariantePdfDauliq();
+        if (variante == null) return;
+        const incluirHistorico = variante === 'completo';
+
+        mostrarLoading();
+        const falhas = [];
+        const plsRenderizados = [];
+        try {
+            const { jsPDF } = window.jspdf;
+            const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
+
+            const carregados = [];
+            for (const plId of ids) {
+                try {
+                    const snap = await db.collection('preLiquidacoes').doc(plId).get();
+                    if (!snap.exists) { falhas.push(`PL ${plId}: não encontrada.`); continue; }
+                    const pl0 = { id: snap.id, ...snap.data() };
+                    const titulos = await carregarTitulosParaPdfPL(pl0);
+                    if (!titulos.length) { falhas.push(`PL ${pl0.codigo || plId}: sem títulos no lote.`); continue; }
+                    carregados.push({ pl0, titulos });
+                } catch (err) {
+                    falhas.push(`PL ${plId}: ${err && err.message || err}.`);
+                }
+            }
+            if (!carregados.length) {
+                alert('Nenhuma PL pôde ser carregada para impressão em bloco.\n\n' + falhas.join('\n'));
+                return;
+            }
+
+            carregados.sort((a, b) => String(a.pl0.codigo || '').localeCompare(String(b.pl0.codigo || ''), 'pt-BR', { numeric: true }));
+
+            for (let i = 0; i < carregados.length; i++) {
+                const { pl0, titulos } = carregados[i];
+                try {
+                    const meta = {
+                        geradoEm: new Date().toISOString(),
+                        usuario: typeof usuarioLogadoEmail === 'string' ? usuarioLogadoEmail : '',
+                        nomeArquivoSugerido: 'DAuLiq_em_bloco_' + (incluirHistorico ? 'completo' : 'sem-historico') + '.pdf',
+                        origem: 'lista_bloco',
+                        variantePdf: incluirHistorico ? 'completo' : 'sem_historico'
+                    };
+                    const evDet = 'DAuLiq gerado em bloco (variante: ' + (incluirHistorico ? 'completo' : 'sem histórico') + ')';
+                    const ev = plHistoricoEntry('pdf', evDet, '');
+                    const histNovo = (pl0.historico || []).concat([ev]);
+                    const plMerged = { ...pl0, auditoriaPdf: meta, historico: histNovo };
+                    await gerarPDFDauliq(plMerged, titulos, {
+                        incluirHistorico,
+                        docPDF,
+                        iniciarComNovaPagina: i > 0,
+                        salvar: false
+                    });
+                    plsRenderizados.push({ id: pl0.id, meta, ev });
+                } catch (err) {
+                    falhas.push(`PL ${pl0.codigo || pl0.id}: ${err && err.message || err}.`);
+                }
+            }
+
+            const totalPages = docPDF.getNumberOfPages();
+            for (let p = 1; p <= totalPages; p++) {
+                docPDF.setPage(p);
+                docPDF.setFontSize(8);
+                docPDF.text(`Página ${p} de ${totalPages}`, 105, 290, { align: 'center' });
+            }
+
+            const stamp = (() => {
+                const d = new Date();
+                return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+            })();
+            const sufArq = incluirHistorico ? '' : '_sem-historico';
+            docPDF.save(`DAuLiq_em_bloco_${plsRenderizados.length}${sufArq}_${stamp}.pdf`);
+
+            for (const r of plsRenderizados) {
+                try {
+                    const plRef = db.collection('preLiquidacoes').doc(r.id);
+                    const cur = await plRef.get();
+                    const curHist = (cur.exists && cur.data().historico) || [];
+                    await plRef.update({
+                        auditoriaPdf: r.meta,
+                        historico: curHist.concat([r.ev]),
+                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (e) {
+                    console.warn('Falha ao registrar auditoria de DAuLiq em bloco para PL', r.id, e);
+                }
+            }
+
+            if (falhas.length) {
+                alert(`PDF em bloco gerado com ${plsRenderizados.length} DAuLiq. Falharam ${falhas.length}:\n\n` + falhas.join('\n'));
+            }
+        } catch (e) {
+            alert('Erro ao gerar DAuLiq em bloco: ' + (e.message || e));
         } finally {
             esconderLoading();
         }
@@ -511,8 +624,11 @@
             return;
         }
         const incluirHistorico = !(opcoesPdf && opcoesPdf.incluirHistorico === false);
+        const salvar = !(opcoesPdf && opcoesPdf.salvar === false);
+        const iniciarComNovaPagina = !!(opcoesPdf && opcoesPdf.iniciarComNovaPagina === true);
         const { jsPDF } = window.jspdf;
-        const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
+        const docPDF = (opcoesPdf && opcoesPdf.docPDF) || new jsPDF({ unit: 'mm', format: 'a4' });
+        if (opcoesPdf && opcoesPdf.docPDF && iniciarComNovaPagina) docPDF.addPage();
         const M = { l: 10, r: 10, t: 10, b: 12 };
         const W = 210 - M.l - M.r;
         const PAGE_H = 297;
@@ -879,6 +995,11 @@
             }
         }
 
+        if (!salvar) {
+            // Modo batch: o chamador é responsável pela paginação final e pelo save.
+            return { ok: true };
+        }
+
         const totalPages = docPDF.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
             docPDF.setPage(i);
@@ -888,6 +1009,7 @@
 
         const sufArq = incluirHistorico ? '' : '_sem-historico';
         docPDF.save('DAuLiq_' + String(pl.codigo || 'lote').replace(/\//g, '-') + sufArq + '.pdf');
+        return { ok: true };
     }
 
     function pedirMotivo(tituloModal) {
@@ -1025,9 +1147,13 @@
             return true;
         });
         if (!filtrada.length) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Nenhuma pré-liquidação.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhuma pré-liquidação.</td></tr>';
+            plSelecionados.clear();
+            atualizarUIselecaoPL();
             return;
         }
+        const idsExibidos = new Set(filtrada.map(p => p.id));
+        plSelecionados.forEach(id => { if (!idsExibidos.has(id)) plSelecionados.delete(id); });
         filtrada.sort((a, b) => String(b.codigo || '').localeCompare(String(a.codigo || '')));
         const podePdf = tem('preliquidacao_gerar_pdf') || ehAdmin();
         const podeEditarLista = podeOperarPLLista();
@@ -1053,7 +1179,11 @@
             const btnPdf = podePdf
                 ? `<button type="button" class="btn-default btn-small btn-pl-pdf" data-id="${escapeHTML(p.id)}" ${nPdf ? '' : 'disabled title="Sem títulos no lote"'}>DAuLiq</button>`
                 : '';
+            const podeSelecionar = podePdf && nPdf > 0;
+            const checked = podeSelecionar && plSelecionados.has(p.id) ? ' checked' : '';
+            const disabledChk = podeSelecionar ? '' : ' disabled title="Sem títulos no lote ou sem permissão"';
             tr.innerHTML = `
+                <td><input type="checkbox" class="check-pl check-pl-row" data-id="${escapeHTML(p.id)}"${checked}${disabledChk}></td>
                 <td>${escapeHTML(p.codigo || '-')}</td>
                 <td>${badge}</td>
                 <td>${escapeHTML(p.fornecedorNome || '-')}</td>
@@ -1082,6 +1212,43 @@
                 gerarDauliqDaLista(btn.getAttribute('data-id'));
             });
         });
+        tbody.querySelectorAll('.check-pl-row').forEach(chk => {
+            chk.addEventListener('change', function() {
+                const id = this.getAttribute('data-id');
+                if (this.checked) plSelecionados.add(id); else plSelecionados.delete(id);
+                atualizarUIselecaoPL();
+                sincronizarCheckTodosPL();
+            });
+        });
+        sincronizarCheckTodosPL();
+        atualizarUIselecaoPL();
+    }
+
+    function sincronizarCheckTodosPL() {
+        const chkTodos = document.getElementById('checkTodosPL');
+        if (!chkTodos) return;
+        const checks = document.querySelectorAll('#tbodyListaPL .check-pl-row:not(:disabled)');
+        if (!checks.length) { chkTodos.checked = false; chkTodos.indeterminate = false; return; }
+        const marcados = Array.from(checks).filter(c => c.checked).length;
+        chkTodos.checked = marcados === checks.length;
+        chkTodos.indeterminate = marcados > 0 && marcados < checks.length;
+    }
+
+    function atualizarUIselecaoPL() {
+        const container = document.getElementById('containerSelecaoMultiplaPL');
+        const count = document.getElementById('countSelecionadosPL');
+        const btn = document.getElementById('btnImprimirBlocoPL');
+        if (!container || !count) return;
+        const n = plSelecionados.size;
+        container.style.display = n > 0 ? 'block' : 'none';
+        count.textContent = n;
+        if (btn) {
+            if (n > 10) {
+                btn.title = `Selecionados: ${n}. Limite de 10 DAuLiq por impressão em bloco.`;
+            } else {
+                btn.title = `Gerar PDF único com ${n} DAuLiq.`;
+            }
+        }
     }
 
     function desenharCarrinho() {
@@ -1706,6 +1873,24 @@
         document.getElementById('btnPLExcluir')?.addEventListener('click', () => excluirPLPermanente());
         document.getElementById('plBuscaTC')?.addEventListener('input', () => desenharDisponiveis());
         document.getElementById('filtroPLInativas')?.addEventListener('change', () => desenharListaPL());
+        document.getElementById('checkTodosPL')?.addEventListener('change', function() {
+            const marcar = this.checked;
+            document.querySelectorAll('#tbodyListaPL .check-pl-row:not(:disabled)').forEach(chk => {
+                chk.checked = marcar;
+                const id = chk.getAttribute('data-id');
+                if (marcar) plSelecionados.add(id); else plSelecionados.delete(id);
+            });
+            atualizarUIselecaoPL();
+        });
+        document.getElementById('btnImprimirBlocoPL')?.addEventListener('click', function() {
+            const ids = Array.from(plSelecionados);
+            if (!ids.length) return;
+            if (ids.length > 10) {
+                alert(`Limite de 10 DAuLiq por impressão em bloco. Você selecionou ${ids.length}.`);
+                return;
+            }
+            gerarDauliqEmBloco(ids);
+        });
 
         const paramsAno = new URLSearchParams(window.location.search);
         const anoPlQ = (paramsAno.get('ano') || '').trim().toLowerCase();

@@ -817,8 +817,33 @@
                     : (todosLiquidados ? '↩ Retornar para Em Liquidação em Bloco' : '↩ Retornar status em Bloco');
             }
             if (btnDevolverBloco) btnDevolverBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento || todosEmLiquidacao)) ? 'inline-block' : 'none';
+            const btnImprimirBlocoTC = document.getElementById('btnImprimirBlocoTC');
+            if (btnImprimirBlocoTC) {
+                const podeGerarPdf = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
+                    (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+                if (n >= 1 && podeGerarPdf) {
+                    btnImprimirBlocoTC.style.display = 'inline-block';
+                    if (n > 10) {
+                        btnImprimirBlocoTC.title = `Selecionados: ${n}. Limite de 10 TC por impressão em bloco.`;
+                    } else {
+                        btnImprimirBlocoTC.title = `Gerar PDF único com ${n} TC.`;
+                    }
+                } else {
+                    btnImprimirBlocoTC.style.display = 'none';
+                }
+            }
         }
     }
+
+    document.getElementById('btnImprimirBlocoTC')?.addEventListener('click', function() {
+        const ids = Array.from(titulosSelecionados);
+        if (!ids.length) return;
+        if (ids.length > 10) {
+            alert(`Limite de 10 TC por impressão em bloco. Você selecionou ${ids.length}.`);
+            return;
+        }
+        gerarPDFTitulosEmBloco(ids);
+    });
 
     window.mudarTamanhoPagina = function() {
         itensPorPagina = parseInt(document.getElementById('itensPorPagina')?.value || 10);
@@ -891,6 +916,7 @@
         document.getElementById('oiEntregou').value = '';
         document.getElementById('fornecedorValor').value = '';
         document.getElementById('contratoIdSelecionado').value = '';
+        aplicarModoSemContrato(false);
         limparFornecedorSelecionado();
         empenhosDaNotaAtual = [];
         deducoesAplicadasAtual = [];
@@ -945,7 +971,6 @@
             String(tc.numTC || '').trim() &&
             String(tc.fornecedorCnpj || '').trim() &&
             String(tc.fornecedorNome || tc.fornecedor || '').trim() &&
-            String(tc.instrumento || '').trim() &&
             Number(tc.valorNotaFiscal || 0) > 0 &&
             String(tc.dataEmissao || '').trim() &&
             String(tc.dataAteste || '').trim()
@@ -957,7 +982,7 @@
         const tc = t || {};
         if (destino === 'Em Processamento') {
             if (!dadosBasicosCompletos(tc)) {
-                return { ok: false, mensagem: 'Dados básicos incompletos. Preencha tipo, entrada EXEFIN, nº TC, fornecedor, contrato, valor e datas (aba Dados Básicos) antes de encaminhar para Processamento.' };
+                return { ok: false, mensagem: 'Dados básicos incompletos. Preencha tipo, entrada EXEFIN, nº TC, fornecedor, valor e datas (aba Dados Básicos) antes de encaminhar para Processamento. O contrato só é obrigatório quando o CNPJ possui contrato cadastrado.' };
             }
             if (!String(tc.oiEntregou || '').trim()) {
                 return { ok: false, mensagem: 'É necessário informar a OI de Origem (aba Dados Básicos) antes de encaminhar para Processamento.' };
@@ -2455,6 +2480,54 @@
         }
     }
 
+    function modoSemContratoAtivo() {
+        const chk = document.getElementById('chkContinuarSemContrato');
+        return !!(chk && chk.checked);
+    }
+
+    function atualizarPlaceholderBuscaNE() {
+        const inputEmpenho = document.getElementById('buscaEmpenhoT');
+        if (!inputEmpenho) return;
+        inputEmpenho.placeholder = modoSemContratoAtivo()
+            ? 'Ex: 741000... (filtro por CNPJ + Tipo de TC)'
+            : 'Ex: 741000...';
+    }
+
+    function aplicarModoSemContrato(ativo) {
+        const fieldset = document.getElementById('fieldsetContratoFornecedor');
+        const chk = document.getElementById('chkContinuarSemContrato');
+        if (chk && chk.checked !== !!ativo) chk.checked = !!ativo;
+        if (fieldset) fieldset.classList.toggle('tc-sem-contrato', !!ativo);
+        if (ativo) {
+            document.getElementById('contratoIdSelecionado').value = '';
+            const sel = document.getElementById('contratoSelecionado');
+            if (sel) sel.value = '';
+            preencherDadosContrato(null);
+            if (typeof recalcularDeducoesContratoSubstituindo === 'function') recalcularDeducoesContratoSubstituindo();
+            if (typeof desenharBotoesCalcularDed === 'function') desenharBotoesCalcularDed();
+        }
+        atualizarPlaceholderBuscaNE();
+    }
+
+    function configurarToggleSemContrato() {
+        const chk = document.getElementById('chkContinuarSemContrato');
+        if (!chk || chk.dataset.bound === '1') return;
+        chk.dataset.bound = '1';
+        chk.addEventListener('change', function() {
+            aplicarModoSemContrato(this.checked);
+        });
+    }
+
+    function atualizarAvisoSemContrato({ cnpjPreenchido, totalContratos }) {
+        const aviso = document.getElementById('avisoSemContratoFornecedor');
+        if (!aviso) return;
+        const deveExibir = !!cnpjPreenchido && totalContratos === 0;
+        aviso.style.display = deveExibir ? '' : 'none';
+        if (!deveExibir) {
+            aplicarModoSemContrato(false);
+        }
+    }
+
     async function selecionarFornecedorPorCnpj(cnpjSelecionado) {
         const cnpjN = normalizarCNPJ14(cnpjSelecionado);
         const fornecedorObj = obterFornecedorPorCnpj(cnpjN);
@@ -2481,19 +2554,29 @@
                 } catch (err) {
                     contratosFornecedorSelecionado = [];
                 }
-                sel.innerHTML = '<option value="">Selecione o contrato</option>';
                 if (contratosFornecedorSelecionado.length === 0) {
-                    sel.innerHTML = '<option value="">Nenhum contrato encontrado para o CNPJ selecionado</option>';
+                    sel.innerHTML = '<option value="">Nenhum contrato vinculado a este CNPJ</option>';
+                    sel.disabled = true;
+                } else {
+                    sel.innerHTML = '<option value="">Selecione o contrato</option>';
+                    sel.disabled = false;
+                    contratosFornecedorSelecionado.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.numContrato || c.instrumento || '-';
+                        sel.appendChild(opt);
+                    });
                 }
-                contratosFornecedorSelecionado.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.id;
-                    opt.textContent = c.numContrato || c.instrumento || '-';
-                    sel.appendChild(opt);
-                });
+            } else {
+                contratosFornecedorSelecionado = [];
             }
         }
+        atualizarAvisoSemContrato({
+            cnpjPreenchido: !!cnpjN,
+            totalContratos: (contratosFornecedorSelecionado || []).length
+        });
         preencherDadosContrato(null);
+        atualizarPlaceholderBuscaNE();
     }
 
     window.limparFornecedorSelecionado = function() {
@@ -2509,7 +2592,9 @@
             sel.innerHTML = '<option value="">Selecione o fornecedor (CNPJ) primeiro</option>';
             sel.disabled = true;
         }
+        atualizarAvisoSemContrato({ cnpjPreenchido: false, totalContratos: 0 });
         preencherDadosContrato(null);
+        atualizarPlaceholderBuscaNE();
     };
 
     function preencherDadosContrato(contrato) {
@@ -2664,8 +2749,15 @@
 
         const contratoId = (document.getElementById('contratoIdSelecionado')?.value || '').trim();
         const contratoSel = contratoId ? baseContratos.find(c => c.id === contratoId) : null;
-        if (!contratoSel) {
+        const semContrato = !contratoSel && modoSemContratoAtivo();
+        const fornecedorCnpjSelecionado = (document.getElementById('fornecedorValor')?.value || '').trim();
+
+        if (!contratoSel && !semContrato) {
             listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Selecione um Contrato para filtrar as NE.</li>';
+            return;
+        }
+        if (semContrato && !fornecedorCnpjSelecionado) {
+            listaEmpenhosT.innerHTML = '<li style="padding:10px; color:#777; font-size:12px;">Selecione o Fornecedor para filtrar as NE.</li>';
             return;
         }
 
@@ -2675,7 +2767,7 @@
             return;
         }
 
-        // Filtro 2: tenta obter CNPJ por múltiplos campos do contrato.
+        // Filtro 2: tenta obter CNPJ por múltiplos campos do contrato (ou direto do fornecedor, se sem contrato).
         const normalizarCNPJ = (v) => String(v || '').replace(/\D/g, '').trim();
         const normalizarNome = (v) => removerAcentos(String(v || '').toLowerCase())
             .replace(/\d+/g, ' ')
@@ -2700,8 +2792,15 @@
             }
             return '';
         };
-        const cnpjContrato = extrairCnpjDoContrato(contratoSel);
-        const nomeFornecedorContrato = normalizarNome(contratoSel.nomeFornecedor || contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
+        const cnpjContrato = semContrato
+            ? normalizarCNPJ(fornecedorCnpjSelecionado)
+            : extrairCnpjDoContrato(contratoSel);
+        const fornecedorSemContratoObj = semContrato
+            ? (typeof obterFornecedorPorCnpj === 'function' ? obterFornecedorPorCnpj(cnpjContrato) : null)
+            : null;
+        const nomeFornecedorContrato = semContrato
+            ? normalizarNome((fornecedorSemContratoObj && (fornecedorSemContratoObj.nome || fornecedorSemContratoObj.nomeFornecedor)) || '')
+            : normalizarNome(contratoSel.nomeFornecedor || contratoSel.fornecedor || contratoSel.razaoSocial || contratoSel.empresa || '');
 
         // Valida o ND: se estiver vazio/inválido, a NE deve sumir (mesmo em "NF Genérica").
         const ndValido = (nd) => {
@@ -2925,9 +3024,12 @@
         const fornecedorCnpj = t.fornecedorCnpj ? normalizarCNPJ(t.fornecedorCnpj) : '';
         if (fornecedorCnpj) {
             selecionarFornecedorPorCnpj(fornecedorCnpj).then(() => {
-                const contratoLigado = (contratosFornecedorSelecionado || []).find(c =>
-                    (c.numContrato || c.instrumento || '') === (t.instrumento || '')
-                );
+                const instrumentoSalvo = String(t.instrumento || '').trim();
+                const contratoLigado = instrumentoSalvo
+                    ? (contratosFornecedorSelecionado || []).find(c =>
+                        (c.numContrato || c.instrumento || '') === instrumentoSalvo
+                    )
+                    : null;
                 if (contratoLigado) {
                     document.getElementById('contratoIdSelecionado').value = contratoLigado.id;
                     const sel = document.getElementById('contratoSelecionado');
@@ -2937,6 +3039,9 @@
                         const rcEl = document.getElementById('rcSelecionada');
                         if (rcEl && t.rc) rcEl.value = t.rc;
                     }
+                } else if (!instrumentoSalvo) {
+                    // TC salvo sem contrato vinculado: ativa automaticamente o modo "sem contrato".
+                    aplicarModoSemContrato(true);
                 }
             });
         } else if (t.fornecedor) {
@@ -3108,7 +3213,8 @@
 
         if (!dataExefin) return alert("Preencha a Entrada na EXEFIN.");
         if (!numTC) return alert("Preencha o Número do TC.");
-        if (!fornecedorCnpj || !instrumento) return alert("Selecione o Fornecedor (CNPJ) e o Contrato.");
+        if (!fornecedorCnpj) return alert("Selecione o Fornecedor (CNPJ).");
+        if (!instrumento && !modoSemContratoAtivo()) return alert('Selecione o Contrato ou marque "Continuar sem contrato vinculado".');
         if (!oiEntregou) return alert("Selecione a OI de Origem.");
         const tipoTCVal = (document.getElementById('tipoTC')?.value || '').trim();
         if (!tipoTCVal) return alert("Selecione o Tipo de TC.");
@@ -3726,28 +3832,30 @@
         }
     }
 
-    async function gerarPDFTitulo(id) {
-        const tLocal = baseTitulos.find(x => x.id === id);
-        let t = tLocal;
+    async function gerarPDFTitulo(id, opcoes = {}) {
+        const salvar = opcoes.salvar !== false;
+        const iniciarComNovaPagina = opcoes.iniciarComNovaPagina === true;
+        let t = opcoes.tcCarregado || baseTitulos.find(x => x.id === id) || null;
         if (!t) {
             try {
                 const doc = await db.collection('titulos').doc(id).get();
                 if (!doc.exists) {
-                    alert("TC não encontrado para gerar PDF.");
-                    return;
+                    if (salvar) alert("TC não encontrado para gerar PDF.");
+                    return { ok: false, erro: 'TC não encontrado' };
                 }
                 t = { id: doc.id, ...doc.data() };
             } catch (err) {
-                alert("Erro ao carregar TC para PDF: " + (err.message || err));
-                return;
+                if (salvar) alert("Erro ao carregar TC para PDF: " + (err.message || err));
+                return { ok: false, erro: err && err.message || String(err) };
             }
         }
         if (!window.jspdf || !window.jspdf.jsPDF) {
-            alert("Módulo de PDF indisponível. Verifique o carregamento da biblioteca jsPDF.");
-            return;
+            if (salvar) alert("Módulo de PDF indisponível. Verifique o carregamento da biblioteca jsPDF.");
+            return { ok: false, erro: 'jsPDF indisponível' };
         }
         const { jsPDF } = window.jspdf;
-        const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
+        const docPDF = opcoes.docPDF || new jsPDF({ unit: 'mm', format: 'a4' });
+        if (opcoes.docPDF && iniciarComNovaPagina) docPDF.addPage();
         const M = { l: 10, r: 10, t: 10, b: 12 };
         const W = 210 - M.l - M.r;
         const PAGE_H = 297;
@@ -4070,6 +4178,11 @@
             { label: 'GEROP', valor: '-' }
         ]);
 
+        if (!salvar) {
+            // Modo batch: o chamador é responsável pela paginação final, save e auditoria.
+            return { ok: true, tc: t };
+        }
+
         // Número de páginas no rodapé simples
         const totalPages = docPDF.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
@@ -4093,6 +4206,107 @@
         } catch (e) {
             // falha silenciosa na auditoria não impede o PDF
             console.warn('Falha ao registrar auditoria de PDF:', e);
+        }
+        return { ok: true, tc: t };
+    }
+
+    async function gerarPDFTitulosEmBloco(ids) {
+        const LIMITE = 10;
+        const listaIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+        if (!listaIds.length) {
+            alert('Nenhum TC selecionado para impressão em bloco.');
+            return;
+        }
+        if (listaIds.length > LIMITE) {
+            alert(`Limite de ${LIMITE} TC por impressão em bloco. Você selecionou ${listaIds.length}.`);
+            return;
+        }
+        const podeGerar = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
+            (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+        if (!podeGerar) {
+            alert('Você não tem permissão para gerar PDF de TC.');
+            return;
+        }
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            alert('Módulo de PDF indisponível. Verifique o carregamento da biblioteca jsPDF.');
+            return;
+        }
+
+        const tcsCarregados = [];
+        const falhas = [];
+        for (const id of listaIds) {
+            const local = baseTitulos.find(x => x.id === id);
+            if (local) {
+                tcsCarregados.push(local);
+                continue;
+            }
+            try {
+                const docSnap = await db.collection('titulos').doc(id).get();
+                if (!docSnap.exists) {
+                    falhas.push(`TC ${id}: não encontrado.`);
+                    continue;
+                }
+                tcsCarregados.push({ id: docSnap.id, ...docSnap.data() });
+            } catch (err) {
+                falhas.push(`TC ${id}: ${err && err.message || err}.`);
+            }
+        }
+        if (!tcsCarregados.length) {
+            alert('Nenhum TC pôde ser carregado para impressão em bloco.\n\n' + falhas.join('\n'));
+            return;
+        }
+
+        tcsCarregados.sort((a, b) => String(a.idProc || '').localeCompare(String(b.idProc || ''), 'pt-BR', { numeric: true }));
+
+        const { jsPDF } = window.jspdf;
+        const docPDF = new jsPDF({ unit: 'mm', format: 'a4' });
+        const tcsRenderizados = [];
+        for (let i = 0; i < tcsCarregados.length; i++) {
+            const tc = tcsCarregados[i];
+            try {
+                const r = await gerarPDFTitulo(tc.id, {
+                    docPDF,
+                    tcCarregado: tc,
+                    iniciarComNovaPagina: i > 0,
+                    salvar: false
+                });
+                if (r && r.ok) tcsRenderizados.push(tc);
+                else falhas.push(`TC ${tc.idProc || tc.id}: falha ao renderizar (${r && r.erro || 'desconhecido'}).`);
+            } catch (err) {
+                falhas.push(`TC ${tc.idProc || tc.id}: ${err && err.message || err}.`);
+            }
+        }
+
+        const totalPages = docPDF.getNumberOfPages();
+        for (let p = 1; p <= totalPages; p++) {
+            docPDF.setPage(p);
+            docPDF.setFontSize(8);
+            docPDF.text(`Página ${p} de ${totalPages}`, 105, 290, { align: 'center' });
+        }
+
+        const stamp = (() => {
+            const d = new Date();
+            return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+        })();
+        docPDF.save(`TCs_em_bloco_${tcsRenderizados.length}_${stamp}.pdf`);
+
+        for (const tc of tcsRenderizados) {
+            try {
+                await db.collection('titulos').doc(tc.id).update({
+                    historicoStatus: firebase.firestore.FieldValue.arrayUnion({
+                        status: 'PDF Gerado (bloco)',
+                        data: firebase.firestore.Timestamp.now(),
+                        usuario: usuarioLogadoEmail || ''
+                    }),
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) {
+                console.warn('Falha ao registrar auditoria de PDF em bloco para TC', tc.id, e);
+            }
+        }
+
+        if (falhas.length) {
+            alert(`PDF em bloco gerado com ${tcsRenderizados.length} TC. Falharam ${falhas.length}:\n\n` + falhas.join('\n'));
         }
     }
 
@@ -4203,6 +4417,7 @@
             fornecedorNome = (m && m[1]) ? m[1].trim() : String(fornecedorTexto).trim().replace(/\d+/g, ' ').replace(/[-./\\]/g, ' ').replace(/\s+/g, ' ').trim();
         }
 
+        const instrumentoImport = valorTexto(row, ['instrumento', 'INSTRUMENTO', 'contrato']);
         const obrigatorios = {
             idProc: valorTexto(row, ['idProc', 'ID_PROC', 'id_proc']),
             tipoTC: valorTexto(row, ['tipoTC', 'TIPO_TC', 'tipo_tc']),
@@ -4210,7 +4425,6 @@
             numTC: valorTexto(row, ['numTC', 'NUM_TC', 'num_tc']),
             fornecedorCnpj: fornecedorCnpj,
             fornecedorNome: valorTexto(row, ['fornecedorNome', 'FORNECEDOR_NOME', 'fornecedor_nome', 'nomeFornecedor', 'NOME_FORNECEDOR', 'nome_fornecedor']) || fornecedorNome,
-            instrumento: valorTexto(row, ['instrumento', 'INSTRUMENTO', 'contrato']),
             valorNotaFiscal: valorNumerico(valorTexto(row, ['valorNotaFiscal', 'VALOR_NOTA_FISCAL', 'valor_nota_fiscal'])),
             dataEmissao: valorDataISO(valorTexto(row, ['dataEmissao', 'DATA_EMISSAO', 'data_emissao'])),
             dataAteste: valorDataISO(valorTexto(row, ['dataAteste', 'DATA_ATESTE', 'data_ateste'])),
@@ -4234,7 +4448,7 @@
             ano: anoImp,
             fornecedorCnpj: obrigatorios.fornecedorCnpj,
             fornecedorNome: obrigatorios.fornecedorNome,
-            instrumento: obrigatorios.instrumento,
+            instrumento: instrumentoImport,
             valorNotaFiscal: obrigatorios.valorNotaFiscal,
             dataEmissao: obrigatorios.dataEmissao,
             dataAteste: obrigatorios.dataAteste,
@@ -4528,6 +4742,7 @@
         configurarAutocompleteOI();
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
+        configurarToggleSemContrato();
         configurarAutocompleteEmpenho();
         configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();
@@ -4543,6 +4758,7 @@
         configurarAutocompleteOI();
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
+        configurarToggleSemContrato();
         configurarAutocompleteEmpenho();
         configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();

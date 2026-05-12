@@ -84,6 +84,49 @@
             cursor: not-allowed !important;
             opacity: 1 !important;
         }
+        .aviso-sem-contrato {
+            margin: 4px 0 10px 0;
+            padding: 10px 12px;
+            background: #fff8e1;
+            border: 1px solid #f0c36d;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #8a6d3b;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .aviso-sem-contrato .aviso-sem-contrato-acao {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            color: #5a4a1f;
+        }
+        .aviso-sem-contrato .aviso-sem-contrato-acao input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+        .badge-sem-contrato {
+            display: none;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #f39c12;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+        .gov-fieldset.tc-sem-contrato .form-row-contrato-derivado,
+        .gov-fieldset.tc-sem-contrato .form-group-contrato-select,
+        .gov-fieldset.tc-sem-contrato .form-row-contrato-derivado-inline,
+        .gov-fieldset.tc-sem-contrato #avisoVigenciaContrato {
+            display: none !important;
+        }
+        .gov-fieldset.tc-sem-contrato .badge-sem-contrato {
+            display: inline-block;
+        }
     </style>
 </head>
 <body style="display: none;" id="corpo-titulos">
@@ -146,6 +189,7 @@
                     <button type="button" id="btnEncaminharBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">➡️ Encaminhar em Bloco</button>
                     <button type="button" id="btnRetornarBloco" class="btn-default btn-small" style="display:none;">↩ Retornar status em Bloco</button>
                     <button type="button" id="btnDevolverBloco" class="btn-default btn-small" style="display:none; color:#e74c3c;">↩ Devolver TC em Bloco</button>
+                    <button type="button" id="btnImprimirBlocoTC" class="btn-default btn-small" data-permission="titulos_pdf" style="margin-left: 15px; display:none;">📄 Imprimir PDF em Bloco</button>
                 </div>
                 <table id="tabelaTitulos" class="tabela-gov">
                     <thead>
@@ -226,32 +270,39 @@
                             <div class="form-group flex-1"><label>Data do Ateste (Certificação):</label><input type="date" id="dataAteste" required></div>
                         </div>
                         <!-- Bloco C -->
-                        <fieldset class="gov-fieldset">
-                            <legend>Dados do Contrato e Fornecedor</legend>
+                        <fieldset class="gov-fieldset" id="fieldsetContratoFornecedor">
+                            <legend>Dados do Contrato e Fornecedor<span id="badgeSemContratoTC" class="badge-sem-contrato" aria-hidden="true">Sem contrato vinculado</span></legend>
                             <div class="form-row">
                                 <div class="form-group flex-1" style="position: relative;">
-                                    <label>Fornecedor:</label>
+                                    <label for="buscaFornecedorT">Fornecedor:</label>
                                     <div class="input-com-clear">
                                         <input type="text" id="buscaFornecedorT" placeholder="Digite 2+ caracteres para buscar fornecedor..." autocomplete="off">
-                                        <button type="button" id="limparFornecedorBtn" class="btn-clear-input" onclick="limparFornecedorSelecionado()" style="display:none;">×</button>
+                                        <button type="button" id="limparFornecedorBtn" class="btn-clear-input" onclick="limparFornecedorSelecionado()" style="display:none;" aria-label="Limpar fornecedor selecionado">×</button>
                                     </div>
                                     <ul id="listaResultadosFornecedorT" class="autocomplete-list"></ul>
                                 </div>
-                                <div class="form-group flex-1">
-                                    <label>Contrato (Instrumento):</label>
+                                <div class="form-group flex-1 form-group-contrato-select">
+                                    <label for="contratoSelecionado">Contrato (Instrumento):</label>
                                     <select id="contratoSelecionado" disabled><option value="">Selecione o fornecedor primeiro</option></select>
                                 </div>
-                                <div class="form-group flex-1"><label>Valor do Contrato (R$):</label><input type="text" id="valorContrato" readonly class="input-readonly" placeholder="Preenchido ao selecionar contrato"></div>
-                                <div class="form-group flex-1">
-                                    <label>RC do Contrato:</label>
+                                <div class="form-group flex-1 form-row-contrato-derivado-inline"><label for="valorContrato">Valor do Contrato (R$):</label><input type="text" id="valorContrato" readonly class="input-readonly" placeholder="Preenchido ao selecionar contrato"></div>
+                                <div class="form-group flex-1 form-row-contrato-derivado-inline">
+                                    <label for="rcSelecionada">RC do Contrato:</label>
                                     <select id="rcSelecionada"><option value="">Selecione o contrato</option></select>
                                 </div>
                             </div>
-                            <div class="form-row">
-                                <div class="form-group flex-1"><label>Início da Vigência:</label><input type="date" id="inicioVigencia" readonly class="input-readonly"></div>
-                                <div class="form-group flex-1"><label>Fim da Vigência:</label><input type="date" id="fimVigencia" readonly class="input-readonly"></div>
-                                <div class="form-group flex-1"><label>Fiscal do Contrato:</label><input type="text" id="fiscalContrato" readonly class="input-readonly"></div>
-                                <div class="form-group flex-1"><label>Contato do Fiscal:</label><input type="text" id="contatoFiscal" readonly class="input-readonly"></div>
+                            <div id="avisoSemContratoFornecedor" class="aviso-sem-contrato" role="status" aria-live="polite" style="display:none;">
+                                <span>Este fornecedor não possui contrato vinculado. Você pode continuar o registro do TC sem associar a um contrato.</span>
+                                <label class="aviso-sem-contrato-acao" for="chkContinuarSemContrato">
+                                    <input type="checkbox" id="chkContinuarSemContrato">
+                                    Continuar sem contrato vinculado
+                                </label>
+                            </div>
+                            <div class="form-row form-row-contrato-derivado">
+                                <div class="form-group flex-1"><label for="inicioVigencia">Início da Vigência:</label><input type="date" id="inicioVigencia" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label for="fimVigencia">Fim da Vigência:</label><input type="date" id="fimVigencia" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label for="fiscalContrato">Fiscal do Contrato:</label><input type="text" id="fiscalContrato" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label for="contatoFiscal">Contato do Fiscal:</label><input type="text" id="contatoFiscal" readonly class="input-readonly"></div>
                             </div>
                             <p id="avisoVigenciaContrato" style="display:none;color:#e74c3c;font-size:12px;margin-top:4px;"></p>
                         </fieldset>
@@ -557,10 +608,10 @@
             </p>
             <div style="font-size:12px; line-height:1.4; max-height:330px; overflow:auto; border:1px solid #e5e7eb; padding:10px; background:#fafafa;">
                 <strong>Obrigatórios:</strong>
-                <div><code>idProc, tipoTC, dataExefin, numTC, fornecedorCnpj, fornecedorNome, instrumento, valorNotaFiscal, dataEmissao, dataAteste, status</code></div>
+                <div><code>idProc, tipoTC, dataExefin, numTC, fornecedorCnpj, fornecedorNome, valorNotaFiscal, dataEmissao, dataAteste, status</code></div>
                 <br>
                 <strong>Opcionais diretos:</strong>
-                <div><code>np, dataLiquidacao, op</code></div>
+                <div><code>instrumento, np, dataLiquidacao, op</code> (instrumento só é exigido quando o fornecedor possui contrato cadastrado).</div>
                 <br>
                 <strong>Empenhos achatados (exemplo índice 1):</strong>
                 <div><code>ne1, nd1, subelemento1, valor1, centroCustosId1, ugId1, lf1, pf1</code></div>
