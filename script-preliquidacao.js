@@ -742,9 +742,9 @@
                 { label: 'Data pagamento (ref.)', valor: hojeStr }
             ]);
             tabela(
-                ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'Centro de Custos', 'UG Beneficiária', 'LF', 'PF'],
+                ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'C. de Custos', 'UG Benf.', 'LF', 'PF'],
                 rowsEmp,
-                [12, 6, 2, 10, 3, 12, 10, 8, 12, 12]
+                [12, 6, 2, 10, 6, 12, 10, 6, 15, 15]
             );
             const totalNE = consolidarEmpenhosPrincipal(titulos).reduce((s, e) => s + (Number(e.valor) || 0), 0);
             if (totalNE > 0) linhaTotalDireita('Valor total das NE (consolidado)', moeda(totalNE));

@@ -3947,7 +3947,7 @@
         if (empenhos.length) {
             tituloSecao('EMPENHOS VINCULADOS');
             tabela(
-                ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'Centro de Custos', 'UG Beneficiária', 'LF', 'PF'],
+                ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'C. de Custos', 'UG Benf.', 'LF', 'PF'],
                 empenhos.map(v => [
                     (typeof formatarNumEmpenhoVisivel === 'function'
                         ? formatarNumEmpenhoVisivel(v.numEmpenho)
@@ -3962,7 +3962,7 @@
                     '',
                     ''
                 ]),
-                [12, 6, 2, 10, 3, 12, 10, 8, 12, 12]
+                [12, 6, 2, 10, 6, 12, 10, 6, 15, 15]
             );
             const totalNE = empenhos.reduce((s, e) => s + Number(e.valorVinculado || 0), 0);
             linhaTotalDireita('Valor total das NE Vinculadas', moeda(totalNE));
