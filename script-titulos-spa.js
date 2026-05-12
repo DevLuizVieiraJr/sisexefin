@@ -3962,7 +3962,7 @@
                     '',
                     ''
                 ]),
-                [12, 6, 2, 10, 6, 12, 10, 6, 15, 15]
+                [12, 6, 4, 10, 6, 12, 10, 6, 15, 15]
             );
             const totalNE = empenhos.reduce((s, e) => s + Number(e.valorVinculado || 0), 0);
             linhaTotalDireita('Valor total das NE Vinculadas', moeda(totalNE));

@@ -744,7 +744,7 @@
             tabela(
                 ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'C. de Custos', 'UG Benf.', 'LF', 'PF'],
                 rowsEmp,
-                [12, 6, 2, 10, 6, 12, 10, 6, 15, 15]
+                [12, 6, 4, 10, 6, 12, 10, 6, 15, 15]
             );
             const totalNE = consolidarEmpenhosPrincipal(titulos).reduce((s, e) => s + (Number(e.valor) || 0), 0);
             if (totalNE > 0) linhaTotalDireita('Valor total das NE (consolidado)', moeda(totalNE));
