@@ -36,6 +36,12 @@ service cloud.firestore {
           || (permissao in ['empenhos_excluir','contratos_excluir','fornecedores_excluir','dedenc_excluir','titulos_excluir','lf_excluir','centrocustos_excluir','ug_excluir'] && permRef.hasAny(['excluir_dados'])));
     }
 
+    function ugCamposTextoObrigatorios(d) {
+      return d.get('codigo', '') is string && d.get('codigo', '').size() > 0
+        && d.get('indicativoNaval', '') is string && d.get('indicativoNaval', '').size() > 0
+        && d.get('nome', '') is string && d.get('nome', '').size() > 0;
+    }
+
     // =================================================================
     // 2. REGRAS DO PAINEL DE ADMINISTRAÇÃO (Segurança Máxima)
     // =================================================================
@@ -175,8 +181,12 @@ service cloud.firestore {
     // Unidade Gestora (UG): leitura só de ativos para não-admin; delete permanente só ADMIN
     match /unidadesGestoras/{docId} {
       allow read: if logado() && temPermissao('ug_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
-      allow create: if logado() && temPermissao('ug_inserir');
-      allow update: if logado() && (temPermissao('ug_editar') || temPermissao('acesso_admin'));
+      allow create: if logado() && temPermissao('ug_inserir') && ugCamposTextoObrigatorios(request.resource.data);
+      allow update: if logado() && (temPermissao('ug_editar') || temPermissao('acesso_admin'))
+        && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ativo'])
+          || ugCamposTextoObrigatorios(request.resource.data)
+        );
       allow delete: if logado() && temPermissao('acesso_admin');
     }
   }

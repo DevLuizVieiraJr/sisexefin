@@ -7,9 +7,79 @@
     const formUG = document.getElementById('formUG');
     const tabelaUGBody = document.querySelector('#tabelaUG tbody');
     const inputComimsup = document.getElementById('ugComimsup');
+    const inputUgCodigo = document.getElementById('ugCodigo');
+    const spanCodigoDisponibilidade = document.getElementById('ugCodigoDisponibilidade');
     const listaResultadosComimsup = document.getElementById('listaResultadosComimsupUG');
     let sugestoesComimsup = [];
     let requestBuscaComimsup = 0;
+    let requestCodigoDisponivel = 0;
+
+    function codigoNormUG(c) {
+        return String(c || '').trim().toLowerCase();
+    }
+
+    function isModoCriacaoUG() {
+        const v = document.getElementById('editIndexUG').value;
+        return v === '-1' || v === -1 || v === '';
+    }
+
+    function outraUGComMesmoCodigoNorm(norm, excludeId) {
+        if (!norm) return false;
+        const base = baseUnidadesGestoras || [];
+        for (let i = 0; i < base.length; i++) {
+            const u = base[i];
+            if (excludeId && u.id === excludeId) continue;
+            if (codigoNormUG(u.codigo) === norm) return true;
+        }
+        return false;
+    }
+
+    async function verificarCodigoJaUsado(codigoTrim, excludeId) {
+        const norm = codigoNormUG(codigoTrim);
+        if (!norm) return false;
+        if (outraUGComMesmoCodigoNorm(norm, excludeId)) return true;
+        try {
+            const snap = await db.collection('unidadesGestoras').where('codigo', '==', codigoTrim).limit(5).get();
+            for (let j = 0; j < snap.docs.length; j++) {
+                const d = snap.docs[j];
+                if (excludeId && d.id === excludeId) continue;
+                return true;
+            }
+        } catch (err) { /* rede */ }
+        return false;
+    }
+
+    function limparFeedbackCodigoUg() {
+        if (!spanCodigoDisponibilidade) return;
+        spanCodigoDisponibilidade.textContent = '';
+        spanCodigoDisponibilidade.style.color = '#666';
+    }
+
+    const debouncedFeedbackCodigoUg = debounce(async function() {
+        const token = ++requestCodigoDisponivel;
+        if (!spanCodigoDisponibilidade || !inputUgCodigo) return;
+        if (!isModoCriacaoUG()) {
+            limparFeedbackCodigoUg();
+            return;
+        }
+        const c = String(inputUgCodigo.value || '').trim();
+        if (!c) {
+            limparFeedbackCodigoUg();
+            return;
+        }
+        spanCodigoDisponibilidade.textContent = 'Verificando…';
+        spanCodigoDisponibilidade.style.color = '#666';
+        const usado = await verificarCodigoJaUsado(c, null);
+        if (token !== requestCodigoDisponivel) return;
+        if (!isModoCriacaoUG()) {
+            limparFeedbackCodigoUg();
+            return;
+        }
+        spanCodigoDisponibilidade.textContent = usado
+            ? 'Já existe uma UG com este código.'
+            : 'Código disponível.';
+        spanCodigoDisponibilidade.style.color = usado ? '#c0392b' : '#666';
+    }, 350);
 
     document.getElementById('buscaTabelaUG').addEventListener('input', debounce(() => {
         termoBuscaUG = document.getElementById('buscaTabelaUG').value.toLowerCase();
@@ -23,9 +93,13 @@
 
     function abrirFormularioUG(isEdit) {
         if (!isEdit) {
+            requestCodigoDisponivel++;
             formUG.reset();
             document.getElementById('editIndexUG').value = -1;
+            const orig = document.getElementById('ugCodigoOriginal');
+            if (orig) orig.value = '';
             limparSugestoesComimsup();
+            limparFeedbackCodigoUg();
         }
         document.getElementById('tela-lista-ug').style.display = 'none';
         document.getElementById('tela-formulario-ug').style.display = 'block';
@@ -107,6 +181,7 @@
     function editarUG(id) {
         const u = (baseUnidadesGestoras || []).find(item => item.id === id);
         if (u) {
+            requestCodigoDisponivel++;
             abrirFormularioUG(true);
             document.getElementById('editIndexUG').value = u.id;
             document.getElementById('ugCodigo').value = u.codigo || '';
@@ -114,7 +189,10 @@
             document.getElementById('ugNome').value = u.nome || '';
             document.getElementById('ugComimsup').value = u.comimsup || '';
             document.getElementById('ugContato').value = u.contato || '';
+            const orig = document.getElementById('ugCodigoOriginal');
+            if (orig) orig.value = String(u.codigo || '').trim();
             limparSugestoesComimsup();
+            limparFeedbackCodigoUg();
         }
     }
 
@@ -227,6 +305,11 @@
         limparSugestoesComimsup();
     });
 
+    if (inputUgCodigo) {
+        inputUgCodigo.addEventListener('input', debouncedFeedbackCodigoUg);
+        inputUgCodigo.addEventListener('change', debouncedFeedbackCodigoUg);
+    }
+
     async function inativarUG(id) {
         if (!confirm('Inativar esta Unidade Gestora? Ela deixará de aparecer na lista (apenas Admin poderá ver e reativar).')) return;
         mostrarLoading();
@@ -261,20 +344,43 @@
         e.preventDefault();
         const fbID = document.getElementById('editIndexUG').value;
         const codigo = String(document.getElementById('ugCodigo').value || '').trim();
+        const indicativoNaval = String(document.getElementById('ugIndicativoNaval').value || '').trim();
+        const nome = String(document.getElementById('ugNome').value || '').trim();
+        if (!codigo || !indicativoNaval || !nome) {
+            alert('Preencha os campos obrigatórios: Código da UG, Indicativo Naval e Nome da UG.');
+            return;
+        }
         const comimsup = String(document.getElementById('ugComimsup').value || '').trim();
         const comimsupOk = await validarComimsup(comimsup, codigo);
         if (!comimsupOk) return;
+
+        const criacao = fbID == -1 || fbID === '';
+        if (criacao) {
+            if (await verificarCodigoJaUsado(codigo, null)) {
+                alert('Já existe uma UG com este código. Informe outro código.');
+                return;
+            }
+        } else {
+            const original = String(document.getElementById('ugCodigoOriginal').value || '').trim();
+            if (codigoNormUG(codigo) !== codigoNormUG(original)) {
+                if (await verificarCodigoJaUsado(codigo, fbID)) {
+                    alert('Já existe uma UG com este código. Informe outro código.');
+                    return;
+                }
+            }
+        }
+
         const dados = {
             codigo: escapeHTML(codigo),
-            indicativoNaval: escapeHTML(document.getElementById('ugIndicativoNaval').value),
-            nome: escapeHTML(document.getElementById('ugNome').value),
+            indicativoNaval: escapeHTML(indicativoNaval),
+            nome: escapeHTML(nome),
             comimsup: escapeHTML(comimsup),
-            contato: escapeHTML(document.getElementById('ugContato').value),
+            contato: escapeHTML(String(document.getElementById('ugContato').value || '').trim()),
             ativo: true
         };
         mostrarLoading();
         try {
-            if (fbID == -1 || fbID === '') await db.collection('unidadesGestoras').add(dados);
+            if (criacao) await db.collection('unidadesGestoras').add(dados);
             else await db.collection('unidadesGestoras').doc(fbID).update(dados);
             voltarParaListaUG();
         } catch (err) { alert('Erro ao guardar.'); }

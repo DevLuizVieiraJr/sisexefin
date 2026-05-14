@@ -266,8 +266,13 @@
                 report.errors.push(`Linha ${line}: COMIMSUP "${n.comimsup}" nao existe na base nem no arquivo.`);
                 continue;
             }
+            if (!String(n.indicativoNaval || '').trim() || !String(n.nome || '').trim()) {
+                report.ignored++;
+                report.errors.push(`Linha ${line}: campos obrigatorios "indicativoNaval" e "nome" nao podem estar vazios.`);
+                continue;
+            }
 
-            const dados = {
+            const dadosInsert = {
                 codigo: escapeHTML(n.codigo),
                 indicativoNaval: escapeHTML(n.indicativoNaval),
                 nome: escapeHTML(n.nome),
@@ -275,12 +280,32 @@
                 contato: escapeHTML(n.contato),
                 ativo: true
             };
-            const docId = mapByCodigo[codeNorm];
+            const dadosUpdate = {
+                indicativoNaval: escapeHTML(n.indicativoNaval),
+                nome: escapeHTML(n.nome),
+                comimsup: escapeHTML(n.comimsup),
+                contato: escapeHTML(n.contato),
+                ativo: true
+            };
+            let docId = mapByCodigo[codeNorm];
+            if (!docId) {
+                try {
+                    const dupSnap = await db.collection('unidadesGestoras').where('codigo', '==', n.codigo.trim()).limit(1).get();
+                    if (!dupSnap.empty) {
+                        docId = dupSnap.docs[0].id;
+                        mapByCodigo[codeNorm] = docId;
+                    }
+                } catch (err) {
+                    report.ignored++;
+                    report.errors.push(`Linha ${line}: erro ao verificar codigo existente: ${err.message || err}`);
+                    continue;
+                }
+            }
             if (docId) {
-                await db.collection('unidadesGestoras').doc(docId).update(dados);
+                await db.collection('unidadesGestoras').doc(docId).update(dadosUpdate);
                 report.updated++;
             } else {
-                const ref = await db.collection('unidadesGestoras').add(dados);
+                const ref = await db.collection('unidadesGestoras').add(dadosInsert);
                 mapByCodigo[codeNorm] = ref.id;
                 report.inserted++;
             }

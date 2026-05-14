@@ -304,6 +304,24 @@
         return u ? String(u.codigo || '-') : (id || '-');
     }
 
+    function formatarDataEmissaoBR(v) {
+        const s = String(v || '').trim();
+        if (!s) return '';
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return s;
+    }
+
+    function labelUGComNaval(id) {
+        const chave = String(id || '').trim();
+        if (!chave) return '-';
+        const u = (listaUG || []).find(x => String(x.id) === chave);
+        if (!u) return chave;
+        const cod = String(u.codigo || '').trim() || '-';
+        const naval = String(u.indicativoNaval || '').trim();
+        return naval ? `${cod}-${naval}` : cod;
+    }
+
     function tituloElegivelPL(t) {
         if (!t || t.inativo) return false;
         if ((t.status || '') !== STATUS_TC_EM_LIQUIDACAO) return false;
@@ -511,12 +529,12 @@
         (titulos || []).forEach(t => {
             const tipoTC = String(t.tipoTC || '');
             const numTC = String(t.numTC || '');
-            const emis = String(t.dataEmissao || '');
+            const emis = formatarDataEmissaoBR(t.dataEmissao);
             (t.empenhosVinculados || []).forEach(v => {
                 const partes = [
                     tipoTC + '-' + numTC,
                     emis,
-                    labelUG(v.ugId),
+                    labelUGComNaval(v.ugId),
                     labelCC(v.centroCustosId),
                     String(v.ptres || v.fr || '').trim() || '-'
                 ];

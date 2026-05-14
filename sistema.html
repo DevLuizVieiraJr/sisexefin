@@ -923,10 +923,15 @@
                     <h2 id="tituloFormUG">Unidade Gestora (UG)</h2>
                     <form id="formUG">
                         <input type="hidden" id="editIndexUG" value="-1">
+                        <input type="hidden" id="ugCodigoOriginal" value="">
                         <div class="form-row">
-                            <div class="form-group flex-1"><label>Código da UG:</label><input type="text" id="ugCodigo" required maxlength="30"></div>
-                            <div class="form-group flex-1"><label>Indicativo Naval:</label><input type="text" id="ugIndicativoNaval" maxlength="50"></div>
-                            <div class="form-group flex-2"><label>Nome da UG:</label><input type="text" id="ugNome" maxlength="150"></div>
+                            <div class="form-group flex-1">
+                                <label for="ugCodigo">Código da UG:</label>
+                                <input type="text" id="ugCodigo" required maxlength="30" autocomplete="off">
+                                <span id="ugCodigoDisponibilidade" role="status" aria-live="polite" style="display:block;font-size:12px;color:#666;margin-top:4px;"></span>
+                            </div>
+                            <div class="form-group flex-1"><label for="ugIndicativoNaval">Indicativo Naval:</label><input type="text" id="ugIndicativoNaval" required maxlength="50"></div>
+                            <div class="form-group flex-2"><label for="ugNome">Nome da UG:</label><input type="text" id="ugNome" required maxlength="150"></div>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-1">
