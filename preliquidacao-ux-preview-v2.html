@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin — Pré-Liquidação (preview UX v2)</title>
+    <style>
+        /* ===== Tokens: claro + escuro (imagem black + preview claro) ===== */
+        :root,
+        [data-theme="light"] {
+            --pl-bg: #ecf0f5;
+            --pl-surface: #ffffff;
+            --pl-surface-2: #f9fafc;
+            --pl-border: #dde1e8;
+            --pl-border-accent: #c5dde9;
+            --pl-text: #1c2333;
+            --pl-text-2: #4a5568;
+            --pl-text-3: #8896a8;
+            --pl-topbar: #2a81b8;
+            --pl-nav: #1e2d3d;
+            --pl-primary: #2a81b8;
+            --pl-primary-hover: #1a5c8a;
+            --pl-primary-soft: #e8f2f9;
+            --pl-cta: #2a81b8;
+            --pl-cta-text: #ffffff;
+            --pl-cta-hover: #1a5c8a;
+            --pl-tab-active: #2a81b8;
+            --pl-resumo-head: #1a5c8a;
+            --pl-row-alt: #f9f9f9;
+            --pl-row-selected: #eef6fb;
+            --pl-row-lote: #f0f9f4;
+            --pl-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --pl-shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+            --pl-badge-draft-bg: #f0f2f5;
+            --pl-badge-draft-fg: #6b7a90;
+            --pl-badge-fechado-bg: #e6f5ee;
+            --pl-badge-fechado-fg: #1e8c5a;
+            --pl-badge-pendente-bg: #f0eaf8;
+            --pl-badge-pendente-fg: #6b45a8;
+            --pl-danger-bg: #fff0f0;
+            --pl-danger-fg: #c0392b;
+            --pl-danger-border: #f5c6c6;
+            --pl-hint-bg: #e8f2f9;
+            --pl-hint-border: #337ab7;
+            --pl-input-bg: #f5f6f8;
+        }
+
+        [data-theme="dark"] {
+            --pl-bg: #12151c;
+            --pl-surface: #1a1f2a;
+            --pl-surface-2: #222836;
+            --pl-border: #2e3648;
+            --pl-border-accent: #3d4f6a;
+            --pl-text: #eef1f6;
+            --pl-text-2: #b8c2d0;
+            --pl-text-3: #7a8799;
+            --pl-topbar: #151a24;
+            --pl-nav: #0f1218;
+            --pl-primary: #4a9fd4;
+            --pl-primary-hover: #6bb3e0;
+            --pl-primary-soft: #1e2a3d;
+            --pl-cta: #c9a227;
+            --pl-cta-text: #1a1508;
+            --pl-cta-hover: #dbb42e;
+            --pl-tab-active: #c9a227;
+            --pl-resumo-head: #1e2636;
+            --pl-row-alt: #1e2433;
+            --pl-row-selected: #243044;
+            --pl-row-lote: #1a2824;
+            --pl-shadow: 0 1px 3px rgba(0,0,0,0.35);
+            --pl-shadow-md: 0 4px 16px rgba(0,0,0,0.45);
+            --pl-badge-draft-bg: #2a3140;
+            --pl-badge-draft-fg: #9aa8bc;
+            --pl-badge-fechado-bg: #1a2e24;
+            --pl-badge-fechado-fg: #5ecf8a;
+            --pl-badge-pendente-bg: #2a2240;
+            --pl-badge-pendente-fg: #b08ae8;
+            --pl-danger-bg: #3a2224;
+            --pl-danger-fg: #f08080;
+            --pl-danger-border: #5c3034;
+            --pl-hint-bg: #1e2a3d;
+            --pl-hint-border: #4a9fd4;
+            --pl-input-bg: #151a24;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--pl-bg);
+            color: var(--pl-text-2);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .proto-banner {
+            background: linear-gradient(90deg, var(--pl-primary-hover), var(--pl-primary));
+            color: #fff;
+            padding: 8px 16px;
+            font-size: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        [data-theme="dark"] .proto-banner {
+            background: linear-gradient(90deg, #2a2410, #3d3214);
+            color: #f5e6b8;
+        }
+        .proto-banner strong { font-weight: 600; }
+        .proto-banner-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+        .btn-theme {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.35);
+            color: inherit;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .btn-theme:hover { background: rgba(255,255,255,0.3); }
+
+        .mock-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.12);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+        }
+        [data-theme="dark"] .mock-tabs { background: rgba(255,255,255,0.06); }
+        .mock-tab-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: transparent;
+            color: inherit;
+            opacity: 0.85;
+            font-weight: 500;
+        }
+        .mock-tab-btn.active {
+            background: rgba(255,255,255,0.92);
+            color: var(--pl-primary-hover);
+            opacity: 1;
+        }
+        [data-theme="dark"] .mock-tab-btn.active {
+            background: rgba(201, 162, 39, 0.25);
+            color: #f5e6b8;
+        }
+
+        .topbar {
+            background: var(--pl-topbar);
+            color: #fff;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: var(--pl-shadow);
+        }
+        [data-theme="dark"] .topbar { border-bottom: 1px solid var(--pl-border); }
+        .topbar-logo {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .topbar-logo-icon {
+            width: 28px; height: 28px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
+        }
+        .topbar-user { font-size: 12px; opacity: 0.9; }
+
+        .app-layout { display: flex; flex: 1; min-height: 0; }
+        .nav-sidebar {
+            width: 52px;
+            background: var(--pl-nav);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .nav-icon-btn {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(255,255,255,0.45);
+            font-size: 16px;
+            cursor: default;
+        }
+        .nav-icon-btn.active {
+            background: var(--pl-primary);
+            color: #fff;
+        }
+
+        .main-content { flex: 1; overflow: auto; min-width: 0; }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        .page-header {
+            background: var(--pl-surface);
+            border-bottom: 1px solid var(--pl-border);
+            padding: 12px 20px;
+        }
+        .breadcrumb {
+            font-size: 11px;
+            color: var(--pl-text-3);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .breadcrumb span { color: var(--pl-primary); }
+        .page-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .page-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--pl-text);
+        }
+        .page-title small {
+            display: block;
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--pl-text-3);
+            margin-top: 4px;
+        }
+
+        .toolbar {
+            background: var(--pl-surface);
+            border-bottom: 1px solid var(--pl-border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .toolbar-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .select-sm, .toolbar input[type="text"] {
+            border: 1px solid var(--pl-border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: var(--pl-text-2);
+            background: var(--pl-input-bg);
+        }
+        .checkbox-label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; cursor: pointer;
+        }
+
+        .sel-bar {
+            background: var(--pl-primary-soft);
+            border-bottom: 1px solid var(--pl-border-accent);
+            padding: 9px 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            color: var(--pl-primary);
+            font-weight: 500;
+        }
+        .sel-bar.visivel { display: flex; }
+
+        .table-wrap { overflow-x: auto; padding-bottom: 16px; }
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: var(--pl-surface);
+        }
+        .data-table thead th {
+            background: var(--pl-surface-2);
+            border-bottom: 1px solid var(--pl-border);
+            padding: 9px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--pl-text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+        .data-table tbody td {
+            padding: 11px 14px;
+            border-bottom: 1px solid var(--pl-border);
+            vertical-align: middle;
+        }
+        .data-table tbody tr:nth-child(odd) { background: var(--pl-row-alt); }
+        .data-table tbody tr:hover td { background: var(--pl-row-selected); }
+        .codigo { font-weight: 600; color: var(--pl-text); }
+        .valor { font-weight: 500; color: var(--pl-text); text-align: right; white-space: nowrap; }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }
+        .badge-draft { background: var(--pl-badge-draft-bg); color: var(--pl-badge-draft-fg); border-color: var(--pl-border); }
+        .badge-fechado { background: var(--pl-badge-fechado-bg); color: var(--pl-badge-fechado-fg); }
+        .badge-pendente { background: var(--pl-badge-pendente-bg); color: var(--pl-badge-pendente-fg); margin-left: 4px; }
+
+        .btn {
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 6px 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-primary {
+            background: var(--pl-cta);
+            color: var(--pl-cta-text);
+            border-color: var(--pl-cta);
+        }
+        .btn-primary:hover { background: var(--pl-cta-hover); border-color: var(--pl-cta-hover); }
+        .btn-outline {
+            background: var(--pl-surface);
+            color: var(--pl-text-2);
+            border-color: var(--pl-border);
+        }
+        .btn-outline:hover { background: var(--pl-surface-2); }
+        .btn-ghost {
+            background: transparent;
+            color: var(--pl-text-3);
+            border-color: transparent;
+        }
+        .btn-ghost:hover { background: var(--pl-surface-2); color: var(--pl-text-2); }
+        .btn-danger {
+            background: var(--pl-danger-bg);
+            color: var(--pl-danger-fg);
+            border-color: var(--pl-danger-border);
+        }
+        .btn-sm { padding: 4px 9px; font-size: 11px; }
+        .btn-link {
+            background: none;
+            border: none;
+            color: var(--pl-primary);
+            font-size: 12px;
+            cursor: pointer;
+            padding: 4px 0;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .btn-link:hover { color: var(--pl-primary-hover); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ===== Editor ===== */
+        .editor-header {
+            background: var(--pl-surface);
+            border-bottom: 1px solid var(--pl-border);
+            padding: 14px 20px;
+            box-shadow: var(--pl-shadow);
+        }
+        [data-theme="dark"] .editor-header {
+            border: 1px solid var(--pl-border-accent);
+            margin: 12px 12px 0;
+            border-radius: 8px;
+        }
+        .editor-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .editor-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--pl-text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .editor-meta { font-size: 12px; color: var(--pl-text-2); margin-top: 4px; }
+        .editor-meta strong { color: var(--pl-text); }
+        .editor-actions-top {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .editor-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+        .editor-links button {
+            background: none;
+            border: none;
+            color: var(--pl-text-3);
+            cursor: pointer;
+            padding: 0;
+        }
+        .editor-links button:hover { color: var(--pl-primary); }
+        .editor-links button.danger:hover { color: var(--pl-danger-fg); }
+
+        .kpi-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding-top: 10px;
+            border-top: 1px solid var(--pl-border);
+        }
+        .kpi { font-size: 11px; color: var(--pl-text-3); }
+        .kpi-val {
+            display: block;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--pl-text);
+            margin-top: 2px;
+        }
+        .kpi-val.destaque { color: var(--pl-tab-active); }
+
+        .acoes-bar {
+            background: var(--pl-surface-2);
+            border-bottom: 1px solid var(--pl-border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        [data-theme="dark"] .acoes-bar {
+            margin: 0 12px;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid var(--pl-border);
+            border-top: none;
+        }
+        .acoes-bar .spacer { margin-left: auto; }
+
+        .editor-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 0;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .editor-grid { grid-template-columns: 1fr; }
+        }
+        .editor-main {
+            padding: 16px 20px;
+            border-right: 1px solid var(--pl-border);
+        }
+        [data-theme="dark"] .editor-main { border-right-color: var(--pl-border); }
+        .editor-aside { padding: 16px; }
+
+        .fieldset {
+            border: 1px solid var(--pl-border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            background: var(--pl-surface);
+            box-shadow: var(--pl-shadow);
+        }
+        [data-theme="dark"] .fieldset {
+            border-color: var(--pl-border-accent);
+        }
+        .fieldset-legend {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--pl-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: var(--pl-text-3);
+            padding: 8px 10px;
+            background: var(--pl-hint-bg);
+            border-left: 3px solid var(--pl-hint-border);
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 10px;
+            line-height: 1.45;
+        }
+        .hint.warn {
+            border-left-color: #e67e22;
+            background: rgba(230, 126, 34, 0.08);
+        }
+
+        .fornecedor-busca { display: none; }
+        .fornecedor-busca.visivel { display: block; }
+        .fornecedor-chip-wrap { display: none; }
+        .fornecedor-chip-wrap.visivel { display: block; }
+
+        .chip-fornecedor {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: var(--pl-primary-soft);
+            border: 1px solid var(--pl-border-accent);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 12px;
+            color: var(--pl-primary);
+            font-weight: 500;
+        }
+        [data-theme="dark"] .chip-fornecedor { color: var(--pl-text); }
+        .chip-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--pl-primary);
+            flex-shrink: 0;
+        }
+        .chip-acoes {
+            margin-top: 8px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-field { position: relative; margin-bottom: 8px; }
+        .search-field input {
+            width: 100%;
+            max-width: 480px;
+            border: 1px solid var(--pl-border);
+            border-radius: 6px;
+            padding: 8px 10px 8px 32px;
+            font-size: 12px;
+            background: var(--pl-input-bg);
+            color: var(--pl-text);
+        }
+        .search-field .ico {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--pl-text-3);
+            font-size: 13px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--pl-border);
+            margin-bottom: 12px;
+        }
+        .tab-btn {
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--pl-text-3);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tab-btn:hover { color: var(--pl-primary); }
+        .tab-btn.active {
+            color: var(--pl-tab-active);
+            border-bottom-color: var(--pl-tab-active);
+        }
+        .tab-count {
+            background: var(--pl-surface-2);
+            border-radius: 10px;
+            padding: 1px 6px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .tab-btn.active .tab-count {
+            background: var(--pl-tab-active);
+            color: var(--pl-cta-text);
+        }
+        [data-theme="dark"] .tab-btn.active .tab-count {
+            color: var(--pl-cta-text);
+        }
+
+        .painel-tab { display: none; }
+        .painel-tab.ativa { display: block; }
+
+        .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .mini-table th {
+            text-align: left;
+            padding: 6px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--pl-text-3);
+            text-transform: uppercase;
+            background: var(--pl-surface-2);
+            border-bottom: 1px solid var(--pl-border);
+        }
+        .mini-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--pl-border);
+            vertical-align: middle;
+        }
+        .mini-table tbody tr.in-lote td { background: var(--pl-row-lote); }
+        .mini-table tbody tr:last-child td { border-bottom: none; }
+
+        .resumo-card {
+            background: var(--pl-surface);
+            border: 1px solid var(--pl-border);
+            border-radius: 10px;
+            overflow: hidden;
+            position: sticky;
+            top: 12px;
+            box-shadow: var(--pl-shadow-md);
+        }
+        [data-theme="dark"] .resumo-card {
+            border-color: var(--pl-border-accent);
+        }
+        .resumo-header {
+            background: var(--pl-resumo-head);
+            color: #fff;
+            padding: 12px 14px;
+        }
+        [data-theme="dark"] .resumo-header {
+            border-bottom: 1px solid var(--pl-border-accent);
+        }
+        .resumo-title {
+            font-size: 11px;
+            font-weight: 600;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .resumo-valor { font-size: 22px; font-weight: 700; margin-top: 4px; }
+        .resumo-body { padding: 12px 14px; }
+        .resumo-meta { font-size: 11px; color: var(--pl-text-3); margin-bottom: 10px; line-height: 1.5; }
+        .resumo-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--pl-border);
+            font-size: 12px;
+        }
+        .resumo-item:last-child { border-bottom: none; }
+        .resumo-vazio {
+            text-align: center;
+            color: var(--pl-text-3);
+            font-size: 12px;
+            padding: 12px 8px;
+            line-height: 1.45;
+        }
+        .resumo-footer {
+            padding: 0 14px 14px;
+        }
+        .resumo-footer .btn { width: 100%; justify-content: center; }
+
+        details.auditoria { margin-top: 8px; }
+        details.auditoria summary {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--pl-primary);
+            cursor: pointer;
+            padding: 8px 0;
+        }
+        .audit-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--pl-border);
+            font-size: 12px;
+        }
+        .audit-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: var(--pl-border);
+        }
+        .audit-dot.salvar { background: var(--pl-primary); }
+        .audit-dot.pdf { background: var(--pl-badge-fechado-fg); }
+        .audit-dot.criacao { background: var(--pl-badge-pendente-fg); }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--pl-text);
+            color: var(--pl-surface);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            max-width: 90vw;
+        }
+        .toast-msg.visivel { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="proto-banner">
+        <span><strong>Preview UX v2</strong> — Dados fictícios. Alterne tema claro/escuro. Regra de CNPJ conforme RN.</span>
+        <div class="proto-banner-actions">
+            <button type="button" class="btn-theme" id="btnToggleTheme" aria-pressed="false">🌙 Tema escuro</button>
+            <div class="mock-tabs">
+                <button type="button" class="mock-tab-btn active" data-screen="lista">Lista</button>
+                <button type="button" class="mock-tab-btn" data-screen="editor">Editor (lote)</button>
+                <button type="button" class="mock-tab-btn" data-screen="novo">Nova PL</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo">
+            <div class="topbar-logo-icon">⚡</div>
+            SISEXEFIN — Pré-Liquidação
+        </div>
+        <span class="topbar-user">👤 usuario.demo@exemplo.org</span>
+    </header>
+
+    <div class="app-layout">
+        <nav class="nav-sidebar" aria-hidden="true">
+            <div class="nav-icon-btn">📊</div>
+            <div class="nav-icon-btn active" title="Pré-Liquidação">💰</div>
+            <div class="nav-icon-btn">📄</div>
+        </nav>
+
+        <main class="main-content">
+            <!-- LISTA -->
+            <section id="screen-lista" class="screen active">
+                <div class="page-header">
+                    <div class="breadcrumb">Execução Financeira <span>›</span> <span>Pré-Liquidações</span></div>
+                    <div class="page-title-row">
+                        <div class="page-title">
+                            Pré-Liquidações
+                            <small>Monte lotes por fornecedor → DAuLiq → NP no SIAFI</small>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="btnIrNovaDaLista">+ Nova pré-liquidação</button>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <div class="toolbar-filters">
+                        <label>Exercício
+                            <select class="select-sm"><option>2026</option><option>2025</option></select>
+                        </label>
+                        <label class="checkbox-label"><input type="checkbox" id="chkInativas"> Mostrar inativas</label>
+                    </div>
+                    <span style="font-size:12px;color:var(--pl-text-3);" id="contagemLista">3 lotes</span>
+                </div>
+
+                <div id="selBar" class="sel-bar" role="status" aria-live="polite">
+                    <strong><span id="selCount">0</span> selecionada(s)</strong>
+                    <button type="button" class="btn btn-outline btn-sm">📄 DAuLiq em bloco</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnLimparSel">Limpar</button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="chkTodos" aria-label="Selecionar todos"></th>
+                                <th>Código</th>
+                                <th>Estado</th>
+                                <th>Fornecedor</th>
+                                <th style="text-align:right;">Valor</th>
+                                <th style="text-align:center;">TCs</th>
+                                <th>Data liq.</th>
+                                <th>NP</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyLista"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- EDITOR -->
+            <section id="screen-editor" class="screen">
+                <div class="editor-header">
+                    <div class="editor-title-row">
+                        <div>
+                            <div class="editor-title" id="editorTitle">
+                                PL-00042/2026
+                                <span class="badge badge-draft">Rascunho</span>
+                            </div>
+                            <p class="editor-meta" id="editorMeta"></p>
+                        </div>
+                        <div class="editor-actions-top">
+                            <button type="button" class="btn btn-primary" id="btnSalvar">💾 Salvar pré-liquidação</button>
+                            <div class="editor-links">
+                                <button type="button" id="btnVoltarLista">← Voltar à lista</button>
+                                <button type="button">Gerar DAuLiq (PDF)</button>
+                                <button type="button" class="danger" id="btnCancelarPl">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kpi-row" id="kpiRow">
+                        <div class="kpi">TCs no lote <span class="kpi-val" id="kpiTcs">0</span></div>
+                        <div class="kpi">Valor total <span class="kpi-val destaque" id="kpiValor">R$ 0,00</span></div>
+                        <div class="kpi">Ateste (mais antigo) <span class="kpi-val" id="kpiAteste">—</span></div>
+                        <div class="kpi">Venc. (+30 d) <span class="kpi-val" id="kpiVenc">—</span></div>
+                    </div>
+                </div>
+
+                <div class="acoes-bar" role="toolbar" aria-label="Ações secundárias">
+                    <button type="button" class="btn btn-outline btn-sm" id="btnDauliq" disabled>📄 Gerar DAuLiq</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnFecharNp" disabled>🔢 Informar NP e data</button>
+                    <span class="spacer"></span>
+                    <span style="font-size:11px;color:var(--pl-text-3);" id="hintAcoes">Salve o lote com ao menos um TC.</span>
+                </div>
+
+                <div class="editor-grid">
+                    <div class="editor-main">
+                        <div class="fieldset" id="blocoFornecedor">
+                            <div class="fieldset-legend">Fornecedor do lote</div>
+
+                            <div id="fornecedorBusca" class="fornecedor-busca">
+                                <p class="hint">Selecione o credor antes de incluir TCs. Todos os títulos do lote devem ser do mesmo CNPJ.</p>
+                                <div class="search-field">
+                                    <span class="ico" aria-hidden="true">🔍</span>
+                                    <input type="text" id="inputBuscaCnpj" placeholder="Buscar por CNPJ ou razão social…" autocomplete="off" aria-label="Buscar fornecedor">
+                                </div>
+                                <ul id="listaAutocomplete" style="list-style:none;font-size:12px;margin-top:4px;"></ul>
+                            </div>
+
+                            <div id="fornecedorChip" class="fornecedor-chip-wrap">
+                                <div class="chip-fornecedor" id="chipConteudo">
+                                    <span class="chip-dot" aria-hidden="true"></span>
+                                    <span id="chipTexto">—</span>
+                                    <a href="#" id="linkProcs" style="font-size:11px;color:inherit;" onclick="return false;">↗ Ver PROCs</a>
+                                </div>
+                                <div class="chip-acoes" id="chipAcoes"></div>
+                            </div>
+                        </div>
+
+                        <div class="fieldset" id="blocoTitulos">
+                            <div class="fieldset-legend">Títulos do lote</div>
+                            <div class="tabs" role="tablist">
+                                <button type="button" class="tab-btn" id="tabDisp" role="tab" aria-selected="false">Disponíveis <span class="tab-count" id="cntDisp">0</span></button>
+                                <button type="button" class="tab-btn active" id="tabLote" role="tab" aria-selected="true">No lote <span class="tab-count" id="cntLote">0</span></button>
+                            </div>
+
+                            <div id="hintSemCnpj" class="hint warn" style="display:none;">
+                                Defina o fornecedor acima para listar TCs elegíveis (Em Liquidação, sem NP).
+                            </div>
+
+                            <div id="painelTitulosComCnpj">
+                                <div class="search-field" style="margin-bottom:10px;">
+                                    <span class="ico">🔍</span>
+                                    <input type="text" id="filtroTc" placeholder="Filtrar PROC ou NE…" aria-label="Filtrar títulos">
+                                </div>
+                                <p class="hint" id="hintAbas">Com TCs no lote, o fornecedor fica fixo. Para trocar o CNPJ, remova todos os TCs do lote.</p>
+
+                                <div id="painelDisp" class="painel-tab" role="tabpanel">
+                                    <table class="mini-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:28px;"></th>
+                                                <th>PROC</th><th>TC/NF</th><th>Ateste</th>
+                                                <th style="text-align:right;">Valor</th><th>Outra PL?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyDisp"></tbody>
+                                    </table>
+                                </div>
+
+                                <div id="painelLote" class="painel-tab ativa" role="tabpanel">
+                                    <table class="mini-table">
+                                        <thead>
+                                            <tr>
+                                                <th>PROC</th><th>TC/NF</th><th>Ateste</th>
+                                                <th style="text-align:right;">Valor</th><th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyLote"></tbody>
+                                    </table>
+                                    <p id="loteVazio" class="resumo-vazio" style="display:none;">Nenhum TC no lote. Use a aba «Disponíveis».</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="auditoria">
+                            <summary>Histórico de auditoria (3 registros)</summary>
+                            <div class="fieldset" style="margin-top:8px;">
+                                <div class="audit-row">
+                                    <span class="audit-dot salvar"></span>
+                                    <span style="color:var(--pl-text-3);min-width:110px;">15/05/2026 10:22</span>
+                                    <span>Lote atualizado (3 TCs)</span>
+                                </div>
+                                <div class="audit-row">
+                                    <span class="audit-dot criacao"></span>
+                                    <span style="color:var(--pl-text-3);min-width:110px;">14/05/2026 16:05</span>
+                                    <span>PL criada PL-00042/2026</span>
+                                </div>
+                                <div class="audit-row">
+                                    <span class="audit-dot pdf"></span>
+                                    <span style="color:var(--pl-text-3);min-width:110px;">10/05/2026 09:11</span>
+                                    <span>DAuLiq gerado</span>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <aside class="editor-aside">
+                        <div class="resumo-card">
+                            <div class="resumo-header">
+                                <div class="resumo-title">Resumo do lote</div>
+                                <div class="resumo-valor" id="resumoValor">R$ 0,00</div>
+                            </div>
+                            <div class="resumo-body">
+                                <div class="resumo-meta" id="resumoMeta">Nenhum TC selecionado</div>
+                                <div id="resumoItens"></div>
+                                <p id="resumoVazio" class="resumo-vazio">Selecione TCs na aba Disponíveis.</p>
+                            </div>
+                            <div class="resumo-footer">
+                                <button type="button" class="btn btn-outline" id="btnNpResumo" disabled>Informar NP e data no SIAFI</button>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast" class="toast-msg" role="status" aria-live="polite"></div>
+
+    <script>
+    (function() {
+        const MOEDA = n => 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const FORNECEDORES = [
+            { cnpj: '12345678000190', nome: 'CONSTRUTORA ALPHA LTDA' },
+            { cnpj: '98765432000111', nome: 'SERVIÇOS BETA S.A.' },
+            { cnpj: '11222333000144', nome: 'TECNOLOGIA GAMMA ME' }
+        ];
+
+        const TCS_BASE = [
+            { id: 't1', proc: 'PROC-2026-0142', tc: 'NF-88421', ateste: '15/03/2026', valor: 18500, cnpj: '12345678000190', outraPl: '' },
+            { id: 't2', proc: 'PROC-2026-0158', tc: 'NF-88502', ateste: '22/03/2026', valor: 15250, cnpj: '12345678000190', outraPl: '' },
+            { id: 't3', proc: 'PROC-2026-0161', tc: 'NF-88519', ateste: '28/03/2026', valor: 15000, cnpj: '12345678000190', outraPl: '' },
+            { id: 't4', proc: 'PROC-2026-0170', tc: 'NF-88601', ateste: '05/04/2026', valor: 22000, cnpj: '12345678000190', outraPl: '' },
+            { id: 't5', proc: 'PROC-2026-0172', tc: 'NF-88615', ateste: '08/04/2026', valor: 9800, cnpj: '12345678000190', outraPl: 'PL-00040/2026' },
+            { id: 't6', proc: 'PROC-2026-0180', tc: 'NF-88688', ateste: '12/04/2026', valor: 6400, cnpj: '12345678000190', outraPl: '' },
+            { id: 't7', proc: 'PROC-2026-0201', tc: 'NF-88710', ateste: '01/04/2026', valor: 11000, cnpj: '98765432000111', outraPl: '' }
+        ];
+
+        const LISTA_PL = [
+            { id: 'pl1', codigo: 'PL-00042/2026', estado: 'Rascunho', fornecedor: 'CONSTRUTORA ALPHA LTDA', valor: 48750, tcs: 3, dataLiq: '—', np: '—' },
+            { id: 'pl2', codigo: 'PL-00038/2026', estado: 'Fechado', fin: 'Pendente LF', fornecedor: 'SERVIÇOS BETA S.A.', valor: 125400, tcs: 7, dataLiq: '02/05/2026', np: '741…NP000012' },
+            { id: 'pl3', codigo: 'PL-00031/2026', estado: 'Fechado', fornecedor: 'TECNOLOGIA GAMMA ME', valor: 8920.5, tcs: 1, dataLiq: '20/04/2026', np: '741…NP000008' }
+        ];
+
+        let estado = {
+            tela: 'lista',
+            modoEditor: 'editar',
+            codigoPl: 'PL-00042/2026',
+            cnpjAtribuido: '',
+            nomeFornecedor: '',
+            loteIds: new Set(),
+            selecionadosLista: new Set(),
+            abaTc: 'lote'
+        };
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s == null ? '' : String(s);
+            return d.innerHTML;
+        }
+
+        function toast(msg) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('visivel');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => el.classList.remove('visivel'), 2800);
+        }
+
+        function formatCnpj(d) {
+            const s = String(d || '');
+            if (s.length !== 14) return s;
+            return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+        }
+
+        function titulosLote() {
+            return TCS_BASE.filter(t => estado.loteIds.has(t.id));
+        }
+
+        function titulosDisponiveis() {
+            if (!estado.cnpjAtribuido) return [];
+            return TCS_BASE.filter(t =>
+                t.cnpj === estado.cnpjAtribuido &&
+                !estado.loteIds.has(t.id) &&
+                !t.outraPl
+            );
+        }
+
+        function podeAlterarCnpj() {
+            return estado.loteIds.size === 0;
+        }
+
+        function atualizarUiFornecedor() {
+            const temCnpj = !!estado.cnpjAtribuido;
+            const comTc = estado.loteIds.size > 0;
+
+            document.getElementById('fornecedorBusca').classList.toggle('visivel', !temCnpj);
+            document.getElementById('fornecedorChip').classList.toggle('visivel', temCnpj);
+
+            if (temCnpj) {
+                document.getElementById('chipTexto').textContent =
+                    estado.nomeFornecedor + ' (' + formatCnpj(estado.cnpjAtribuido) + ')';
+            }
+
+            const chipAcoes = document.getElementById('chipAcoes');
+            chipAcoes.innerHTML = '';
+
+            if (temCnpj && podeAlterarCnpj()) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-link';
+                btn.textContent = 'Alterar fornecedor';
+                btn.addEventListener('click', () => {
+                    if (confirm('Não há TCs no lote. Deseja escolher outro fornecedor?')) {
+                        estado.cnpjAtribuido = '';
+                        estado.nomeFornecedor = '';
+                        document.getElementById('inputBuscaCnpj').value = '';
+                        atualizarUiFornecedor();
+                        renderEditor();
+                        toast('Fornecedor removido. Selecione um novo CNPJ.');
+                    }
+                });
+                chipAcoes.appendChild(btn);
+            }
+
+            document.getElementById('hintAbas').style.display = (temCnpj && comTc) ? 'block' : 'none';
+            document.getElementById('hintSemCnpj').style.display = temCnpj ? 'none' : 'block';
+            document.getElementById('painelTitulosComCnpj').style.display = temCnpj ? 'block' : 'none';
+            document.getElementById('blocoTitulos').style.opacity = temCnpj ? '1' : '0.55';
+            document.getElementById('blocoTitulos').style.pointerEvents = temCnpj ? '' : 'none';
+
+            const meta = document.getElementById('editorMeta');
+            if (!temCnpj) {
+                meta.innerHTML = '<span style="color:var(--pl-text-3);">Nenhum fornecedor definido — selecione o CNPJ para montar o lote.</span>';
+            } else {
+                meta.innerHTML = '<strong>Fornecedor:</strong> ' + esc(estado.nomeFornecedor) + ' — CNPJ ' + esc(formatCnpj(estado.cnpjAtribuido));
+            }
+        }
+
+        function atualizarKpisResumo() {
+            const ts = titulosLote();
+            const total = ts.reduce((s, t) => s + t.valor, 0);
+            const n = ts.length;
+
+            document.getElementById('kpiTcs').textContent = n;
+            document.getElementById('kpiValor').textContent = MOEDA(total);
+            document.getElementById('resumoValor').textContent = MOEDA(total);
+            document.getElementById('cntLote').textContent = n;
+            document.getElementById('cntDisp').textContent = titulosDisponiveis().length;
+
+            if (n && ts[0].ateste) {
+                document.getElementById('kpiAteste').textContent = ts[0].ateste;
+                document.getElementById('kpiVenc').textContent = '14/04/2026';
+                document.getElementById('resumoMeta').textContent =
+                    n + ' título(s) · Ateste ' + ts[0].ateste + ' · Venc. 14/04/2026';
+            } else {
+                document.getElementById('kpiAteste').textContent = '—';
+                document.getElementById('kpiVenc').textContent = '—';
+                document.getElementById('resumoMeta').textContent = n ? n + ' título(s)' : 'Nenhum TC selecionado';
+            }
+
+            const itens = document.getElementById('resumoItens');
+            const vazio = document.getElementById('resumoVazio');
+            if (!n) {
+                itens.innerHTML = '';
+                vazio.style.display = 'block';
+            } else {
+                vazio.style.display = 'none';
+                itens.innerHTML = ts.map(t =>
+                    '<div class="resumo-item"><span>' + esc(t.tc) + '</span><strong>' + MOEDA(t.valor) + '</strong></div>'
+                ).join('');
+            }
+
+            const podeAcao = n > 0 && !!estado.cnpjAtribuido;
+            document.getElementById('btnDauliq').disabled = !podeAcao;
+            document.getElementById('btnFecharNp').disabled = !podeAcao;
+            document.getElementById('btnNpResumo').disabled = !podeAcao;
+            document.getElementById('hintAcoes').textContent = podeAcao
+                ? 'Lote pronto para salvar ou gerar DAuLiq.'
+                : (estado.cnpjAtribuido ? 'Inclua ao menos um TC no lote.' : 'Defina o fornecedor antes dos TCs.');
+
+            if (n > 0 && estado.abaTc !== 'lote') {
+                estado.abaTc = 'lote';
+                aplicarAbaTc();
+            }
+        }
+
+        function aplicarAbaTc() {
+            const disp = estado.abaTc === 'disp';
+            document.getElementById('tabDisp').classList.toggle('active', disp);
+            document.getElementById('tabLote').classList.toggle('active', !disp);
+            document.getElementById('tabDisp').setAttribute('aria-selected', disp);
+            document.getElementById('tabLote').setAttribute('aria-selected', !disp);
+            document.getElementById('painelDisp').classList.toggle('ativa', disp);
+            document.getElementById('painelLote').classList.toggle('ativa', !disp);
+        }
+
+        function renderTabelasTc() {
+            const q = (document.getElementById('filtroTc').value || '').toLowerCase();
+            const filtro = t => !q || t.proc.toLowerCase().includes(q) || t.tc.toLowerCase().includes(q);
+
+            const disp = titulosDisponiveis().filter(filtro);
+            document.getElementById('tbodyDisp').innerHTML = disp.length ? disp.map(t => `
+                <tr>
+                    <td><input type="checkbox" class="chk-add" data-id="${t.id}" aria-label="Adicionar ${esc(t.proc)}"></td>
+                    <td>${esc(t.proc)}</td><td>${esc(t.tc)}</td><td>${esc(t.ateste)}</td>
+                    <td style="text-align:right;font-weight:600;">${MOEDA(t.valor)}</td>
+                    <td style="color:var(--pl-text-3);">—</td>
+                </tr>
+            `).join('') : '<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--pl-text-3);">Nenhum TC disponível para este fornecedor.</td></tr>';
+
+            document.getElementById('tbodyDisp').querySelectorAll('.chk-add').forEach(chk => {
+                chk.addEventListener('change', function() {
+                    if (!estado.cnpjAtribuido) {
+                        this.checked = false;
+                        toast('Selecione o fornecedor antes de incluir TCs.');
+                        return;
+                    }
+                    if (this.checked) estado.loteIds.add(this.dataset.id);
+                    renderEditor();
+                });
+            });
+
+            const lote = titulosLote().filter(filtro);
+            document.getElementById('loteVazio').style.display = lote.length ? 'none' : 'block';
+            document.getElementById('tbodyLote').innerHTML = lote.map(t => `
+                <tr class="in-lote">
+                    <td>${esc(t.proc)}</td><td>${esc(t.tc)}</td><td>${esc(t.ateste)}</td>
+                    <td style="text-align:right;font-weight:600;">${MOEDA(t.valor)}</td>
+                    <td><button type="button" class="btn btn-ghost btn-sm btn-rem" data-id="${t.id}" style="color:var(--pl-danger-fg);">✕ Remover</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('tbodyLote').querySelectorAll('.btn-rem').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    estado.loteIds.delete(this.dataset.id);
+                    renderEditor();
+                    if (podeAlterarCnpj()) {
+                        toast('TC removido. Agora você pode alterar o fornecedor, se necessário.');
+                    }
+                });
+            });
+        }
+
+        function renderEditor() {
+            atualizarUiFornecedor();
+            renderTabelasTc();
+            atualizarKpisResumo();
+            aplicarAbaTc();
+
+            const novo = estado.modoEditor === 'novo';
+            document.getElementById('editorTitle').innerHTML = novo
+                ? 'Nova pré-liquidação <span class="badge badge-draft">Rascunho</span>'
+                : esc(estado.codigoPl) + ' <span class="badge badge-draft">Rascunho</span>';
+            document.getElementById('kpiRow').style.display = novo && !estado.cnpjAtribuido && !estado.loteIds.size ? 'none' : 'flex';
+
+            if (novo && !estado.loteIds.size) {
+                estado.abaTc = 'disp';
+                aplicarAbaTc();
+            }
+        }
+
+        function iniciarEditor(modo) {
+            estado.modoEditor = modo;
+            if (modo === 'novo') {
+                estado.codigoPl = '';
+                estado.cnpjAtribuido = '';
+                estado.nomeFornecedor = '';
+                estado.loteIds = new Set();
+                estado.abaTc = 'disp';
+            } else {
+                estado.codigoPl = 'PL-00042/2026';
+                estado.cnpjAtribuido = '12345678000190';
+                estado.nomeFornecedor = 'CONSTRUTORA ALPHA LTDA';
+                estado.loteIds = new Set(['t1', 't2', 't3']);
+                estado.abaTc = 'lote';
+            }
+            renderEditor();
+            mostrarTela('editor');
+        }
+
+        function mostrarTela(id) {
+            estado.tela = id;
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-' + (id === 'editor' || id === 'novo' ? 'editor' : 'lista')).classList.add('active');
+            document.querySelectorAll('.mock-tab-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.screen === id);
+            });
+        }
+
+        function renderLista() {
+            const tbody = document.getElementById('tbodyLista');
+            tbody.innerHTML = LISTA_PL.map(p => {
+                const badge = p.estado === 'Fechado'
+                    ? '<span class="badge badge-fechado">Fechado</span>' + (p.fin ? '<span class="badge badge-pendente">' + esc(p.fin) + '</span>' : '')
+                    : '<span class="badge badge-draft">Rascunho</span>';
+                return `<tr>
+                    <td><input type="checkbox" class="chk-pl" data-id="${p.id}" ${estado.selecionadosLista.has(p.id) ? 'checked' : ''} ${p.tcs ? '' : 'disabled'}></td>
+                    <td class="codigo">${esc(p.codigo)}</td>
+                    <td>${badge}</td>
+                    <td>${esc(p.fornecedor)}</td>
+                    <td class="valor">${MOEDA(p.valor)}</td>
+                    <td style="text-align:center;">${p.tcs}</td>
+                    <td>${esc(p.dataLiq)}</td>
+                    <td style="font-size:11px;">${esc(p.np)}</td>
+                    <td>
+                        <button type="button" class="btn btn-ghost btn-sm" title="Visualizar" aria-label="Visualizar">👁</button>
+                        <button type="button" class="btn btn-primary btn-sm btn-edit-pl">Editar</button>
+                        <button type="button" class="btn btn-outline btn-sm" ${p.tcs ? '' : 'disabled'}>DAuLiq</button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            tbody.querySelectorAll('.chk-pl').forEach(chk => {
+                chk.addEventListener('change', function() {
+                    if (this.checked) estado.selecionadosLista.add(this.dataset.id);
+                    else estado.selecionadosLista.delete(this.dataset.id);
+                    atualizarSelLista();
+                });
+            });
+            tbody.querySelectorAll('.btn-edit-pl').forEach(btn => {
+                btn.addEventListener('click', () => iniciarEditor('editar'));
+            });
+            atualizarSelLista();
+        }
+
+        function atualizarSelLista() {
+            const n = estado.selecionadosLista.size;
+            document.getElementById('selCount').textContent = n;
+            document.getElementById('selBar').classList.toggle('visivel', n > 0);
+        }
+
+        document.getElementById('inputBuscaCnpj').addEventListener('input', function() {
+            const q = this.value.trim().toLowerCase();
+            const ul = document.getElementById('listaAutocomplete');
+            ul.innerHTML = '';
+            if (q.length < 2) return;
+            FORNECEDORES.filter(f =>
+                f.nome.toLowerCase().includes(q) || f.cnpj.includes(q.replace(/\D/g, ''))
+            ).forEach(f => {
+                const li = document.createElement('li');
+                li.style.cssText = 'padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--pl-border);';
+                li.textContent = f.nome + ' — ' + formatCnpj(f.cnpj);
+                li.addEventListener('click', () => {
+                    estado.cnpjAtribuido = f.cnpj;
+                    estado.nomeFornecedor = f.nome;
+                    document.getElementById('inputBuscaCnpj').value = '';
+                    ul.innerHTML = '';
+                    renderEditor();
+                    toast('Fornecedor definido: ' + f.nome);
+                });
+                ul.appendChild(li);
+            });
+        });
+
+        document.getElementById('tabDisp').addEventListener('click', () => {
+            if (!estado.cnpjAtribuido) { toast('Selecione o fornecedor primeiro.'); return; }
+            estado.abaTc = 'disp';
+            aplicarAbaTc();
+        });
+        document.getElementById('tabLote').addEventListener('click', () => {
+            estado.abaTc = 'lote';
+            aplicarAbaTc();
+        });
+        document.getElementById('filtroTc').addEventListener('input', renderTabelasTc);
+
+        document.querySelectorAll('.mock-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const s = btn.dataset.screen;
+                if (s === 'lista') { renderLista(); mostrarTela('lista'); }
+                else if (s === 'novo') iniciarEditor('novo');
+                else iniciarEditor('editar');
+            });
+        });
+
+        document.getElementById('btnIrNovaDaLista').addEventListener('click', () => iniciarEditor('novo'));
+        document.getElementById('btnVoltarLista').addEventListener('click', () => { renderLista(); mostrarTela('lista'); });
+        document.getElementById('btnLimparSel').addEventListener('click', () => {
+            estado.selecionadosLista.clear();
+            renderLista();
+        });
+        document.getElementById('chkTodos').addEventListener('change', function() {
+            document.querySelectorAll('.chk-pl:not(:disabled)').forEach(c => {
+                c.checked = this.checked;
+                if (this.checked) estado.selecionadosLista.add(c.dataset.id);
+                else estado.selecionadosLista.delete(c.dataset.id);
+            });
+            atualizarSelLista();
+        });
+
+        document.getElementById('btnToggleTheme').addEventListener('click', function() {
+            const html = document.documentElement;
+            const dark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', dark ? 'light' : 'dark');
+            this.textContent = dark ? '🌙 Tema escuro' : '☀️ Tema claro';
+            this.setAttribute('aria-pressed', dark ? 'false' : 'true');
+        });
+
+        document.getElementById('btnSalvar').addEventListener('click', () => {
+            if (!estado.cnpjAtribuido) { toast('Selecione o fornecedor.'); return; }
+            if (!estado.loteIds.size) { toast('Inclua ao menos um TC no lote.'); return; }
+            toast('Pré-liquidação salva (simulação).');
+        });
+
+        renderLista();
+    })();
+    </script>
+</body>
+</html>

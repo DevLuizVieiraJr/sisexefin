@@ -27,6 +27,12 @@
     let modalMotivoResolver = null;
     let modalDauliqVarianteResolver = null;
 
+    let paginaAtualPL = 1;
+    let itensPorPaginaPL = 10;
+    let termoBuscaPL = '';
+    let estadoOrdenacaoPL = { coluna: 'codigo', direcao: 'desc' };
+    let plAbaAtiva = 'lote';
+
     function tem(perm) {
         return typeof temPermissaoUI === 'function' && temPermissaoUI(perm);
     }
@@ -1157,12 +1163,15 @@
         return { cls: 'badge-pl-pgto-parcial', label: 'Pgto parcial' };
     }
 
-    function desenharListaPL() {
-        const tbody = document.getElementById('tbodyListaPL');
-        if (!tbody) return;
+    function obterTimestampEmMsPL(ts) {
+        if (!ts) return 0;
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+
+    function plListaFiltrada() {
         const mostrarInat = document.getElementById('filtroPLInativas')?.checked;
-        tbody.innerHTML = '';
-        const filtrada = listaPL.filter(p => {
+        let lista = listaPL.filter(p => {
             if (p.ativo === false && !mostrarInat && !ehAdmin()) return false;
             if (filtroAnoExercicioPL && filtroAnoExercicioPL !== 'todos') {
                 const want = parseInt(filtroAnoExercicioPL, 10);
@@ -1170,18 +1179,97 @@
             }
             return true;
         });
-        if (!filtrada.length) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhuma pré-liquidação.</td></tr>';
-            plSelecionados.clear();
-            atualizarUIselecaoPL();
-            return;
+        if (termoBuscaPL.trim()) {
+            const q = termoBuscaPL.toLowerCase();
+            lista = lista.filter(p =>
+                String(p.codigo || '').toLowerCase().includes(q) ||
+                String(p.fornecedorNome || '').toLowerCase().includes(q) ||
+                String(p.np || '').toLowerCase().includes(q) ||
+                String(p.fornecedorCnpj || '').toLowerCase().includes(q)
+            );
         }
+        const { coluna, direcao } = estadoOrdenacaoPL;
+        lista.sort((a, b) => {
+            if (coluna === 'valorTotal') {
+                const va = valorTotalLoteNaLista(a);
+                const vb = valorTotalLoteNaLista(b);
+                return direcao === 'asc' ? va - vb : vb - va;
+            }
+            if (coluna === 'qtdTcs') {
+                const va = (a.tituloIds || []).length || (a.titulosParticiparamIds || []).length;
+                const vb = (b.tituloIds || []).length || (b.titulosParticiparamIds || []).length;
+                return direcao === 'asc' ? va - vb : vb - va;
+            }
+            if (coluna === 'editado_em') {
+                const ta = obterTimestampEmMsPL(a.editado_em);
+                const tb = obterTimestampEmMsPL(b.editado_em);
+                return direcao === 'asc' ? ta - tb : tb - ta;
+            }
+            let va = a[coluna] != null ? String(a[coluna]).toLowerCase() : '';
+            let vb = b[coluna] != null ? String(b[coluna]).toLowerCase() : '';
+            const cmp = va.localeCompare(vb);
+            return direcao === 'asc' ? cmp : -cmp;
+        });
+        return lista;
+    }
+
+    function atualizarIconesOrdenacaoPL() {
+        document.querySelectorAll('#tabelaPreLiquidacoes .sort-icon').forEach(el => { el.textContent = ''; });
+        const icon = document.getElementById('sort-pl-' + estadoOrdenacaoPL.coluna);
+        if (icon) icon.textContent = estadoOrdenacaoPL.direcao === 'asc' ? '▲' : '▼';
+    }
+
+    window.ordenarListaPL = function(coluna) {
+        if (estadoOrdenacaoPL.coluna === coluna) {
+            estadoOrdenacaoPL.direcao = estadoOrdenacaoPL.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            estadoOrdenacaoPL.coluna = coluna;
+            estadoOrdenacaoPL.direcao = coluna === 'codigo' ? 'desc' : 'asc';
+        }
+        paginaAtualPL = 1;
+        atualizarIconesOrdenacaoPL();
+        desenharListaPL();
+    };
+
+    window.mudarTamanhoPaginaPL = function() {
+        itensPorPaginaPL = parseInt(document.getElementById('itensPorPaginaPL')?.value || 10, 10);
+        paginaAtualPL = 1;
+        desenharListaPL();
+    };
+    window.mudarPaginaPL = function(dir) {
+        paginaAtualPL += dir;
+        desenharListaPL();
+    };
+    window.irParaPrimeiraPaginaPL = function() {
+        paginaAtualPL = 1;
+        desenharListaPL();
+    };
+    window.irParaUltimaPaginaPL = function() {
+        const lista = plListaFiltrada();
+        paginaAtualPL = Math.ceil(lista.length / itensPorPaginaPL) || 1;
+        desenharListaPL();
+    };
+
+    function desenharListaPL() {
+        const tbody = document.getElementById('tbodyListaPL');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const filtrada = plListaFiltrada();
         const idsExibidos = new Set(filtrada.map(p => p.id));
         plSelecionados.forEach(id => { if (!idsExibidos.has(id)) plSelecionados.delete(id); });
-        filtrada.sort((a, b) => String(b.codigo || '').localeCompare(String(a.codigo || '')));
+        const totalPaginas = Math.ceil(filtrada.length / itensPorPaginaPL) || 1;
+        if (paginaAtualPL > totalPaginas) paginaAtualPL = totalPaginas;
+        if (paginaAtualPL < 1) paginaAtualPL = 1;
+        const inicio = (paginaAtualPL - 1) * itensPorPaginaPL;
+        const pagina = filtrada.slice(inicio, inicio + itensPorPaginaPL);
+        if (!filtrada.length) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhuma pré-liquidação encontrada.</td></tr>';
+            plSelecionados.clear();
+            atualizarUIselecaoPL();
+        } else {
         const podePdf = tem('preliquidacao_gerar_pdf') || ehAdmin();
         const podeEditarLista = podeOperarPLLista();
-        filtrada.forEach(p => {
+        pagina.forEach(p => {
             const tr = document.createElement('tr');
             const n = (p.tituloIds || []).length || (p.titulosParticiparamIds || []).length;
             const nPdf = idsTitulosParaPdfPL(p).length;
@@ -1198,10 +1286,10 @@
             if (p.ativo === false) badge += ' <span class="badge-pl-inativo">Inativo</span>';
             const vTot = valorTotalLoteNaLista(p);
             const btnEditar = podeEditarLista
-                ? `<button type="button" class="btn-primary btn-small btn-pl-editar" data-id="${escapeHTML(p.id)}">Editar</button>`
+                ? `<button type="button" class="btn-icon btn-pl-editar" data-id="${escapeHTML(p.id)}" title="Editar">✏️</button>`
                 : '';
             const btnPdf = podePdf
-                ? `<button type="button" class="btn-default btn-small btn-pl-pdf" data-id="${escapeHTML(p.id)}" ${nPdf ? '' : 'disabled title="Sem títulos no lote"'}>DAuLiq</button>`
+                ? `<button type="button" class="btn-icon btn-pl-pdf" data-id="${escapeHTML(p.id)}" title="Gerar DAuLiq"${nPdf ? '' : ' disabled'}>📄</button>`
                 : '';
             const podeSelecionar = podePdf && nPdf > 0;
             const checked = podeSelecionar && plSelecionados.has(p.id) ? ' checked' : '';
@@ -1220,14 +1308,30 @@
                 <td style="white-space:nowrap;">${escapeHTML(formatarDataSimplesPL(p.dataLiquidacao))}</td>
                 <td style="font-size:12px;white-space:nowrap;">${escapeHTML(formatarDataHoraLista(p.editado_em))}</td>
                 <td style="font-size:12px;">${escapeHTML(p.np || '—')}</td>
-                <td class="pl-acoes">
-                    <button type="button" class="btn-default btn-small btn-pl-ver" data-id="${escapeHTML(p.id)}">Visualizar</button>
+                <td class="pl-acoes" style="white-space:nowrap;">
+                    <button type="button" class="btn-icon btn-pl-ver" data-id="${escapeHTML(p.id)}" title="Visualizar">👁️</button>
                     ${btnEditar}
                     ${btnPdf}
                 </td>
             `;
             tbody.appendChild(tr);
         });
+        }
+        const info = document.getElementById('infoPaginaPL');
+        if (info) info.textContent = `Página ${paginaAtualPL} de ${totalPaginas}`;
+        const mostrandoDe = document.getElementById('mostrandoDePL');
+        const mostrandoTotal = document.getElementById('mostrandoTotalPL');
+        if (mostrandoDe) mostrandoDe.textContent = pagina.length;
+        if (mostrandoTotal) mostrandoTotal.textContent = filtrada.length;
+        const btnPrimeira = document.getElementById('btnPrimeiraPL');
+        const btnAnt = document.getElementById('btnAnteriorPL');
+        const btnProx = document.getElementById('btnProximoPL');
+        const btnUltima = document.getElementById('btnUltimaPL');
+        if (btnPrimeira) btnPrimeira.disabled = paginaAtualPL <= 1;
+        if (btnAnt) btnAnt.disabled = paginaAtualPL <= 1;
+        if (btnProx) btnProx.disabled = paginaAtualPL >= totalPaginas;
+        if (btnUltima) btnUltima.disabled = paginaAtualPL >= totalPaginas;
+        atualizarIconesOrdenacaoPL();
         tbody.querySelectorAll('.btn-pl-ver').forEach(btn => {
             btn.addEventListener('click', () => abrirEditorPL(btn.getAttribute('data-id'), { somenteLeitura: true }));
         });
@@ -1279,51 +1383,222 @@
         }
     }
 
-    function desenharCarrinho() {
-        const ul = document.getElementById('plListaCarrinho');
-        const empty = document.getElementById('plCarrinhoVazio');
-        const resumoDiv = document.getElementById('plCarrinhoResumo');
-        const resumoTotal = document.getElementById('plCarrinhoResumoTotal');
-        const resumoAteste = document.getElementById('plCarrinhoResumoAteste');
-        if (!ul || !empty) return;
-        ul.innerHTML = '';
-        const ts = titulosDoCarrinho();
-        if (!ts.length) {
-            empty.style.display = 'block';
-            if (resumoDiv) resumoDiv.style.display = 'none';
+    function fmtDataLocalPL(d) {
+        if (!d || isNaN(d.getTime())) return '—';
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+
+    function fornecedorBloqueadoPL() {
+        if (plSomenteLeitura) return true;
+        if (carrinhoIds.size > 0) return true;
+        if (plIdAtual && plDocAtual && (plDocAtual.estado || '') !== 'Rascunho') return true;
+        return false;
+    }
+
+    function atualizarUiFornecedorPL() {
+        const buscaWrap = document.getElementById('plFornecedorBusca');
+        const chipWrap = document.getElementById('plFornecedorChipWrap');
+        const chipTexto = document.getElementById('plChipTexto');
+        const linkProcs = document.getElementById('plLinkProcs');
+        const chipAcoes = document.getElementById('plChipAcoes');
+        const hintSemCnpj = document.getElementById('plHintSemCnpj');
+        const blocoTitulos = document.getElementById('plBlocoTitulosComCnpj');
+        const hintAbas = document.getElementById('plHintAbas');
+        const inpBusca = document.getElementById('plBuscaFornecedor');
+        const cnpjDigitos = normalizarDigitos(fornecedorFiltroCnpj || '');
+
+        if (hintSemCnpj) hintSemCnpj.style.display = cnpjDigitos ? 'none' : 'block';
+        if (blocoTitulos) blocoTitulos.style.display = cnpjDigitos ? 'block' : 'none';
+
+        if (!cnpjDigitos) {
+            if (buscaWrap) buscaWrap.classList.add('visivel');
+            if (chipWrap) chipWrap.classList.remove('visivel');
+            if (inpBusca) { inpBusca.disabled = plSomenteLeitura; inpBusca.value = ''; }
             return;
         }
-        empty.style.display = 'none';
-        if (resumoDiv) {
-            const totalLote = ts.reduce((s, t) => s + (Number(t.valorNotaFiscal) || 0), 0);
-            const atesteMin = dataAtesteMaisAntiga(ts);
-            const fmtLocalDate = (d) => {
-                if (!d || isNaN(d.getTime())) return '—';
-                return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-            };
-            if (resumoTotal) resumoTotal.textContent = `Total do lote: ${moeda(totalLote)} (${ts.length} TC${ts.length > 1 ? 's' : ''})`;
-            if (resumoAteste) {
-                if (atesteMin) {
-                    const venc30 = new Date(atesteMin.getFullYear(), atesteMin.getMonth(), atesteMin.getDate() + 30);
-                    resumoAteste.textContent = `Ateste mais antigo: ${fmtLocalDate(atesteMin)} · Venc. (+30 d): ${fmtLocalDate(venc30)}`;
-                } else {
-                    resumoAteste.textContent = 'Sem data de ateste nos TCs do lote.';
-                }
-            }
-            resumoDiv.style.display = 'block';
+
+        const nomeExib = fornecedorFiltroNome
+            ? escapeHTML(fornecedorFiltroNome) + ' (' + escapeHTML(cnpjDigitos) + ')'
+            : escapeHTML(cnpjDigitos);
+        if (chipTexto) chipTexto.innerHTML = nomeExib;
+        if (linkProcs) {
+            linkProcs.href = 'titulos.html?cnpj=' + encodeURIComponent(cnpjDigitos) + '&status=Em%20Liquida%C3%A7%C3%A3o';
         }
+
+        const bloqueado = fornecedorBloqueadoPL();
+        if (bloqueado) {
+            if (buscaWrap) buscaWrap.classList.remove('visivel');
+            if (chipWrap) chipWrap.classList.add('visivel');
+            if (chipAcoes) {
+                chipAcoes.innerHTML = carrinhoIds.size > 0
+                    ? '<span class="pl-hint" style="margin:0;padding:6px 8px;">Para trocar o CNPJ, remova todos os TCs do lote.</span>'
+                    : '';
+            }
+            if (hintAbas && carrinhoIds.size > 0) {
+                hintAbas.textContent = 'Com TCs no lote, o fornecedor fica fixo. Para trocar o CNPJ, remova todos os TCs do lote.';
+            }
+        } else {
+            if (buscaWrap) buscaWrap.classList.remove('visivel');
+            if (chipWrap) chipWrap.classList.add('visivel');
+            if (chipAcoes) {
+                chipAcoes.innerHTML = '<button type="button" class="pl-btn-link" id="plBtnAlterarFornecedor">Alterar fornecedor</button>';
+                document.getElementById('plBtnAlterarFornecedor')?.addEventListener('click', () => {
+                    fornecedorFiltroCnpj = '';
+                    fornecedorFiltroNome = '';
+                    if (inpBusca) inpBusca.value = '';
+                    atualizarUiFornecedorPL();
+                    desenharDisponiveis();
+                });
+            }
+            if (hintAbas) {
+                hintAbas.textContent = 'Status Em Liquidação e sem NP. Use a aba Disponíveis para incluir TCs no lote.';
+            }
+        }
+    }
+
+    function atualizarExibicaoFornecedorPL(cnpj, nome) {
+        fornecedorFiltroCnpj = cnpj || '';
+        fornecedorFiltroNome = nome || '';
+        atualizarUiFornecedorPL();
+    }
+
+    function alternarAbaPL(aba) {
+        plAbaAtiva = aba;
+        const tabDisp = document.getElementById('plTabDisp');
+        const tabLote = document.getElementById('plTabLote');
+        const painelDisp = document.getElementById('plPainelDisp');
+        const painelLote = document.getElementById('plPainelLote');
+        const ativaDisp = aba === 'disp';
+        tabDisp?.classList.toggle('ativa', ativaDisp);
+        tabLote?.classList.toggle('ativa', !ativaDisp);
+        tabDisp?.setAttribute('aria-selected', ativaDisp ? 'true' : 'false');
+        tabLote?.setAttribute('aria-selected', !ativaDisp ? 'true' : 'false');
+        painelDisp?.classList.toggle('ativa', ativaDisp);
+        painelLote?.classList.toggle('ativa', !ativaDisp);
+    }
+
+    function atualizarCabecalhoEditorPL() {
+        const ts = titulosDoCarrinho();
+        const totalLote = ts.reduce((s, t) => s + (Number(t.valorNotaFiscal) || 0), 0);
+        const atesteMin = dataAtesteMaisAntiga(ts);
+        const kpiTcs = document.getElementById('plKpiTcs');
+        const kpiValor = document.getElementById('plKpiValor');
+        const kpiAteste = document.getElementById('plKpiAteste');
+        const kpiVenc = document.getElementById('plKpiVenc');
+        if (kpiTcs) kpiTcs.textContent = String(ts.length);
+        if (kpiValor) kpiValor.textContent = moeda(totalLote);
+        if (kpiAteste) kpiAteste.textContent = atesteMin ? fmtDataLocalPL(atesteMin) : '—';
+        if (kpiVenc) {
+            if (atesteMin) {
+                const venc30 = new Date(atesteMin.getFullYear(), atesteMin.getMonth(), atesteMin.getDate() + 30);
+                kpiVenc.textContent = fmtDataLocalPL(venc30);
+            } else kpiVenc.textContent = '—';
+        }
+        const badge = document.getElementById('plBadgeEstado');
+        if (badge) {
+            const est = plDocAtual ? (plDocAtual.estado || 'Rascunho') : 'Novo';
+            let html = '';
+            if (est === 'Fechado') html = '<span class="badge-pl-fechado">Fechado</span>';
+            else if (est === 'Cancelado') html = '<span class="badge-pl-cancel">Cancelado</span>';
+            else if (est === 'Novo') html = '<span class="badge-pl-rascunho">Novo</span>';
+            else html = '<span class="badge-pl-rascunho">Rascunho</span>';
+            if (plDocAtual && plDocAtual.ativo === false) html += ' <span class="badge-pl-inativo">Inativo</span>';
+            badge.innerHTML = html;
+        }
+        const cntDisp = document.getElementById('plCntDisp');
+        const cntLote = document.getElementById('plCntLote');
+        if (cntLote) cntLote.textContent = String(ts.length);
+        if (cntDisp) {
+            const cnpjAlvo = normalizarDigitos(fornecedorFiltroCnpj);
+            let nDisp = 0;
+            if (cnpjAlvo) {
+                nDisp = baseTitulos.filter(t => {
+                    if (!tituloElegivelPL(t)) return false;
+                    if (normalizarDigitos(t.fornecedorCnpj || '') !== cnpjAlvo) return false;
+                    const outra = outraPLAberta(t);
+                    return !outra || carrinhoIds.has(t.id);
+                }).length;
+            }
+            cntDisp.textContent = String(nDisp);
+        }
+    }
+
+    function atualizarResumoEditorPL() {
+        const ts = titulosDoCarrinho();
+        const resumoValor = document.getElementById('plResumoValor');
+        const resumoMeta = document.getElementById('plResumoMeta');
+        const resumoItens = document.getElementById('plResumoItens');
+        const resumoVazio = document.getElementById('plResumoVazio');
+        const totalLote = ts.reduce((s, t) => s + (Number(t.valorNotaFiscal) || 0), 0);
+        const atesteMin = dataAtesteMaisAntiga(ts);
+        if (resumoValor) resumoValor.textContent = moeda(totalLote);
+        if (!ts.length) {
+            if (resumoMeta) resumoMeta.textContent = 'Nenhum TC selecionado';
+            if (resumoItens) resumoItens.innerHTML = '';
+            if (resumoVazio) resumoVazio.style.display = 'block';
+            return;
+        }
+        if (resumoVazio) resumoVazio.style.display = 'none';
+        if (resumoMeta) {
+            let meta = `${ts.length} TC${ts.length > 1 ? 's' : ''} no lote`;
+            if (atesteMin) meta += ` · Ateste: ${fmtDataLocalPL(atesteMin)}`;
+            resumoMeta.textContent = meta;
+        }
+        if (resumoItens) {
+            resumoItens.innerHTML = ts.map(t =>
+                '<div class="pl-resumo-item"><span>' + escapeHTML(t.idProc || t.id) + '</span><span>' + escapeHTML(moeda(t.valorNotaFiscal)) + '</span></div>'
+            ).join('');
+        }
+    }
+
+    function desenharLotePL() {
+        const tbody = document.getElementById('tbodyPLLote');
+        const vazio = document.getElementById('plLoteVazio');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const ts = titulosDoCarrinho();
+        if (!ts.length) {
+            if (vazio) vazio.style.display = 'block';
+            return;
+        }
+        if (vazio) vazio.style.display = 'none';
         const podeRemover = plDocAtual && !plSomenteLeitura && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar');
+        const podeRemoverNova = !plIdAtual && !plSomenteLeitura && tem('preliquidacao_inserir');
         ts.forEach(t => {
-            const li = document.createElement('li');
-            li.style.cssText = 'padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;';
-            const atesteTC = formatarDataSimplesPL(t.dataAteste);
-            li.innerHTML = `<span>${escapeHTML(t.idProc || t.id)} — ${escapeHTML(moeda(t.valorNotaFiscal))}<br><small style="color:#888;">Ateste: ${escapeHTML(atesteTC)}</small></span>` +
-                (podeRemover ? `<button type="button" class="btn-default btn-small btn-pl-rem" data-id="${escapeHTML(t.id)}">Remover</button>` : '');
-            ul.appendChild(li);
+            const tr = document.createElement('tr');
+            tr.className = 'pl-row-lote';
+            tr.innerHTML = `
+                <td>${escapeHTML(t.idProc || '')}</td>
+                <td>${escapeHTML((t.tipoTC || '') + '-' + (t.numTC || ''))}</td>
+                <td style="white-space:nowrap;">${escapeHTML(formatarDataSimplesPL(t.dataAteste))}</td>
+                <td style="text-align:right;">${escapeHTML(moeda(t.valorNotaFiscal))}</td>
+                <td>${(podeRemover || podeRemoverNova)
+                    ? `<button type="button" class="btn-default btn-small btn-pl-rem" data-id="${escapeHTML(t.id)}" title="Remover do lote">✕</button>`
+                    : ''}</td>
+            `;
+            tbody.appendChild(tr);
         });
-        ul.querySelectorAll('.btn-pl-rem').forEach(btn => {
-            btn.addEventListener('click', () => removerTcDoCarrinho(btn.getAttribute('data-id')));
+        tbody.querySelectorAll('.btn-pl-rem').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                if (plIdAtual && (plDocAtual.estado || '') === 'Rascunho') removerTcDoCarrinho(id);
+                else {
+                    carrinhoIds.delete(id);
+                    desenharLotePL();
+                    desenharDisponiveis();
+                    atualizarCabecalhoEditorPL();
+                    atualizarResumoEditorPL();
+                    atualizarUiFornecedorPL();
+                    atualizarBotoesEditor();
+                }
+            });
         });
+    }
+
+    function desenharCarrinho() {
+        desenharLotePL();
+        atualizarResumoEditorPL();
+        atualizarCabecalhoEditorPL();
     }
 
     async function removerTcDoCarrinho(tituloId) {
@@ -1368,6 +1643,7 @@
             desenharCarrinho();
             desenharDisponiveis();
             desenharHistoricoPL();
+            atualizarUiFornecedorPL();
         } catch (e) {
             alert('Erro: ' + (e.message || e));
         } finally {
@@ -1424,9 +1700,12 @@
                 if (chk.checked) carrinhoIds.add(id);
                 else carrinhoIds.delete(id);
                 desenharCarrinho();
+                desenharDisponiveis();
+                atualizarUiFornecedorPL();
                 atualizarBotoesEditor();
             });
         });
+        atualizarCabecalhoEditorPL();
     }
 
     function desenharHistoricoPL() {
@@ -1451,26 +1730,49 @@
         const fechado = est === 'Fechado';
         const cancel = est === 'Cancelado';
         const rasc = est === 'Rascunho' || est === 'Novo';
+        const setVis = (id, vis) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = vis ? '' : 'none';
+        };
+        const hint = document.getElementById('plHintAcoes');
+        const btnNpResumo = document.getElementById('btnPLFecharNPResumo');
         if (plSomenteLeitura && plIdAtual) {
-            document.getElementById('btnPLSalvar').style.display = 'none';
-            document.getElementById('btnPLFecharNP').style.display = 'none';
-            document.getElementById('btnPLCorrigirNP').style.display = 'none';
-            document.getElementById('btnPLCancelar').style.display = 'none';
-            document.getElementById('btnPLInativar').style.display = 'none';
-            document.getElementById('btnPLExcluir').style.display = 'none';
+            setVis('btnPLSalvar', false);
+            setVis('btnPLFecharNP', false);
+            setVis('btnPLCorrigirNP', false);
+            setVis('btnPLCancelar', false);
+            setVis('btnPLInativar', false);
+            setVis('btnPLExcluir', false);
             const pdfVis = carrinhoIds.size > 0 && (tem('preliquidacao_gerar_pdf') || ehAdmin());
-            document.getElementById('btnPLPdf').style.display = pdfVis ? 'inline-block' : 'none';
+            setVis('btnPLPdf', pdfVis);
+            setVis('btnPLPdfTopo', pdfVis);
+            if (hint) hint.textContent = 'Modo somente leitura.';
+            if (btnNpResumo) btnNpResumo.disabled = true;
             return;
         }
         const salvarVis = (rasc && (tem('preliquidacao_editar') || tem('preliquidacao_inserir'))) || (!plIdAtual && tem('preliquidacao_inserir'));
-        document.getElementById('btnPLSalvar').style.display = salvarVis ? 'inline-block' : 'none';
-        document.getElementById('btnPLPdf').style.display = (carrinhoIds.size > 0 && tem('preliquidacao_gerar_pdf')) ? 'inline-block' : 'none';
-        document.getElementById('btnPLFecharNP').style.display = (rasc && plIdAtual && carrinhoIds.size > 0 && tem('preliquidacao_fechar_np')) ? 'inline-block' : 'none';
-        document.getElementById('btnPLCorrigirNP').style.display = (fechado && tem('preliquidacao_fechar_np')) ? 'inline-block' : 'none';
-        document.getElementById('btnPLCancelar').style.display = (!cancel && plIdAtual && tem('preliquidacao_cancelar')) ? 'inline-block' : 'none';
-        document.getElementById('btnPLInativar').style.display = (plIdAtual && (tem('preliquidacao_status') || ehAdmin())) ? 'inline-block' : 'none';
-        document.getElementById('btnPLExcluir').style.display = (plIdAtual && cancel && (tem('preliquidacao_excluir') || ehAdmin())) ? 'inline-block' : 'none';
-        if (fechado) document.getElementById('btnPLFecharNP').style.display = 'none';
+        const pdfVis = carrinhoIds.size > 0 && (tem('preliquidacao_gerar_pdf') || ehAdmin());
+        const npVis = rasc && plIdAtual && carrinhoIds.size > 0 && tem('preliquidacao_fechar_np');
+        setVis('btnPLSalvar', salvarVis);
+        setVis('btnPLPdf', pdfVis);
+        setVis('btnPLPdfTopo', pdfVis);
+        setVis('btnPLFecharNP', npVis);
+        setVis('btnPLCorrigirNP', fechado && tem('preliquidacao_fechar_np'));
+        setVis('btnPLCancelar', !cancel && plIdAtual && tem('preliquidacao_cancelar'));
+        setVis('btnPLInativar', plIdAtual && (tem('preliquidacao_status') || ehAdmin()));
+        setVis('btnPLExcluir', plIdAtual && cancel && (tem('preliquidacao_excluir') || ehAdmin()));
+        if (fechado) setVis('btnPLFecharNP', false);
+        if (btnNpResumo) {
+            btnNpResumo.disabled = !npVis;
+            btnNpResumo.style.display = fechado && plDocAtual?.np ? '' : (npVis ? '' : 'none');
+            if (fechado && plDocAtual?.np) btnNpResumo.textContent = 'NP: ' + (plDocAtual.np || '');
+        }
+        if (hint) {
+            if (!plIdAtual) hint.textContent = 'Salve o lote com ao menos um TC.';
+            else if (!carrinhoIds.size) hint.textContent = 'Inclua TCs no lote para gerar DAuLiq ou informar NP.';
+            else if (rasc && !plDocAtual?.np) hint.textContent = 'Rascunho — informe NP após registro no SIAFI.';
+            else hint.textContent = '';
+        }
     }
 
     function aplicarEstadoCamposEditorLeitura() {
@@ -1502,16 +1804,19 @@
         if (plSomenteLeitura) document.getElementById('plBuscaFornecedor').value = '';
         atualizarExibicaoFornecedorPL(fornecedorFiltroCnpj, fornecedorFiltroNome);
         const sufLeitura = plSomenteLeitura ? ' — visualização' : '';
-        document.getElementById('tituloEditorPL').textContent = 'Pré-Liquidação ' + (plDocAtual.codigo || '') + sufLeitura;
-        let resumo = `Estado: ${plDocAtual.estado || 'Rascunho'} | NP: ${plDocAtual.np || '—'} | Inativo: ${plDocAtual.ativo === false ? 'sim' : 'não'}`;
-        if (plSomenteLeitura) resumo += ' | Modo somente leitura (sem alterar o lote).';
+        document.getElementById('tituloEditorPL').textContent = (plDocAtual.codigo || 'Pré-Liquidação') + sufLeitura;
+        let resumo = `NP: ${plDocAtual.np || '—'} · Atualizado: ${formatarDataHoraLista(plDocAtual.editado_em)}`;
+        if (plDocAtual.ativo === false) resumo += ' · Inativo';
+        if (plSomenteLeitura) resumo += ' · Somente leitura';
         document.getElementById('resumoEditorPL').textContent = resumo;
         document.getElementById('tela-lista-pl').style.display = 'none';
         document.getElementById('tela-editor-pl').style.display = 'block';
+        alternarAbaPL(carrinhoIds.size ? 'lote' : 'disp');
         aplicarEstadoCamposEditorLeitura();
         desenharCarrinho();
         desenharDisponiveis();
         desenharHistoricoPL();
+        atualizarUiFornecedorPL();
         atualizarBotoesEditor();
         if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
     }
@@ -1530,8 +1835,10 @@
         document.getElementById('resumoEditorPL').textContent = 'Salve para gerar o código PL-#####/AAAA.';
         document.getElementById('tela-lista-pl').style.display = 'none';
         document.getElementById('tela-editor-pl').style.display = 'block';
+        alternarAbaPL('disp');
         desenharCarrinho();
         desenharDisponiveis();
+        atualizarUiFornecedorPL();
         document.getElementById('tbodyPLHistorico').innerHTML = '<tr><td colspan="4" style="text-align:center;">Salve para criar o histórico.</td></tr>';
         atualizarBotoesEditor();
         if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
@@ -1543,7 +1850,7 @@
             return;
         }
         if (carrinhoIds.size < 1) {
-            alert('Adicione ao menos um TC ao carrinho.');
+            alert('Adicione ao menos um TC ao lote.');
             return;
         }
         const ts = titulosDoCarrinho();
@@ -1606,7 +1913,7 @@
                 const snap = await plRef.get();
                 const d = snap.data() || {};
                 if ((d.estado || '') !== 'Rascunho') {
-                    alert('Só é possível alterar o carrinho em Rascunho.');
+                    alert('Só é possível alterar o lote em Rascunho.');
                     return;
                 }
                 const antigos = new Set(d.tituloIds || []);
@@ -1628,7 +1935,7 @@
                         editado_em: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
-                const ev = plHistoricoEntry('salvar', 'Carrinho atualizado (' + novos.size + ' TCs)', '');
+                const ev = plHistoricoEntry('salvar', 'Lote atualizado (' + novos.size + ' TCs)', '');
                 const hist = (d.historico || []).concat([ev]);
                 batch.update(plRef, {
                     tituloIds: Array.from(carrinhoIds),
@@ -1798,16 +2105,6 @@
         }
     }
 
-    function atualizarExibicaoFornecedorPL(cnpj, nome) {
-        const el = document.getElementById('plFornecedorSelecionado');
-        if (!el) return;
-        const cnpjDigitos = normalizarDigitos(cnpj || '');
-        if (!cnpjDigitos) { el.innerHTML = ''; return; }
-        const nomeExib = nome ? escapeHTML(nome) + ' (' + cnpjDigitos + ')' : cnpjDigitos;
-        const urlProcs = 'titulos.html?cnpj=' + encodeURIComponent(cnpjDigitos) + '&status=Em%20Liquida%C3%A7%C3%A3o';
-        el.innerHTML = nomeExib + ' <a href="' + urlProcs + '" target="_blank" rel="noopener" title="Ver PROCs deste CNPJ em nova aba" style="font-size:12px;margin-left:6px;white-space:nowrap;">↗ Ver PROCs</a>';
-    }
-
     function setupFornecedorAutocomplete() {
         const inp = document.getElementById('plBuscaFornecedor');
         const ul = document.getElementById('plListaFornecedores');
@@ -1858,9 +2155,18 @@
             plDocAtual = null;
         });
         document.getElementById('btnPLSalvar')?.addEventListener('click', () => salvarPL());
+        document.getElementById('plTabDisp')?.addEventListener('click', () => alternarAbaPL('disp'));
+        document.getElementById('plTabLote')?.addEventListener('click', () => alternarAbaPL('lote'));
+        const acionarPdfPL = async () => {
+            document.getElementById('btnPLPdf')?.click();
+        };
+        document.getElementById('btnPLPdfTopo')?.addEventListener('click', acionarPdfPL);
+        document.getElementById('btnPLFecharNPResumo')?.addEventListener('click', () => {
+            document.getElementById('btnPLFecharNP')?.click();
+        });
         document.getElementById('btnPLPdf')?.addEventListener('click', async () => {
             const ts = titulosDoCarrinho();
-            if (!ts.length) { alert('Carrinho vazio.'); return; }
+            if (!ts.length) { alert('Lote vazio.'); return; }
             if (!plDocAtual) { alert('Salve a pré-liquidação antes de gerar o PDF (para histórico).'); return; }
             const eraSomenteLeitura = plSomenteLeitura;
             const variante = await pedirVariantePdfDauliq();
@@ -1935,12 +2241,22 @@
         document.getElementById('filtroPLInativas')?.addEventListener('change', () => desenharListaPL());
         document.getElementById('checkTodosPL')?.addEventListener('change', function() {
             const marcar = this.checked;
-            document.querySelectorAll('#tbodyListaPL .check-pl-row:not(:disabled)').forEach(chk => {
-                chk.checked = marcar;
-                const id = chk.getAttribute('data-id');
-                if (marcar) plSelecionados.add(id); else plSelecionados.delete(id);
-            });
+            const filtradaChk = plListaFiltrada();
+            const inicioChk = (paginaAtualPL - 1) * itensPorPaginaPL;
+            const idsPagina = filtradaChk.slice(inicioChk, inicioChk + itensPorPaginaPL).map(p => p.id);
+            if (marcar) idsPagina.forEach(id => plSelecionados.add(id));
+            else idsPagina.forEach(id => plSelecionados.delete(id));
+            desenharListaPL();
             atualizarUIselecaoPL();
+        });
+        document.getElementById('buscaTabelaPL')?.addEventListener('input', typeof debounce === 'function' ? debounce(() => {
+            termoBuscaPL = document.getElementById('buscaTabelaPL')?.value || '';
+            paginaAtualPL = 1;
+            desenharListaPL();
+        }) : function() {
+            termoBuscaPL = document.getElementById('buscaTabelaPL')?.value || '';
+            paginaAtualPL = 1;
+            desenharListaPL();
         });
         document.getElementById('btnImprimirBlocoPL')?.addEventListener('click', function() {
             const ids = Array.from(plSelecionados);
@@ -1969,6 +2285,7 @@
             if (document.getElementById('tela-editor-pl').style.display !== 'none') {
                 desenharDisponiveis();
                 desenharCarrinho();
+                atualizarUiFornecedorPL();
             }
         });
         unsubPL = db.collection('preLiquidacoes').onSnapshot(snap => {
@@ -1979,9 +2296,12 @@
                 if (p) {
                     plDocAtual = p;
                     desenharHistoricoPL();
+                    atualizarCabecalhoEditorPL();
+                    atualizarUiFornecedorPL();
                     atualizarBotoesEditor();
-                    document.getElementById('resumoEditorPL').textContent =
-                        `Estado: ${p.estado || 'Rascunho'} | NP: ${p.np || '—'} | Inativo: ${p.ativo === false ? 'sim' : 'não'}`;
+                    let resumo = `NP: ${p.np || '—'} · Atualizado: ${formatarDataHoraLista(p.editado_em)}`;
+                    if (p.ativo === false) resumo += ' · Inativo';
+                    document.getElementById('resumoEditorPL').textContent = resumo;
                 }
             }
         });

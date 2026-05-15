@@ -9,26 +9,14 @@
     <title>SisExeFin - Pré-Liquidação</title>
     <script src="script-tema.js"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="preliquidacao-pl.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .loading-overlay.hide { display: none; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .pl-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
-        @media (max-width: 960px) { .pl-grid { grid-template-columns: 1fr; } }
-        .pl-cart { position: sticky; top: 12px; max-height: calc(100vh - 100px); overflow: auto; }
-        .badge-pl-rascunho { background: #95a5a6; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-fechado { background: #27ae60; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-cancel { background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-inativo { background: #bdc3c7; color: #333; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
-        .badge-pl-pendente-lf { background: #8e44ad; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-aguardando-fin { background: #f39c12; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-pgto-parcial { background: #2980b9; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .badge-pl-para-pg { background: #1e8449; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
         .autocomplete-list { max-height: 200px; }
-        .pl-acoes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 320px; }
-        .pl-acoes .btn-small { margin: 0; }
     </style>
 </head>
 <body style="display: none; flex-direction: column;" id="corpo-preliquidacao">
@@ -60,122 +48,180 @@
 
         <main class="content">
             <div class="card" id="tela-lista-pl">
-                <div class="header-lista" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
-                    <h2 style="margin:0;">Pré-Liquidações</h2>
+                <div class="header-lista">
+                    <h2>Pré-Liquidações</h2>
                     <button type="button" id="btnNovaPL" class="btn-primary" data-permission="preliquidacao_inserir">+ Nova pré-liquidação</button>
                 </div>
-                <p style="color:#666; font-size:13px; margin:12px 0;">Monte lotes de TC do mesmo fornecedor, gere o DAuLiq (PDF) e registre a NP após o SIAFI.</p>
-                <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:10px;">
-                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px;">
-                        <span>Exercício</span>
+                <p style="color:#666; font-size:13px; margin:0 0 12px 0;">Monte lotes de TC do mesmo fornecedor, gere o DAuLiq (PDF) e registre a NP após o SIAFI.</p>
+                <div class="controles-tabela">
+                    <label>A exibir <select id="itensPorPaginaPL" onchange="mudarTamanhoPaginaPL()"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
+                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                        Exercício
                         <select id="filtroAnoExercicioPL" title="Filtrar lotes por ano do exercício"></select>
                     </label>
-                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px;">
-                        <input type="checkbox" id="filtroPLInativas">
-                        Mostrar pré-liquidações inativas (admin)
-                    </label>
+                    <div class="search-box"><input type="text" id="buscaTabelaPL" placeholder="Pesquisar código PL, empresa ou NP…" aria-label="Pesquisar pré-liquidações"></div>
                 </div>
                 <div id="containerSelecaoMultiplaPL" style="display:none; margin-bottom:12px; padding:10px; background:#e8f4f8; border-radius:4px;">
                     <strong>Selecionados: <span id="countSelecionadosPL">0</span></strong>
                     <button type="button" id="btnImprimirBlocoPL" class="btn-default btn-small" data-permission="preliquidacao_gerar_pdf" style="margin-left:15px;">📄 Imprimir DAuLiq em Bloco</button>
                 </div>
-                <table class="tabela-gov">
+                <table id="tabelaPreLiquidacoes" class="tabela-gov">
                     <thead>
                         <tr>
-                            <th style="width:40px;"><input type="checkbox" id="checkTodosPL" class="check-pl" title="Selecionar todos"></th>
-                            <th>Código</th>
-                            <th>Estado</th>
-                            <th>Fornecedor</th>
-                            <th>Valor (R$)</th>
-                            <th>TCs</th>
-                            <th>Data liq.</th>
-                            <th>Atualizado</th>
-                            <th>NP</th>
+                            <th style="width:40px;"><input type="checkbox" id="checkTodosPL" class="check-pl" title="Selecionar todos da página"></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('codigo')">Código <span class="sort-icon" id="sort-pl-codigo"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('estado')">Estado <span class="sort-icon" id="sort-pl-estado"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('fornecedorNome')">Fornecedor <span class="sort-icon" id="sort-pl-fornecedorNome"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('valorTotal')" style="text-align:right;">Valor (R$) <span class="sort-icon" id="sort-pl-valorTotal"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('qtdTcs')" style="text-align:center;">TCs <span class="sort-icon" id="sort-pl-qtdTcs"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('dataLiquidacao')">Data liq. <span class="sort-icon" id="sort-pl-dataLiquidacao"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('editado_em')">Atualizado <span class="sort-icon" id="sort-pl-editado_em"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaPL('np')">NP <span class="sort-icon" id="sort-pl-np"></span></th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyListaPL"></tbody>
                 </table>
+                <div class="paginacao">
+                    <span style="margin-right:15px;">Mostrando <strong id="mostrandoDePL">0</strong> de <strong id="mostrandoTotalPL">0</strong> registros</span>
+                    <button type="button" onclick="irParaPrimeiraPaginaPL()" id="btnPrimeiraPL">Primeiro</button>
+                    <button type="button" onclick="mudarPaginaPL(-1)" id="btnAnteriorPL">Anterior</button>
+                    <span id="infoPaginaPL">Página 1 de 1</span>
+                    <button type="button" onclick="mudarPaginaPL(1)" id="btnProximoPL">Próximo</button>
+                    <button type="button" onclick="irParaUltimaPaginaPL()" id="btnUltimaPL">Último</button>
+                    <label data-permission="preliquidacao_status" style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px; margin-left:12px;">
+                        <input type="checkbox" id="filtroPLInativas">
+                        Mostrar inativas (admin)
+                    </label>
+                </div>
             </div>
 
             <div class="card" id="tela-editor-pl" style="display:none;">
-                <div class="header-lista" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
-                    <h2 style="margin:0;" id="tituloEditorPL">Pré-Liquidação</h2>
-                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                        <button type="button" id="btnVoltarListaPL" class="btn-default">← Lista</button>
+                <div class="pl-editor-header">
+                    <div class="pl-editor-title-row">
+                        <div>
+                            <h2 class="pl-editor-title" id="tituloEditorPL">Pré-Liquidação</h2>
+                            <span id="plBadgeEstado"></span>
+                            <p class="pl-editor-meta" id="resumoEditorPL"></p>
+                        </div>
+                        <div class="pl-editor-actions-top">
+                            <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Salvar pré-liquidação</button>
+                            <div class="pl-editor-links">
+                                <button type="button" id="btnVoltarListaPL">← Voltar à lista</button>
+                                <button type="button" id="btnPLPdfTopo" data-permission="preliquidacao_gerar_pdf">Gerar DAuLiq (PDF)</button>
+                                <button type="button" id="btnPLCancelar" class="pl-link-danger" data-permission="preliquidacao_cancelar">Cancelar</button>
+                                <button type="button" id="btnPLInativar" data-permission="preliquidacao_status" style="display:none;">Inativar / Reativar</button>
+                                <button type="button" id="btnPLExcluir" class="pl-link-danger" data-permission="preliquidacao_excluir" style="display:none;">Excluir permanentemente</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pl-kpi-row">
+                        <div class="pl-kpi">TCs no lote <span class="pl-kpi-val" id="plKpiTcs">0</span></div>
+                        <div class="pl-kpi">Valor total <span class="pl-kpi-val destaque" id="plKpiValor">R$ 0,00</span></div>
+                        <div class="pl-kpi">Ateste (mais antigo) <span class="pl-kpi-val" id="plKpiAteste">—</span></div>
+                        <div class="pl-kpi">Venc. (+30 d) <span class="pl-kpi-val" id="plKpiVenc">—</span></div>
                     </div>
                 </div>
-                <p id="resumoEditorPL" style="color:#555; font-size:13px; margin:10px 0;"></p>
 
-                <div class="pl-grid">
+                <div class="pl-acoes-bar">
+                    <button type="button" id="btnPLPdf" class="btn-default btn-small" data-permission="preliquidacao_gerar_pdf">📄 Gerar DAuLiq</button>
+                    <button type="button" id="btnPLFecharNP" class="btn-default btn-small" data-permission="preliquidacao_fechar_np" style="display:none;">🔢 Informar NP e data</button>
+                    <button type="button" id="btnPLCorrigirNP" class="btn-default btn-small" data-permission="preliquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
+                    <span class="pl-acoes-spacer"></span>
+                    <span class="pl-hint-acoes" id="plHintAcoes"></span>
+                </div>
+
+                <div class="pl-editor-grid">
                     <div>
                         <fieldset class="gov-fieldset">
-                            <legend>1. Fornecedor</legend>
-                            <div class="form-row">
+                            <legend>Fornecedor do lote</legend>
+                            <div id="plFornecedorBusca" class="pl-fornecedor-busca">
+                                <p class="pl-hint">Selecione o credor antes de incluir TCs. Todos os títulos do lote devem ser do mesmo CNPJ.</p>
                                 <div class="form-group flex-1" style="position:relative;">
-                                    <label for="plBuscaFornecedor">Filtrar fornecedor (CNPJ ou nome):</label>
-                                    <input type="text" id="plBuscaFornecedor" placeholder="Digite para buscar..." autocomplete="off">
+                                    <label for="plBuscaFornecedor">Buscar por CNPJ ou razão social</label>
+                                    <input type="text" id="plBuscaFornecedor" placeholder="Digite para buscar…" autocomplete="off">
                                     <ul id="plListaFornecedores" class="autocomplete-list"></ul>
                                 </div>
                             </div>
-                            <p id="plFornecedorSelecionado" style="font-weight:600; color:#333; margin:6px 0 0 0;"></p>
+                            <div id="plFornecedorChipWrap" class="pl-fornecedor-chip-wrap">
+                                <div class="pl-chip-fornecedor">
+                                    <span class="pl-chip-dot" aria-hidden="true"></span>
+                                    <span id="plChipTexto">—</span>
+                                    <a href="#" id="plLinkProcs" target="_blank" rel="noopener" style="font-size:11px;">↗ Ver PROCs</a>
+                                </div>
+                                <div class="pl-chip-acoes" id="plChipAcoes"></div>
+                            </div>
                         </fieldset>
 
                         <fieldset class="gov-fieldset" style="margin-top:12px;">
-                            <legend>2. Títulos elegíveis</legend>
-                            <p style="font-size:12px; color:#666; margin:0 0 8px 0;">Status <strong>Em Liquidação</strong> e sem NP vinculada. Clique no checkbox para adicionar ao lote.</p>
-                            <div class="controles-tabela">
-                                <div class="search-box"><input type="text" id="plBuscaTC" placeholder="Filtrar por PROC ou NE..." aria-label="Filtrar por PROC ou NE"></div>
+                            <legend>Títulos do lote</legend>
+                            <p id="plHintSemCnpj" class="pl-hint warn" style="display:none;">Defina o fornecedor acima para listar TCs elegíveis (Em Liquidação, sem NP).</p>
+                            <div id="plBlocoTitulosComCnpj">
+                                <div class="pl-tabs" role="tablist">
+                                    <button type="button" class="pl-tab-btn" id="plTabDisp" role="tab">Disponíveis <span class="pl-tab-count" id="plCntDisp">0</span></button>
+                                    <button type="button" class="pl-tab-btn ativa" id="plTabLote" role="tab">No lote <span class="pl-tab-count" id="plCntLote">0</span></button>
+                                </div>
+                                <p class="pl-hint" id="plHintAbas">Status <strong>Em Liquidação</strong> e sem NP. Use a aba Disponíveis para incluir TCs no lote.</p>
+                                <div class="controles-tabela" style="margin-bottom:8px;">
+                                    <div class="search-box"><input type="text" id="plBuscaTC" placeholder="Filtrar PROC ou NE…" aria-label="Filtrar títulos"></div>
+                                </div>
+                                <div id="plPainelDisp" class="pl-painel-tab">
+                                    <table class="tabela-gov">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:30px;"></th>
+                                                <th>PROC</th>
+                                                <th>TC</th>
+                                                <th>Ateste</th>
+                                                <th>Valor</th>
+                                                <th>Em outra PL?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyPLDisponiveis"></tbody>
+                                    </table>
+                                </div>
+                                <div id="plPainelLote" class="pl-painel-tab ativa">
+                                    <table class="tabela-gov">
+                                        <thead>
+                                            <tr>
+                                                <th>PROC</th>
+                                                <th>TC</th>
+                                                <th>Ateste</th>
+                                                <th>Valor</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyPLLote"></tbody>
+                                    </table>
+                                    <p id="plLoteVazio" class="pl-resumo-vazio" style="display:none;">Nenhum TC no lote. Use a aba «Disponíveis».</p>
+                                </div>
                             </div>
-                            <table class="tabela-gov">
-                                <thead>
-                                    <tr>
-                                        <th style="width:30px;"></th>
-                                        <th>PROC</th>
-                                        <th>TC</th>
-                                        <th>Ateste</th>
-                                        <th>Valor</th>
-                                        <th>Em outra PL?</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbodyPLDisponiveis"></tbody>
-                            </table>
                         </fieldset>
+
+                        <details class="pl-auditoria" style="margin-top:12px;">
+                            <summary>Histórico de auditoria</summary>
+                            <table class="tabela-gov" style="margin-top:8px;">
+                                <thead><tr><th>Data</th><th>Tipo</th><th>Usuário</th><th>Detalhe</th></tr></thead>
+                                <tbody id="tbodyPLHistorico"></tbody>
+                            </table>
+                        </details>
                     </div>
-                    <div class="pl-cart gov-fieldset" style="margin:0; padding:12px;">
-                        <legend style="font-weight:600;">3. Lote / Carrinho</legend>
-                        <div id="plCarrinhoResumo" style="font-size:12px; color:#555; margin-bottom:8px; display:none;">
-                            <div id="plCarrinhoResumoTotal" style="font-weight:600;"></div>
-                            <div id="plCarrinhoResumoAteste" style="color:#666;"></div>
+
+                    <aside class="pl-resumo-card">
+                        <div class="pl-resumo-header">
+                            <div class="pl-resumo-title">Resumo do lote</div>
+                            <div class="pl-resumo-valor" id="plResumoValor">R$ 0,00</div>
                         </div>
-                        <ul id="plListaCarrinho" style="list-style:none; padding:0; margin:0 0 8px 0; font-size:13px;"></ul>
-                        <p id="plCarrinhoVazio" style="color:#999; font-size:13px; margin:0 0 8px 0;">Nenhum TC no carrinho.</p>
-
-                        <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                            <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Salvar pré-liquidação</button>
-                            <button type="button" id="btnPLPdf" class="btn-default" data-permission="preliquidacao_gerar_pdf">Gerar DAuLiq (PDF)</button>
-
-                            <hr style="border:none; border-top:1px solid #ddd; margin:4px 0;">
-
-                            <button type="button" id="btnPLFecharNP" class="btn-primary" data-permission="preliquidacao_fechar_np" style="display:none;">Informar NP e data</button>
-                            <button type="button" id="btnPLCorrigirNP" class="btn-default" data-permission="preliquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
-
-                            <hr style="border:none; border-top:1px solid #ddd; margin:4px 0;">
-
-                            <button type="button" id="btnPLCancelar" class="btn-default" style="color:#c0392b;" data-permission="preliquidacao_cancelar">Cancelar pré-liquidação</button>
-                            <button type="button" id="btnPLInativar" class="btn-default" data-permission="preliquidacao_status" style="display:none; color:#7f8c8d;">Inativar / Reativar (admin)</button>
-                            <button type="button" id="btnPLExcluir" class="btn-default" data-permission="preliquidacao_excluir" style="display:none; color:#e74c3c;">Excluir permanentemente (admin)</button>
+                        <div class="pl-resumo-body">
+                            <div class="pl-resumo-meta" id="plResumoMeta">Nenhum TC selecionado</div>
+                            <div id="plResumoItens"></div>
+                            <p id="plResumoVazio" class="pl-resumo-vazio">Selecione TCs na aba Disponíveis.</p>
                         </div>
-                    </div>
+                        <div class="pl-resumo-footer">
+                            <button type="button" id="btnPLFecharNPResumo" class="btn-default" data-permission="preliquidacao_fechar_np" disabled>Informar NP e data no SIAFI</button>
+                        </div>
+                    </aside>
                 </div>
-
-                <fieldset class="gov-fieldset" style="margin-top:16px;">
-                    <legend>Auditoria desta pré-liquidação</legend>
-                    <table class="tabela-gov">
-                        <thead><tr><th>Data</th><th>Tipo</th><th>Usuário</th><th>Detalhe</th></tr></thead>
-                        <tbody id="tbodyPLHistorico"></tbody>
-                    </table>
-                </fieldset>
             </div>
         </main>
     </div>
