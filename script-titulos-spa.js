@@ -283,6 +283,13 @@
         assinarTitulosPorStatus(statusFiltroAtual);
         desenharFiltrosStatus();
         ligarEventos();
+
+        const cnpjQ = (urlParams.get('cnpj') || '').replace(/\D/g, '').trim();
+        if (cnpjQ) {
+            termoBusca = cnpjQ;
+            const inputBusca = document.getElementById('buscaTabelaTitulos');
+            if (inputBusca) inputBusca.value = cnpjQ;
+        }
     }
     window.inicializarTitulosSPA = inicializarTitulosSPA;
 

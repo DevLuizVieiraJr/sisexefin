@@ -509,8 +509,14 @@
         (titulos || []).forEach(t => {
             const s = t.dataAteste;
             if (!s) return;
-            const d = new Date(s);
-            if (isNaN(d.getTime())) return;
+            let d;
+            if (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) {
+                const [ano, mes, dia] = s.slice(0, 10).split('-').map(Number);
+                d = new Date(ano, mes - 1, dia);
+            } else {
+                d = s && s.toDate ? s.toDate() : new Date(s);
+            }
+            if (!d || isNaN(d.getTime())) return;
             if (!min || d < min) min = d;
         });
         return min;
@@ -1200,11 +1206,15 @@
             const podeSelecionar = podePdf && nPdf > 0;
             const checked = podeSelecionar && plSelecionados.has(p.id) ? ' checked' : '';
             const disabledChk = podeSelecionar ? '' : ' disabled title="Sem títulos no lote ou sem permissão"';
+            const cnpjListaDigitos = normalizarDigitos(p.fornecedorCnpj || '');
+            const linkProcLista = cnpjListaDigitos
+                ? `<a href="titulos.html?cnpj=${encodeURIComponent(cnpjListaDigitos)}&status=Em%20Liquida%C3%A7%C3%A3o" target="_blank" rel="noopener" title="Ver PROCs deste CNPJ em nova aba" style="margin-left:5px;font-size:11px;white-space:nowrap;">↗ PROCs</a>`
+                : '';
             tr.innerHTML = `
                 <td><input type="checkbox" class="check-pl check-pl-row" data-id="${escapeHTML(p.id)}"${checked}${disabledChk}></td>
                 <td>${escapeHTML(p.codigo || '-')}</td>
                 <td>${badge}</td>
-                <td>${escapeHTML(p.fornecedorNome || '-')}</td>
+                <td>${escapeHTML(p.fornecedorNome || '-')}${linkProcLista}</td>
                 <td style="text-align:right;white-space:nowrap;">${escapeHTML(moeda(vTot))}</td>
                 <td style="text-align:center;">${n}</td>
                 <td style="white-space:nowrap;">${escapeHTML(formatarDataSimplesPL(p.dataLiquidacao))}</td>
@@ -1272,19 +1282,42 @@
     function desenharCarrinho() {
         const ul = document.getElementById('plListaCarrinho');
         const empty = document.getElementById('plCarrinhoVazio');
+        const resumoDiv = document.getElementById('plCarrinhoResumo');
+        const resumoTotal = document.getElementById('plCarrinhoResumoTotal');
+        const resumoAteste = document.getElementById('plCarrinhoResumoAteste');
         if (!ul || !empty) return;
         ul.innerHTML = '';
         const ts = titulosDoCarrinho();
         if (!ts.length) {
             empty.style.display = 'block';
+            if (resumoDiv) resumoDiv.style.display = 'none';
             return;
         }
         empty.style.display = 'none';
+        if (resumoDiv) {
+            const totalLote = ts.reduce((s, t) => s + (Number(t.valorNotaFiscal) || 0), 0);
+            const atesteMin = dataAtesteMaisAntiga(ts);
+            const fmtLocalDate = (d) => {
+                if (!d || isNaN(d.getTime())) return '—';
+                return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+            };
+            if (resumoTotal) resumoTotal.textContent = `Total do lote: ${moeda(totalLote)} (${ts.length} TC${ts.length > 1 ? 's' : ''})`;
+            if (resumoAteste) {
+                if (atesteMin) {
+                    const venc30 = new Date(atesteMin.getFullYear(), atesteMin.getMonth(), atesteMin.getDate() + 30);
+                    resumoAteste.textContent = `Ateste mais antigo: ${fmtLocalDate(atesteMin)} · Venc. (+30 d): ${fmtLocalDate(venc30)}`;
+                } else {
+                    resumoAteste.textContent = 'Sem data de ateste nos TCs do lote.';
+                }
+            }
+            resumoDiv.style.display = 'block';
+        }
         const podeRemover = plDocAtual && !plSomenteLeitura && (plDocAtual.estado || '') === 'Rascunho' && tem('preliquidacao_editar');
         ts.forEach(t => {
             const li = document.createElement('li');
             li.style.cssText = 'padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;';
-            li.innerHTML = `<span>${escapeHTML(t.idProc || t.id)} — ${escapeHTML(moeda(t.valorNotaFiscal))}</span>` +
+            const atesteTC = formatarDataSimplesPL(t.dataAteste);
+            li.innerHTML = `<span>${escapeHTML(t.idProc || t.id)} — ${escapeHTML(moeda(t.valorNotaFiscal))}<br><small style="color:#888;">Ateste: ${escapeHTML(atesteTC)}</small></span>` +
                 (podeRemover ? `<button type="button" class="btn-default btn-small btn-pl-rem" data-id="${escapeHTML(t.id)}">Remover</button>` : '');
             ul.appendChild(li);
         });
@@ -1349,7 +1382,7 @@
         tbody.innerHTML = '';
         const cnpjAlvo = normalizarDigitos(fornecedorFiltroCnpj);
         if (!cnpjAlvo) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Selecione um fornecedor.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Selecione um fornecedor.</td></tr>';
             return;
         }
         const lista = baseTitulos.filter(t => {
@@ -1365,7 +1398,7 @@
             return true;
         });
         if (!lista.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum TC elegível.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum TC elegível.</td></tr>';
             return;
         }
         lista.forEach(t => {
@@ -1378,6 +1411,7 @@
                 <td><input type="checkbox" class="pl-chk-tc" data-id="${escapeHTML(t.id)}" ${carrinhoIds.has(t.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''}></td>
                 <td>${escapeHTML(t.idProc || '')}</td>
                 <td>${escapeHTML((t.tipoTC || '') + '-' + (t.numTC || ''))}</td>
+                <td style="white-space:nowrap;">${escapeHTML(formatarDataSimplesPL(t.dataAteste))}</td>
                 <td>${escapeHTML(moeda(t.valorNotaFiscal))}</td>
                 <td>${outra ? escapeHTML(outra) : '-'}</td>
             `;
@@ -1466,9 +1500,7 @@
         fornecedorFiltroCnpj = plDocAtual.fornecedorCnpj || '';
         fornecedorFiltroNome = plDocAtual.fornecedorNome || '';
         if (plSomenteLeitura) document.getElementById('plBuscaFornecedor').value = '';
-        document.getElementById('plFornecedorSelecionado').textContent = fornecedorFiltroNome
-            ? `${fornecedorFiltroNome} (${fornecedorFiltroCnpj})`
-            : '';
+        atualizarExibicaoFornecedorPL(fornecedorFiltroCnpj, fornecedorFiltroNome);
         const sufLeitura = plSomenteLeitura ? ' — visualização' : '';
         document.getElementById('tituloEditorPL').textContent = 'Pré-Liquidação ' + (plDocAtual.codigo || '') + sufLeitura;
         let resumo = `Estado: ${plDocAtual.estado || 'Rascunho'} | NP: ${plDocAtual.np || '—'} | Inativo: ${plDocAtual.ativo === false ? 'sim' : 'não'}`;
@@ -1493,7 +1525,7 @@
         fornecedorFiltroCnpj = '';
         fornecedorFiltroNome = '';
         document.getElementById('plBuscaFornecedor').value = '';
-        document.getElementById('plFornecedorSelecionado').textContent = '';
+        atualizarExibicaoFornecedorPL('', '');
         document.getElementById('tituloEditorPL').textContent = 'Nova pré-liquidação';
         document.getElementById('resumoEditorPL').textContent = 'Salve para gerar o código PL-#####/AAAA.';
         document.getElementById('tela-lista-pl').style.display = 'none';
@@ -1766,6 +1798,16 @@
         }
     }
 
+    function atualizarExibicaoFornecedorPL(cnpj, nome) {
+        const el = document.getElementById('plFornecedorSelecionado');
+        if (!el) return;
+        const cnpjDigitos = normalizarDigitos(cnpj || '');
+        if (!cnpjDigitos) { el.innerHTML = ''; return; }
+        const nomeExib = nome ? escapeHTML(nome) + ' (' + cnpjDigitos + ')' : cnpjDigitos;
+        const urlProcs = 'titulos.html?cnpj=' + encodeURIComponent(cnpjDigitos) + '&status=Em%20Liquida%C3%A7%C3%A3o';
+        el.innerHTML = nomeExib + ' <a href="' + urlProcs + '" target="_blank" rel="noopener" title="Ver PROCs deste CNPJ em nova aba" style="font-size:12px;margin-left:6px;white-space:nowrap;">↗ Ver PROCs</a>';
+    }
+
     function setupFornecedorAutocomplete() {
         const inp = document.getElementById('plBuscaFornecedor');
         const ul = document.getElementById('plListaFornecedores');
@@ -1787,7 +1829,7 @@
                     fornecedorFiltroNome = f.razaoSocial || f.nome || '';
                     inp.value = fornecedorFiltroNome;
                     ul.innerHTML = '';
-                    document.getElementById('plFornecedorSelecionado').textContent = `${fornecedorFiltroNome} (${fornecedorFiltroCnpj})`;
+                    atualizarExibicaoFornecedorPL(fornecedorFiltroCnpj, fornecedorFiltroNome);
                     desenharDisponiveis();
                 });
                 ul.appendChild(li);

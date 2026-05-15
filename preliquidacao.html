@@ -110,24 +110,30 @@
                 <div class="pl-grid">
                     <div>
                         <fieldset class="gov-fieldset">
-                            <legend>Fornecedor e TCs elegíveis</legend>
+                            <legend>1. Fornecedor</legend>
                             <div class="form-row">
                                 <div class="form-group flex-1" style="position:relative;">
-                                    <label>Filtrar fornecedor (CNPJ ou nome):</label>
+                                    <label for="plBuscaFornecedor">Filtrar fornecedor (CNPJ ou nome):</label>
                                     <input type="text" id="plBuscaFornecedor" placeholder="Digite para buscar..." autocomplete="off">
                                     <ul id="plListaFornecedores" class="autocomplete-list"></ul>
                                 </div>
                             </div>
-                            <p id="plFornecedorSelecionado" style="font-weight:600; color:#333; margin-bottom:8px;"></p>
+                            <p id="plFornecedorSelecionado" style="font-weight:600; color:#333; margin:6px 0 0 0;"></p>
+                        </fieldset>
+
+                        <fieldset class="gov-fieldset" style="margin-top:12px;">
+                            <legend>2. Títulos elegíveis</legend>
+                            <p style="font-size:12px; color:#666; margin:0 0 8px 0;">Status <strong>Em Liquidação</strong> e sem NP vinculada. Clique no checkbox para adicionar ao lote.</p>
                             <div class="controles-tabela">
-                                <div class="search-box"><input type="text" id="plBuscaTC" placeholder="Filtrar por PROC ou NE..."></div>
+                                <div class="search-box"><input type="text" id="plBuscaTC" placeholder="Filtrar por PROC ou NE..." aria-label="Filtrar por PROC ou NE"></div>
                             </div>
                             <table class="tabela-gov">
                                 <thead>
                                     <tr>
-                                        <th></th>
+                                        <th style="width:30px;"></th>
                                         <th>PROC</th>
                                         <th>TC</th>
+                                        <th>Ateste</th>
                                         <th>Valor</th>
                                         <th>Em outra PL?</th>
                                     </tr>
@@ -137,17 +143,27 @@
                         </fieldset>
                     </div>
                     <div class="pl-cart gov-fieldset" style="margin:0; padding:12px;">
-                        <legend style="font-weight:600;">Carrinho</legend>
-                        <p style="font-size:12px; color:#666;">Mesmo credor apenas. Status <strong>Em Liquidação</strong> e sem NP.</p>
-                        <ul id="plListaCarrinho" style="list-style:none; padding:0; margin:10px 0; font-size:13px;"></ul>
-                        <p id="plCarrinhoVazio" style="color:#999; font-size:13px;">Nenhum TC no carrinho.</p>
-                        <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+                        <legend style="font-weight:600;">3. Lote / Carrinho</legend>
+                        <div id="plCarrinhoResumo" style="font-size:12px; color:#555; margin-bottom:8px; display:none;">
+                            <div id="plCarrinhoResumoTotal" style="font-weight:600;"></div>
+                            <div id="plCarrinhoResumoAteste" style="color:#666;"></div>
+                        </div>
+                        <ul id="plListaCarrinho" style="list-style:none; padding:0; margin:0 0 8px 0; font-size:13px;"></ul>
+                        <p id="plCarrinhoVazio" style="color:#999; font-size:13px; margin:0 0 8px 0;">Nenhum TC no carrinho.</p>
+
+                        <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
                             <button type="button" id="btnPLSalvar" class="btn-primary" data-permission="preliquidacao_editar">Salvar pré-liquidação</button>
                             <button type="button" id="btnPLPdf" class="btn-default" data-permission="preliquidacao_gerar_pdf">Gerar DAuLiq (PDF)</button>
+
+                            <hr style="border:none; border-top:1px solid #ddd; margin:4px 0;">
+
                             <button type="button" id="btnPLFecharNP" class="btn-primary" data-permission="preliquidacao_fechar_np" style="display:none;">Informar NP e data</button>
                             <button type="button" id="btnPLCorrigirNP" class="btn-default" data-permission="preliquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
+
+                            <hr style="border:none; border-top:1px solid #ddd; margin:4px 0;">
+
                             <button type="button" id="btnPLCancelar" class="btn-default" style="color:#c0392b;" data-permission="preliquidacao_cancelar">Cancelar pré-liquidação</button>
-                            <button type="button" id="btnPLInativar" class="btn-default" data-permission="preliquidacao_status" style="display:none;">Inativar / Reativar (admin)</button>
+                            <button type="button" id="btnPLInativar" class="btn-default" data-permission="preliquidacao_status" style="display:none; color:#7f8c8d;">Inativar / Reativar (admin)</button>
                             <button type="button" id="btnPLExcluir" class="btn-default" data-permission="preliquidacao_excluir" style="display:none; color:#e74c3c;">Excluir permanentemente (admin)</button>
                         </div>
                     </div>
