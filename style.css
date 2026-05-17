@@ -453,6 +453,56 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
 #corpo-admin .admin-table-wrap { overflow-x: auto; }
 #corpo-admin .admin-search-wrap { max-width: 300px; margin-bottom: 15px; }
 #corpo-admin .admin-form-limited { max-width: 500px; }
+#corpo-admin .admin-grid-controles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+#corpo-admin .admin-grid-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}
+#corpo-admin .admin-grid-actions label {
+    margin: 0;
+    font-size: 12px;
+}
+#corpo-admin .admin-grid-actions select {
+    min-width: 88px;
+}
+#corpo-admin .admin-feedback {
+    display: block;
+    border: 1px solid #cfe3f5;
+    border-left: 4px solid #337ab7;
+    background: #f4f9ff;
+    color: #215a86;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 3px;
+    margin: 10px 0;
+}
+#corpo-admin .admin-feedback-warning {
+    border-color: #f0d8a8;
+    border-left-color: #d38b00;
+    background: #fff9ec;
+    color: #7a4d00;
+}
+#corpo-admin .admin-feedback-success {
+    border-color: #b7e2c2;
+    border-left-color: #2b9951;
+    background: #eefaf1;
+    color: #1f6a38;
+}
+#corpo-admin .admin-feedback-error {
+    border-color: #f0c0c0;
+    border-left-color: #c0392b;
+    background: #fff1f1;
+    color: #8b1f17;
+}
 
 #corpo-admin .matriz-permissoes-wrap { overflow-x: auto; margin: 10px 0; }
 #corpo-admin .tabela-matriz-permissoes { table-layout: fixed; min-width: 600px; }
@@ -634,6 +684,30 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
 [data-theme="dark"] #corpo-admin .admin-text-muted,
 [data-theme="dark"] #corpo-admin .painel-intro {
     color: #9aa0a6;
+}
+[data-theme="dark"] #corpo-admin .admin-feedback {
+    background: #243446;
+    border-color: #365673;
+    border-left-color: #64a5d9;
+    color: #cde6fb;
+}
+[data-theme="dark"] #corpo-admin .admin-feedback-warning {
+    background: #3a3224;
+    border-color: #5a4b31;
+    border-left-color: #f0b13e;
+    color: #f9e4b5;
+}
+[data-theme="dark"] #corpo-admin .admin-feedback-success {
+    background: #253a30;
+    border-color: #355744;
+    border-left-color: #3bb26a;
+    color: #cbf0d8;
+}
+[data-theme="dark"] #corpo-admin .admin-feedback-error {
+    background: #422a2a;
+    border-color: #684040;
+    border-left-color: #e05a4f;
+    color: #ffd6d2;
 }
 
 /* Página conta.html */

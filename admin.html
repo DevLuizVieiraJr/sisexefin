@@ -42,11 +42,11 @@
         <main class="content">
             <div class="admin-tabs-wrap">
                 <div class="admin-tabs" role="tablist" aria-label="Seções do painel de administração">
-                    <button type="button" role="tab" id="admin-tab-usuarios" data-painel="usuarios" class="admin-tab ativo" onclick="mostrarPainelAdmin('usuarios')" aria-selected="true" aria-controls="painel-usuarios" tabindex="0">Usuários</button>
-                    <button type="button" role="tab" id="admin-tab-pendentes" data-painel="pendentes" class="admin-tab" onclick="mostrarPainelAdmin('pendentes')" aria-selected="false" aria-controls="painel-pendentes" tabindex="-1">Aguardando Aprovação</button>
-                    <button type="button" role="tab" id="admin-tab-perfis" data-painel="perfis" class="admin-tab" onclick="mostrarPainelAdmin('perfis')" aria-selected="false" aria-controls="painel-perfis" tabindex="-1">Perfis</button>
-                    <button type="button" role="tab" id="admin-tab-oi" data-painel="oi" class="admin-tab" onclick="mostrarPainelAdmin('oi')" aria-selected="false" aria-controls="painel-oi" tabindex="-1">OI</button>
-                    <button type="button" role="tab" id="admin-tab-cadastrar" data-painel="cadastrar" class="admin-tab" onclick="mostrarPainelAdmin('cadastrar')" aria-selected="false" aria-controls="painel-cadastrar" tabindex="-1">Cadastrar Usuário</button>
+                    <button type="button" role="tab" id="admin-tab-usuarios" data-painel="usuarios" data-permission-any="acesso_admin,usuarios_ler" class="admin-tab ativo" onclick="mostrarPainelAdmin('usuarios')" aria-selected="true" aria-controls="painel-usuarios" tabindex="0">Usuários</button>
+                    <button type="button" role="tab" id="admin-tab-pendentes" data-painel="pendentes" data-permission-any="acesso_admin,admin_pendentes_ler" class="admin-tab" onclick="mostrarPainelAdmin('pendentes')" aria-selected="false" aria-controls="painel-pendentes" tabindex="-1">Aguardando Aprovação</button>
+                    <button type="button" role="tab" id="admin-tab-perfis" data-painel="perfis" data-permission-any="acesso_admin" class="admin-tab" onclick="mostrarPainelAdmin('perfis')" aria-selected="false" aria-controls="painel-perfis" tabindex="-1">Perfis</button>
+                    <button type="button" role="tab" id="admin-tab-oi" data-painel="oi" data-permission-any="acesso_admin,oi_ler" class="admin-tab" onclick="mostrarPainelAdmin('oi')" aria-selected="false" aria-controls="painel-oi" tabindex="-1">OI</button>
+                    <button type="button" role="tab" id="admin-tab-cadastrar" data-painel="cadastrar" data-permission-any="acesso_admin,admin_cadastrar_usuario,usuarios_inserir,usuarios_editar" class="admin-tab" onclick="mostrarPainelAdmin('cadastrar')" aria-selected="false" aria-controls="painel-cadastrar" tabindex="-1">Cadastrar Usuário</button>
                 </div>
             </div>
 
@@ -55,8 +55,28 @@
                     <h2>Usuários Cadastrados</h2>
                 </div>
                 <p class="painel-intro">Liste, edite ou bloqueie os usuários do sistema.</p>
-                <div class="search-box admin-search-wrap">
-                    <input type="text" id="buscaUsuarios" placeholder="Pesquisar por email ou perfil..." oninput="filtrarListaUsuarios()" aria-label="Pesquisar usuários por email ou perfil">
+                <div class="controles-tabela admin-grid-controles">
+                    <div class="search-box admin-search-wrap">
+                        <input type="text" id="buscaUsuarios" placeholder="Pesquisar por email, perfil ou UID..." oninput="filtrarListaUsuarios()" aria-label="Pesquisar usuários por email, perfil ou UID">
+                    </div>
+                    <div class="admin-grid-actions">
+                        <label for="filtroStatusUsuarios">Status:</label>
+                        <select id="filtroStatusUsuarios" onchange="filtrarListaUsuarios()">
+                            <option value="todos">Todos</option>
+                            <option value="ativo">Ativo</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="bloqueado">Bloqueado</option>
+                        </select>
+                        <label for="itensPorPaginaUsuarios">Itens/página:</label>
+                        <select id="itensPorPaginaUsuarios" onchange="window.mudarItensPaginaAdmin && window.mudarItensPaginaAdmin('usuarios', this.value)">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                        <button type="button" class="btn-default btn-small" id="exportUsuariosCsv">Exportar CSV</button>
+                        <button type="button" class="btn-default btn-small" id="exportUsuariosXlsx">Exportar XLSX</button>
+                    </div>
                 </div>
                 <div class="admin-table-wrap">
                     <table id="tabelaUsuarios" class="tabela-gov">
@@ -73,13 +93,30 @@
                         <tbody id="tbodyUsuarios"></tbody>
                     </table>
                 </div>
+                <div class="paginacao" id="paginacaoUsuarios"></div>
             </div>
 
             <div id="painel-pendentes" class="admin-painel card" role="tabpanel" aria-labelledby="admin-tab-pendentes" aria-hidden="true">
                 <div class="header-lista">
                     <h2>Aguardando Aprovação</h2>
                 </div>
-                <p class="painel-intro">Usuários que se cadastraram via Google e aguardam atribuição de perfil pelo administrador.</p>
+                <p class="painel-intro">Usuários que se cadastraram via Google e aguardam atribuição de perfil. Ao clicar em Aprovar, o sistema abre o formulário de edição para concluir a atribuição e salvar.</p>
+                <div class="controles-tabela admin-grid-controles">
+                    <div class="search-box admin-search-wrap">
+                        <input type="text" id="buscaPendentes" placeholder="Pesquisar por email, nome ou origem..." oninput="window.filtrarPendentesAdmin && window.filtrarPendentesAdmin()" aria-label="Pesquisar pendentes por email, nome ou origem">
+                    </div>
+                    <div class="admin-grid-actions">
+                        <label for="itensPorPaginaPendentes">Itens/página:</label>
+                        <select id="itensPorPaginaPendentes" onchange="window.mudarItensPaginaAdmin && window.mudarItensPaginaAdmin('pendentes', this.value)">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                        <button type="button" class="btn-default btn-small" id="exportPendentesCsv">Exportar CSV</button>
+                        <button type="button" class="btn-default btn-small" id="exportPendentesXlsx">Exportar XLSX</button>
+                    </div>
+                </div>
                 <div class="admin-table-wrap">
                     <table id="tabelaPendentes" class="tabela-gov">
                         <thead>
@@ -94,6 +131,7 @@
                         <tbody id="tbodyPendentes"></tbody>
                     </table>
                 </div>
+                <div class="paginacao" id="paginacaoPendentes"></div>
             </div>
 
             <div id="painel-perfis" class="admin-painel card" role="tabpanel" aria-labelledby="admin-tab-perfis" aria-hidden="true">
@@ -103,6 +141,22 @@
                         <button type="button" onclick="abrirFormularioPerfil()" class="btn-primary">+ Novo Perfil</button>
                     </div>
                     <p class="painel-intro">Liste ou edite os perfis de acesso.</p>
+                    <div class="controles-tabela admin-grid-controles">
+                        <div class="search-box admin-search-wrap">
+                            <input type="text" id="buscaPerfis" placeholder="Pesquisar por perfil ou permissão..." oninput="window.filtrarPerfisAdmin && window.filtrarPerfisAdmin()" aria-label="Pesquisar perfis por nome ou permissão">
+                        </div>
+                        <div class="admin-grid-actions">
+                            <label for="itensPorPaginaPerfis">Itens/página:</label>
+                            <select id="itensPorPaginaPerfis" onchange="window.mudarItensPaginaAdmin && window.mudarItensPaginaAdmin('perfis', this.value)">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            <button type="button" class="btn-default btn-small" id="exportPerfisCsv">Exportar CSV</button>
+                            <button type="button" class="btn-default btn-small" id="exportPerfisXlsx">Exportar XLSX</button>
+                        </div>
+                    </div>
                     <div class="admin-table-wrap">
                         <table id="tabelaPerfis" class="tabela-gov">
                             <thead>
@@ -115,6 +169,7 @@
                             <tbody id="tbodyPerfis"></tbody>
                         </table>
                     </div>
+                    <div class="paginacao" id="paginacaoPerfis"></div>
                 </div>
                 <div id="tela-formulario-perfis" class="admin-nested-form" style="display:none;">
                     <div class="admin-form-section-header">
@@ -138,6 +193,8 @@
                                 <label><input type="checkbox" class="cb-perm" value="preliquidacao_fechar_np"> Pré-Liq.: informar NP / fechar</label>
                                 <label><input type="checkbox" class="cb-perm" value="preliquidacao_cancelar"> Pré-Liq.: cancelar lote</label>
                                 <label><input type="checkbox" class="cb-perm" value="preliquidacao_associar_lf"> Pré-Liq.: associar LF (futuro)</label>
+                                <label><input type="checkbox" class="cb-perm" value="admin_pendentes_ler"> Admin: acessar aba Aguardando Aprovação</label>
+                                <label><input type="checkbox" class="cb-perm" value="admin_cadastrar_usuario"> Admin: acessar aba Cadastrar Usuário</label>
                             </div>
                         </fieldset>
                         <div class="form-acoes form-acoes--rodape">
@@ -154,7 +211,29 @@
                         <h2 class="titulo-sem-margem">Organizações Internas (OI)</h2>
                         <button type="button" onclick="window.abrirFormularioOI && window.abrirFormularioOI()" class="btn-primary">+ Nova OI</button>
                     </div>
-                    <p class="painel-intro">Liste ou cadastre organizações internas. A coleção OI é criada automaticamente ao salvar o primeiro registro. O seu perfil precisa da permissão <strong>Acesso Admin</strong> (em Perfis).</p>
+                <p class="painel-intro">Liste ou cadastre organizações internas. A coleção OI é criada automaticamente ao salvar o primeiro registro. O acesso depende de permissão específica da aba ou de <strong>Acesso Admin</strong>.</p>
+                    <div class="controles-tabela admin-grid-controles">
+                        <div class="search-box admin-search-wrap">
+                            <input type="text" id="buscaOI" placeholder="Pesquisar por número, nome ou contato..." oninput="window.filtrarOIAdmin && window.filtrarOIAdmin()" aria-label="Pesquisar OI por número, nome ou contato">
+                        </div>
+                        <div class="admin-grid-actions">
+                            <label for="filtroSituacaoOI">Situação:</label>
+                            <select id="filtroSituacaoOI" onchange="window.filtrarOIAdmin && window.filtrarOIAdmin()">
+                                <option value="todas">Todas</option>
+                                <option value="Ativo">Ativo</option>
+                                <option value="Inativo">Inativo</option>
+                            </select>
+                            <label for="itensPorPaginaOI">Itens/página:</label>
+                            <select id="itensPorPaginaOI" onchange="window.mudarItensPaginaAdmin && window.mudarItensPaginaAdmin('oi', this.value)">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            <button type="button" class="btn-default btn-small" id="exportOICsv">Exportar CSV</button>
+                            <button type="button" class="btn-default btn-small" id="exportOIXlsx">Exportar XLSX</button>
+                        </div>
+                    </div>
                     <div class="admin-table-wrap">
                         <table id="tabelaOI" class="tabela-gov">
                             <thead>
@@ -170,6 +249,7 @@
                             <tbody id="tbodyOI"></tbody>
                         </table>
                     </div>
+                    <div class="paginacao" id="paginacaoOI"></div>
                 </div>
                 <div id="tela-formulario-oi" class="admin-nested-form" style="display:none;">
                     <div class="admin-form-section-header">
@@ -224,8 +304,11 @@
                         <div class="form-group"><label for="adminUsuarioPerfilAtual">Perfil ativo por padrão:</label>
                             <select id="adminUsuarioPerfilAtual"></select>
                         </div>
+                        <p id="adminPerfilPadraoAviso" class="admin-feedback admin-feedback-warning" role="status" aria-live="polite" style="display:none;"></p>
+                        <p id="adminUsuarioFluxoAviso" class="admin-feedback" role="status" aria-live="polite" style="display:none;"></p>
                         <div class="form-acoes form-acoes--rodape">
                             <button type="button" id="btnNovoUsuario" class="btn-default">Novo usuário</button>
+                            <button type="button" id="btnCancelarEdicaoUsuario" class="btn-default">Voltar à lista</button>
                             <button type="submit" class="btn-primary">💾 Salvar Usuário</button>
                         </div>
                     </form>
@@ -237,6 +320,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="firebase-config.js"></script>
     <script src="script-menu-lateral.js"></script>
     <script src="script.js"></script>

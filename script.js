@@ -382,6 +382,15 @@ function temPermissaoUI(perm) {
 }
 window.temPermissaoUI = temPermissaoUI;
 
+function temAlgumaPermissaoUI(perms) {
+    if (!Array.isArray(perms)) return false;
+    for (let i = 0; i < perms.length; i += 1) {
+        if (temPermissaoUI(perms[i])) return true;
+    }
+    return false;
+}
+window.temAlgumaPermissaoUI = temAlgumaPermissaoUI;
+
 /**
  * Motor de ocultação de UI (RBAC). Remove elementos sem permissão do DOM (el.remove).
  * Deve ser chamada após carregarPermissoes().
@@ -390,6 +399,13 @@ function aplicarPermissoesUI() {
     document.querySelectorAll('[data-permission]').forEach(el => {
         const req = el.getAttribute('data-permission');
         if (!temPermissaoUI(req)) el.remove();
+    });
+    document.querySelectorAll('[data-permission-any]').forEach(el => {
+        const req = (el.getAttribute('data-permission-any') || '')
+            .split(',')
+            .map(p => p.trim())
+            .filter(Boolean);
+        if (!temAlgumaPermissaoUI(req)) el.remove();
     });
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
@@ -503,11 +519,22 @@ auth.onAuthStateChanged(async (user) => {
 
         // Lógica de Rota: Estamos no Admin?
         if (corpoAdmin) {
-            if (!permissoesEmCache.includes('acesso_admin')) {
+            const podeEntrarAdmin = temAlgumaPermissaoUI([
+                'acesso_admin',
+                'usuarios_ler',
+                'admin_pendentes_ler',
+                'oi_ler',
+                'admin_cadastrar_usuario',
+                'usuarios_inserir',
+                'usuarios_editar'
+            ]);
+            if (!podeEntrarAdmin) {
                 alert("Acesso Negado! Redirecionando...");
                 window.location.replace('dashboard.html');
                 return;
             }
+            aplicarPermissoesUI();
+            atualizarSeletorPerfil();
             corpoAdmin.style.display = 'flex';
         }
         // Lógica de Rota: Estamos na SPA Títulos?
@@ -679,8 +706,17 @@ if (formUsuarioAdmin) {
         const perfis = Array.from(checkboxes).map(cb => cb.value.trim().toLowerCase());
         const perfilAtualEl = document.getElementById('adminUsuarioPerfilAtual');
         let perfilAtual = (perfilAtualEl && perfilAtualEl.value) ? perfilAtualEl.value.trim().toLowerCase() : null;
+        let perfilAjustado = false;
+        if (typeof window.mostrarAvisoPerfilPadrao === 'function') window.mostrarAvisoPerfilPadrao('');
         if (perfis.length === 0) { alert("Selecione pelo menos um perfil."); return; }
-        if (!perfilAtual || !perfis.includes(perfilAtual)) perfilAtual = perfis[0];
+        if (!perfilAtual || !perfis.includes(perfilAtual)) {
+            perfilAtual = perfis[0];
+            perfilAjustado = true;
+            if (perfilAtualEl) perfilAtualEl.value = perfilAtual;
+            if (typeof window.mostrarAvisoPerfilPadrao === 'function') {
+                window.mostrarAvisoPerfilPadrao('Perfil padrao ajustado automaticamente para um perfil atribuido.');
+            }
+        }
 
         const dados = { email, perfis, perfil_ativo: perfilAtual, status: 'ativo' };
         if (cpfRaw.length === 11) dados.cpf = cpfRaw;
@@ -719,20 +755,30 @@ if (formUsuarioAdmin) {
                     try { await secondaryAuth.signOut(); } catch (e) { /* ignorar */ }
                 }
                 if (typeof registrarAuditoria === 'function') registrarAuditoria('criar_usuario', email, { perfis, perfil_ativo: perfilAtual });
-                alert(`Usuário criado com sucesso. UID gerado automaticamente pelo Firebase Auth. Perfis: ${perfis.join(', ')}.`);
-                formUsuarioAdmin.reset();
-                const uidInput = document.getElementById('adminUsuarioUid');
-                if (uidInput) uidInput.value = '';
-                if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+                const mensagemCriacao = `Usuario criado com sucesso. Perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`;
+                if (typeof window.adminPosSalvarUsuario === 'function') {
+                    window.adminPosSalvarUsuario({ mensagem: mensagemCriacao, perfilAjustado: perfilAjustado, uid: uidFinal });
+                } else {
+                    alert(mensagemCriacao);
+                    formUsuarioAdmin.reset();
+                    const uidInput = document.getElementById('adminUsuarioUid');
+                    if (uidInput) uidInput.value = '';
+                    if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+                }
                 return;
             }
             await db.collection('usuarios').doc(uidFinal).set(dados, { merge: true });
             if (typeof registrarAuditoria === 'function') registrarAuditoria('atualizar_usuario', email, { perfis, perfil_ativo: perfilAtual });
-            alert(`Usuário atualizado com perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`);
-            formUsuarioAdmin.reset();
-            const uidInputEdit = document.getElementById('adminUsuarioUid');
-            if (uidInputEdit) uidInputEdit.value = '';
-            if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+            const mensagemAtualizacao = `Usuario atualizado com perfis: ${perfis.join(', ')}. Perfil ativo: ${perfilAtual}.`;
+            if (typeof window.adminPosSalvarUsuario === 'function') {
+                window.adminPosSalvarUsuario({ mensagem: mensagemAtualizacao, perfilAjustado: perfilAjustado, uid: uidFinal });
+            } else {
+                alert(mensagemAtualizacao);
+                formUsuarioAdmin.reset();
+                const uidInputEdit = document.getElementById('adminUsuarioUid');
+                if (uidInputEdit) uidInputEdit.value = '';
+                if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
+            }
         } catch (err) {
             const msg = err.code === 'auth/email-already-in-use' ? 'Este email já está em uso.' :
                 err.code === 'auth/invalid-email' ? 'Email inválido.' :

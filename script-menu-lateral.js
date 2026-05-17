@@ -150,11 +150,43 @@
                 <p>Minha conta</p>
             </a>
         </li>
-        <li class="nav-item" data-permission="acesso_admin">
-            <a href="admin.html" class="nav-link nav-link--admin" data-menu-ativo="admin" title="Controle de Acesso">
+        <li class="nav-item has-treeview" data-tree="admin">
+            <a href="#" class="nav-link nav-link--admin" data-toggle="tree" title="Módulo Admin" aria-expanded="false">
                 <i class="nav-icon fas fa-user-shield"></i>
-                <p>Controle de Acesso</p>
+                <p>Módulo Admin <i class="right fas fa-angle-left"></i></p>
             </a>
+            <ul class="nav nav-treeview">
+                <li class="nav-item" data-permission-any="acesso_admin,usuarios_ler">
+                    <a href="admin.html?aba=usuarios" class="nav-link menu-secao-admin" data-menu-ativo="admin-usuarios" data-aba-admin="usuarios" title="Admin - Usuários">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Usuários</p>
+                    </a>
+                </li>
+                <li class="nav-item" data-permission-any="acesso_admin,admin_pendentes_ler">
+                    <a href="admin.html?aba=pendentes" class="nav-link menu-secao-admin" data-menu-ativo="admin-pendentes" data-aba-admin="pendentes" title="Admin - Aguardando Aprovação">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Aguardando Aprovação</p>
+                    </a>
+                </li>
+                <li class="nav-item" data-permission-any="acesso_admin">
+                    <a href="admin.html?aba=perfis" class="nav-link menu-secao-admin" data-menu-ativo="admin-perfis" data-aba-admin="perfis" title="Admin - Perfis">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Perfis</p>
+                    </a>
+                </li>
+                <li class="nav-item" data-permission-any="acesso_admin,oi_ler">
+                    <a href="admin.html?aba=oi" class="nav-link menu-secao-admin" data-menu-ativo="admin-oi" data-aba-admin="oi" title="Admin - OI">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>OI</p>
+                    </a>
+                </li>
+                <li class="nav-item" data-permission-any="acesso_admin,admin_cadastrar_usuario,usuarios_inserir,usuarios_editar">
+                    <a href="admin.html?aba=cadastrar" class="nav-link menu-secao-admin" data-menu-ativo="admin-cadastrar" data-aba-admin="cadastrar" title="Admin - Cadastrar Usuário">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Cadastrar Usuário</p>
+                    </a>
+                </li>
+            </ul>
         </li>
     `;
 
@@ -280,7 +312,12 @@
     function detectarPaginaAtiva() {
         const path = window.location.pathname || '';
         const search = window.location.search || '';
-        if (path.includes('admin.html')) return 'admin';
+        if (path.includes('admin.html')) {
+            const aba = new URLSearchParams(search).get('aba');
+            const abasValidas = ['usuarios', 'pendentes', 'perfis', 'oi', 'cadastrar'];
+            if (aba && abasValidas.includes(aba)) return 'admin-' + aba;
+            return 'admin-usuarios';
+        }
         if (path.includes('titulos.html')) return 'titulos';
         if (path.includes('preliquidacao.html')) return 'preliquidacao';
         if (path.includes('sistema.html')) {
@@ -326,6 +363,10 @@
             const secao = ativo === 'sistema' ? (new URLSearchParams(window.location.search).get('secao') || 'empenhos') : ativo;
             const linkSecao = ul.querySelector('a[href*="secao=' + secao + '"]');
             if (linkSecao) linkSecao.classList.add('active');
+        } else if (ativo.indexOf('admin-') === 0) {
+            const aba = ativo.replace('admin-', '');
+            const linkAba = ul.querySelector('a[data-aba-admin="' + aba + '"]');
+            if (linkAba) linkAba.classList.add('active');
         }
 
         // Estado persistido dos trees + abre "Tabelas de Apoio" quando em sistema.html
@@ -336,6 +377,8 @@
         ul.querySelectorAll('.nav-item.has-treeview[data-tree]').forEach(function(item) {
             const id = item.getAttribute('data-tree');
             if (id === 'tabelas' && (ativo === 'sistema' || ['empenhos','lf','op','deducoesEncargos','contratos','fornecedores','centrocustos','ug','backup'].indexOf(ativo) >= 0)) {
+                item.classList.add('menu-open');
+            } else if (id === 'admin' && ativo.indexOf('admin-') === 0) {
                 item.classList.add('menu-open');
             } else if (treeState[id] === true) {
                 item.classList.add('menu-open');
@@ -394,6 +437,21 @@
                 if (permsCarregadas && typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
                 if (typeof mostrarSecao === 'function') mostrarSecao(idSecao, link);
                 if (typeof history.pushState === 'function') history.pushState({}, '', 'sistema.html?secao=' + secao);
+            });
+        }
+
+        const corpoAdmin = document.getElementById('corpo-admin');
+        if (corpoAdmin) {
+            ul.addEventListener('click', function(e) {
+                const link = e.target.closest('a.menu-secao-admin');
+                if (!link) return;
+                const aba = link.getAttribute('data-aba-admin');
+                if (!aba) return;
+                e.preventDefault();
+                if (typeof window.abrirPainelAdminPorRota === 'function') {
+                    window.abrirPainelAdminPorRota(aba, link);
+                }
+                if (typeof history.pushState === 'function') history.pushState({}, '', 'admin.html?aba=' + aba);
             });
         }
 
