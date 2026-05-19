@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin — Corrigir LPs Migrados</title>
+    <script src="script-tema.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #logA, #logB { font-family: monospace; font-size: 12px; background: #f8f8f8; border: 1px solid #ddd; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; margin-top: 8px; }
+        .warn  { color: #a94442; }
+        .ok    { color: #3c763d; }
+        .info  { color: #31708f; }
+        .passo { border: 1px solid #ddd; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }
+        .passo h3 { margin: 0 0 6px; }
+        .passo p  { font-size: 13px; color: #555; margin: 0 0 12px; }
+        .btn-row  { display: flex; gap: 10px; flex-wrap: wrap; }
+    </style>
+</head>
+<body style="display:none; flex-direction:column;" id="corpo-corrigir-lp">
+    <main class="content" style="max-width:960px; margin:24px auto;">
+        <div class="card">
+            <h2>Correção pós-migração: LPs Migrados</h2>
+            <p style="font-size:13px; color:#555;">
+                Ferramenta administrativa para corrigir lacunas deixadas pela migração PL → LP.
+                Execute os passos <strong>em ordem</strong>. Requer <strong>acesso_admin</strong>.
+                Cada passo tem modo <em>Simular</em> (só lê, não grava) e <em>Executar</em> (grava no Firestore).
+            </p>
+
+            <!-- ===== PASSO A ===== -->
+            <div class="passo">
+                <h3>Passo A — Reconstruir orçamento dos LPs migrados</h3>
+                <p>
+                    O PL nunca persistia um campo <code>orcamento</code>; a migração gerava linhas com <code>ne: '—'</code>
+                    porque lia campos inexistentes na raiz do TC. Este passo reconstrói o <code>orcamento[]</code>
+                    de cada LP com <code>migradoDePreLiquidacao: true</code> a partir de
+                    <code>empenhosVinculados[]</code> dos TCs vinculados, preservando <code>lf</code>, <code>pf</code>
+                    e <code>vinc</code> já preenchidos.
+                </p>
+                <div class="btn-row">
+                    <button type="button" id="btnSimularA" class="btn-default">Simular Passo A</button>
+                    <button type="button" id="btnExecutarA" class="btn-primary">Executar Passo A</button>
+                </div>
+                <div id="logA"></div>
+            </div>
+
+            <!-- ===== PASSO B ===== -->
+            <div class="passo">
+                <h3>Passo B — Limpar campos legados em TCs participantes</h3>
+                <p>
+                    A migração original só apagou <code>preLiquidacaoId</code> / <code>preLiquidacaoCodigo</code>
+                    dos TCs em <code>tituloIds</code>. TCs que estavam em <code>titulosParticiparamIds</code>
+                    (ex.: removidos do lote antes do fechamento) ainda carregam os campos legados.
+                    Este passo os remove com segurança (só apaga se <code>preLiquidacaoId === plId</code>).
+                </p>
+                <div class="btn-row">
+                    <button type="button" id="btnSimularB" class="btn-default">Simular Passo B</button>
+                    <button type="button" id="btnExecutarB" class="btn-primary">Executar Passo B</button>
+                </div>
+                <div id="logB"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="script.js"></script>
+    <script>
+    (function () {
+        // ===== helpers de log =====
+        function makeLog(elId) {
+            var el = document.getElementById(elId);
+            return function log(msg, cls) {
+                var line = document.createElement('div');
+                if (cls) line.className = cls;
+                line.textContent = msg;
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+            };
+        }
+
+        function verificarAdmin() {
+            if (!permissoesEmCache.includes('acesso_admin')) {
+                alert('Acesso negado: requer acesso_admin.');
+                return false;
+            }
+            return true;
+        }
+
+        // ===== Carrega TCs em lote por IDs (chunks de 10 para o operador IN do Firestore) =====
+        async function carregarTitulosPorIds(ids) {
+            var mapa = {};
+            var chunks = [];
+            for (var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
+            for (var c = 0; c < chunks.length; c++) {
+                var snap = await db.collection('titulos').where(firebase.firestore.FieldPath.documentId(), 'in', chunks[c]).get();
+                snap.docs.forEach(function (d) { mapa[d.id] = d.data(); });
+            }
+            return mapa;
+        }
+
+        // ===== Reconstrói orcamento a partir de empenhosVinculados =====
+        // Preserva lf/pf/vinc do orcamento antigo quando (tcId, ne) bater.
+        function reconstruirOrcamento(tcsIds, titulosMap, orcamentoAntigo) {
+            var resultado = [];
+            (tcsIds || []).forEach(function (tid) {
+                var t    = titulosMap[tid] || {};
+                var emps = (t.empenhosVinculados || []);
+                if (!emps.length) {
+                    var ant = (orcamentoAntigo || []).find(function (o) { return o.tcId === tid; }) || {};
+                    resultado.push({
+                        tcId: tid, ne: '—', nd: '—', sub: '—', fr: '—',
+                        valor: Number(t.valorNotaFiscal || t.valor || 0),
+                        cc: '—', ug: '—',
+                        vinc: ant.vinc || '', lf: ant.lf || '', pf: ant.pf || '',
+                    });
+                } else {
+                    emps.forEach(function (v) {
+                        var ne  = v.numEmpenho || v.numNE || '—';
+                        var ant = (orcamentoAntigo || []).find(function (o) {
+                            return o.tcId === tid && o.ne === ne;
+                        }) || {};
+                        resultado.push({
+                            tcId:  tid,
+                            ne:    ne,
+                            nd:    v.nd          || '—',
+                            sub:   v.subelemento || '—',
+                            fr:    v.fr          || '—',
+                            valor: Number(v.valorVinculado || 0),
+                            cc:    v.centroCustosId || '—',
+                            ug:    v.ugId           || '—',
+                            vinc:  ant.vinc || '',
+                            lf:    ant.lf   || v.lf  || '',
+                            pf:    ant.pf   || v.pf  || '',
+                        });
+                    });
+                }
+            });
+            return resultado;
+        }
+
+        // ===== PASSO A =====
+        async function executarPassoA(simular) {
+            var log = makeLog('logA');
+            document.getElementById('logA').innerHTML = '';
+            if (!verificarAdmin()) return;
+            log(simular ? '=== SIMULAÇÃO — Passo A ===' : '=== EXECUÇÃO — Passo A ===');
+            mostrarLoading && mostrarLoading();
+
+            try {
+                var snapLPs = await db.collection('liquidacoes')
+                    .where('migradoDePreLiquidacao', '==', true)
+                    .get();
+
+                log('LPs migrados encontrados: ' + snapLPs.size, 'info');
+                var atualizados = 0;
+                var semTCs = 0;
+
+                for (var i = 0; i < snapLPs.docs.length; i++) {
+                    var lpDoc  = snapLPs.docs[i];
+                    var lp     = lpDoc.data();
+                    var lpId   = lpDoc.id;
+                    var tcsIds = (lp.tcsIds || []).length ? lp.tcsIds : (lp.tcsParticiparamIds || []);
+
+                    if (!tcsIds.length) {
+                        log('  ' + (lp.codigo || lpId) + ': sem TCs — ignorado.', 'warn');
+                        semTCs++;
+                        continue;
+                    }
+
+                    var titulosMap   = await carregarTitulosPorIds(tcsIds);
+                    var novoOrcamento = reconstruirOrcamento(tcsIds, titulosMap, lp.orcamento || []);
+
+                    // Detectar se há melhora real (algum ne diferente de '—')
+                    var temNEReal = novoOrcamento.some(function (e) { return e.ne !== '—'; });
+                    var linhasAntes = (lp.orcamento || []).length;
+                    var linhasDepois = novoOrcamento.length;
+
+                    log(
+                        '  ' + (lp.codigo || lpId) +
+                        ': ' + tcsIds.length + ' TC(s), ' +
+                        linhasAntes + ' → ' + linhasDepois + ' linha(s) orcamento' +
+                        (temNEReal ? '' : ' [aviso: nenhuma NE real encontrada]'),
+                        temNEReal ? 'ok' : 'warn'
+                    );
+
+                    if (!simular) {
+                        await db.collection('liquidacoes').doc(lpId).update({
+                            orcamento: novoOrcamento,
+                            editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                        });
+                    }
+                    atualizados++;
+                }
+
+                log(
+                    'Concluído: ' + atualizados + ' LP(s) ' + (simular ? 'simuladas' : 'atualizadas') +
+                    (semTCs ? '; ' + semTCs + ' ignoradas (sem TCs).' : '.'),
+                    'ok'
+                );
+            } catch (err) {
+                log('Erro: ' + (err.message || err), 'warn');
+                console.error(err);
+            } finally {
+                esconderLoading && esconderLoading();
+            }
+        }
+
+        // ===== PASSO B =====
+        async function executarPassoB(simular) {
+            var log = makeLog('logB');
+            document.getElementById('logB').innerHTML = '';
+            if (!verificarAdmin()) return;
+            log(simular ? '=== SIMULAÇÃO — Passo B ===' : '=== EXECUÇÃO — Passo B ===');
+            mostrarLoading && mostrarLoading();
+
+            try {
+                // Iterar PLs migradas para obter titulosParticiparamIds
+                var snapPLs = await db.collection('preLiquidacoes')
+                    .where('migradoLiquidacao', '==', true)
+                    .get();
+
+                log('PLs migradas encontradas: ' + snapPLs.size, 'info');
+                var tcAtualizados = 0;
+                var tcIgnorados   = 0;
+                var plSemPartic   = 0;
+
+                for (var i = 0; i < snapPLs.docs.length; i++) {
+                    var plDoc  = snapPLs.docs[i];
+                    var pl     = plDoc.data();
+                    var plId   = plDoc.id;
+                    var partic = (pl.titulosParticiparamIds || []);
+
+                    if (!partic.length) { plSemPartic++; continue; }
+
+                    // Carregar TCs participantes
+                    var mapa = await carregarTitulosPorIds(partic);
+                    var batch = db.batch();
+                    var opsBatch = 0;
+
+                    for (var j = 0; j < partic.length; j++) {
+                        var tid = partic[j];
+                        var tc  = mapa[tid];
+                        if (!tc) {
+                            log('    TC ' + tid + ': não encontrado — ignorado.', 'warn');
+                            tcIgnorados++;
+                            continue;
+                        }
+
+                        // Só limpa se preLiquidacaoId for exatamente este plId
+                        if (tc.preLiquidacaoId !== plId) {
+                            tcIgnorados++;
+                            continue;
+                        }
+
+                        log(
+                            '  PL ' + (pl.codigo || plId) + ' → TC ' + tid +
+                            ': remover preLiquidacaoId=' + tc.preLiquidacaoId,
+                            'ok'
+                        );
+
+                        if (!simular) {
+                            batch.update(db.collection('titulos').doc(tid), {
+                                preLiquidacaoId:     firebase.firestore.FieldValue.delete(),
+                                preLiquidacaoCodigo: firebase.firestore.FieldValue.delete(),
+                                editado_em:          firebase.firestore.FieldValue.serverTimestamp(),
+                            });
+                            opsBatch++;
+
+                            // Firestore batch tem limite de 500 ops; commit parcial se necessário
+                            if (opsBatch >= 400) {
+                                await batch.commit();
+                                batch    = db.batch();
+                                opsBatch = 0;
+                            }
+                        }
+                        tcAtualizados++;
+                    }
+
+                    if (!simular && opsBatch > 0) await batch.commit();
+                }
+
+                log(
+                    'Concluído: ' + tcAtualizados + ' TC(s) ' + (simular ? 'identificados' : 'limpos') +
+                    '; ' + tcIgnorados + ' ignorados (sem vínculo ou já limpos)' +
+                    (plSemPartic ? '; ' + plSemPartic + ' PLs sem participantes.' : '.'),
+                    'ok'
+                );
+            } catch (err) {
+                log('Erro: ' + (err.message || err), 'warn');
+                console.error(err);
+            } finally {
+                esconderLoading && esconderLoading();
+            }
+        }
+
+        // ===== Inicialização =====
+        auth.onAuthStateChanged(async function (user) {
+            if (!user) { window.location.href = 'index.html'; return; }
+            if (typeof carregarPermissoes === 'function') await carregarPermissoes();
+            if (!permissoesEmCache.includes('acesso_admin')) {
+                document.querySelector('main').innerHTML =
+                    '<div class="card"><p style="color:#a94442;font-weight:600;">Acesso negado: requer acesso_admin.</p></div>';
+                document.body.style.display = 'flex';
+                return;
+            }
+            document.body.style.display = 'flex';
+
+            document.getElementById('btnSimularA').addEventListener('click', function () { executarPassoA(true); });
+            document.getElementById('btnExecutarA').addEventListener('click', function () {
+                if (!confirm('Executar Passo A (reescreve orcamento dos LPs migrados no Firestore)?')) return;
+                executarPassoA(false);
+            });
+            document.getElementById('btnSimularB').addEventListener('click', function () { executarPassoB(true); });
+            document.getElementById('btnExecutarB').addEventListener('click', function () {
+                if (!confirm('Executar Passo B (limpa campos legados nos TCs participantes)?')) return;
+                executarPassoB(false);
+            });
+        });
+    })();
+    </script>
+</body>
+</html>

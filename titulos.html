@@ -408,16 +408,16 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel2">
-                        <p style="color:#666; margin-bottom:12px;">Informe a <strong>NP</strong> e a <strong>data de liquidação</strong> quando aplicável. <strong>LF e PF</strong> são <strong>somente leitura</strong> nesta tela (origem: <a href="preliquidacao.html" class="btn-modelo-csv">Pré-Liquidação</a> e importação LFxPF). A NP é obrigatória para concluir a liquidação (mudança para status <strong>Liquidado</strong>).</p>
+                        <p style="color:#666; margin-bottom:12px;">Informe a <strong>NP</strong> e a <strong>data de liquidação</strong> quando aplicável. <strong>LF e PF</strong> são <strong>somente leitura</strong> nesta tela (origem: <a href="liquidacao.html" class="btn-modelo-csv">Liquidação e Pagamento</a> e importação LFxPF). A NP é obrigatória para concluir a liquidação (mudança para status <strong>Liquidado</strong>).</p>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>NP (Nota de Pagamento) <span style="color:#e74c3c;">*</span>:</label><input type="text" id="np" placeholder="Ex: 741000000012026NP000001"></div>
                             <div class="form-group flex-1"><label>Data de Liquidação:</label><input type="date" id="dataLiquidacao"></div>
                         </div>
                         <div id="plRastroWrap" class="form-row" style="display:none;">
                             <div class="form-group flex-1">
-                                <label>Pré-Liquidação:</label>
+                                <label>Lote de Liquidação (LP):</label>
                                 <span id="plRastroTexto" style="font-weight:600;"></span>
-                                <a id="plRastroLink" href="preliquidacao.html" class="btn-modelo-csv" style="margin-left:10px;">Abrir no módulo</a>
+                                <a id="plRastroLink" href="liquidacao.html" class="btn-modelo-csv" style="margin-left:10px;">Abrir no módulo</a>
                             </div>
                         </div>
                         <table class="tabela-gov tabela-ne-inputs" id="tabelaLiquidacao" style="margin-top:15px;">
@@ -441,7 +441,7 @@
                     </div>
 
                     <div class="tab-panel-tc" id="panel3">
-                        <p style="color:#666; margin-bottom:15px;"><strong>LF, PF e OP</strong> são <strong>somente leitura</strong> (Pré-Liquidação / LFxPF / importações). Use esta aba apenas para consulta.</p>
+                        <p style="color:#666; margin-bottom:15px;"><strong>LF, PF e OP</strong> são <strong>somente leitura</strong> (preenchidos pela Liquidação e Pagamento / LFxPF / importações). Use esta aba apenas para consulta.</p>
                         <table class="tabela-gov tabela-ne-inputs" id="tabelaLFPF">
                             <thead><tr><th>NE</th><th>Valor</th><th>LF</th><th>PF</th></tr></thead>
                             <tbody id="tbodyLFPF"></tbody>

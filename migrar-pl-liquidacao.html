@@ -46,14 +46,18 @@
         function mapEstadoPL(estado) {
             var e = String(estado || '').trim();
             var m = {
-                'Rascunho': 'rascunho',
-                'Fechado': 'fechado',
-                'Cancelado': 'cancelado',
-                'Aguardando Financeiro': 'aguardandoFinanceiroSemLF',
-                'Para Pagamento parcial': 'paraPagamentoParcial',
-                'Para Pagamento': 'paraPagamento',
+                'Rascunho':                  'rascunho',
+                'Fechado':                   'fechado',
+                'Cancelado':                 'cancelado',
+                'Aguardando Financeiro':      'aguardandoFinanceiroSemLF',
+                'Para Pagamento parcial':     'paraPagamentoParcial',
+                'Para Pagamento':            'paraPagamento',
             };
             return m[e] || String(e).toLowerCase() || 'rascunho';
+        }
+
+        function estadoCancelado(estadoLP) {
+            return estadoLP === 'cancelado';
         }
 
         function codigoPLparaLP(codigo) {
@@ -61,22 +65,99 @@
         }
 
         function buildOrcamento(tituloIds, titulosMap) {
-            return (tituloIds || []).map(function (tid) {
-                var t = titulosMap[tid] || {};
-                return {
-                    tcId: tid,
-                    ne: t.ne || '—',
-                    nd: t.nd || '—',
-                    sub: t.sub || '—',
-                    fr: t.fr || '—',
-                    valor: Number(t.valorNotaFiscal || t.valor || 0),
-                    cc: t.cc || t.centroCusto || '—',
-                    ug: t.ug || t.unidadeGestora || '—',
-                    vinc: '',
-                    lf: '',
-                    pf: '',
-                };
+            var resultado = [];
+            (tituloIds || []).forEach(function (tid) {
+                var t    = titulosMap[tid] || {};
+                var emps = (t.empenhosVinculados || []);
+                if (!emps.length) {
+                    resultado.push({
+                        tcId: tid, ne: '—', nd: '—', sub: '—', fr: '—',
+                        valor: Number(t.valorNotaFiscal || t.valor || 0),
+                        cc: '—', ug: '—', vinc: '', lf: '', pf: '',
+                    });
+                } else {
+                    emps.forEach(function (v) {
+                        resultado.push({
+                            tcId:  tid,
+                            ne:    v.numEmpenho || v.numNE || '—',
+                            nd:    v.nd          || '—',
+                            sub:   v.subelemento || '—',
+                            fr:    v.fr          || '—',
+                            valor: Number(v.valorVinculado || 0),
+                            cc:    v.centroCustosId || '—',
+                            ug:    v.ugId           || '—',
+                            vinc: '', lf: v.lf || '', pf: v.pf || '',
+                        });
+                    });
+                }
             });
+            return resultado;
+        }
+
+        // Retorna deduções de um TC por tipo a partir do mapa já carregado
+        function getDeducoesDoMap(titulosMap, tcId, tipo) {
+            var t = titulosMap[tcId] || {};
+            return (t.deducoesAplicadas || t.tributacoes || []).filter(function (d) { return d.tipo === tipo; });
+        }
+
+        function somarDeducoes(lista, campo1, campo2) {
+            return lista.reduce(function (s, d) {
+                return s + (Number(d[campo1] || d[campo2] || 0));
+            }, 0);
+        }
+
+        function moeda(v) {
+            return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        }
+
+        // Gera log de diagnóstico de NE e deduções para cada TC do lote
+        function logDiagnosticos(tituloIds, titulosMap, codigoLp) {
+            var semNE = [];
+            var totalNEs = 0;
+            var totalINSS = 0, totalISS = 0, totalDARF = 0;
+            var tcsSemDeducao = 0;
+
+            (tituloIds || []).forEach(function (tid) {
+                var t = titulosMap[tid];
+                if (!t) { semNE.push(tid); return; }
+
+                var emps = (t.empenhosVinculados || []);
+                if (!emps.length) {
+                    semNE.push(tid);
+                } else {
+                    totalNEs += emps.length;
+                }
+
+                var inss = getDeducoesDoMap(titulosMap, tid, 'DDF021');
+                var iss  = getDeducoesDoMap(titulosMap, tid, 'DDR001');
+                var darf = getDeducoesDoMap(titulosMap, tid, 'DDF025');
+
+                totalINSS += somarDeducoes(inss, 'valor', 'valor');
+                totalISS  += somarDeducoes(iss,  'valor', 'valor');
+                totalDARF += somarDeducoes(darf, 'total', 'valor');
+
+                if (!inss.length && !iss.length && !darf.length) tcsSemDeducao++;
+            });
+
+            log('  NEs vinculados: ' + totalNEs + ' | TCs sem empenhosVinculados: ' + semNE.length
+                + (semNE.length ? ' ⚠ (NE ficará "—")' : ''));
+
+            if (semNE.length) {
+                log('    TCs sem NE: ' + semNE.join(', '), 'warn');
+            }
+
+            var totalDed = totalINSS + totalISS + totalDARF;
+            if (totalDed > 0) {
+                log('  Deduções → INSS: ' + moeda(totalINSS)
+                    + ' | ISS: ' + moeda(totalISS)
+                    + ' | DARF: ' + moeda(totalDARF)
+                    + ' | Total: ' + moeda(totalDed));
+            } else {
+                log('  Deduções: nenhuma' + (tcsSemDeducao === tituloIds.length ? '' : ' (apenas em alguns TCs)'));
+            }
+            if (tcsSemDeducao > 0) {
+                log('  TCs sem nenhuma dedução: ' + tcsSemDeducao + ' de ' + tituloIds.length);
+            }
         }
 
         async function carregarTitulos(ids) {
@@ -111,10 +192,16 @@
                     var doc = pendentes[j];
                     var pl = doc.data();
                     var plId = doc.id;
-                    var tituloIds = (pl.tituloIds || []).slice();
-                    if (!tituloIds.length && (pl.titulosParticiparamIds || []).length) {
-                        tituloIds = pl.titulosParticiparamIds.slice();
-                    }
+                    var estadoLP = mapEstadoPL(pl.estado);
+                    var cancelada = estadoCancelado(estadoLP);
+
+                    // IDs reais da PL (usados para log e tcsParticiparamIds)
+                    var todosIds = (pl.tituloIds || []).slice();
+                    if (!todosIds.length) todosIds = (pl.titulosParticiparamIds || []).slice();
+
+                    // IDs que receberão liquidacaoId: nenhum para PLs canceladas
+                    var idsParaVincular = cancelada ? [] : todosIds;
+
                     var codigoLp = codigoPLparaLP(pl.codigo);
                     var m = codigoLp.match(/LP-(\d{5})\/(\d{4})/);
                     if (m) {
@@ -123,50 +210,78 @@
                         maxSeqPorAno[ano] = Math.max(maxSeqPorAno[ano] || 0, seq);
                     }
 
-                    var titulosMap = await carregarTitulos(tituloIds);
+                    var titulosMap = await carregarTitulos(todosIds);
+
+                    // Para LP cancelada: tcsIds=[], tcsParticiparamIds=todosIds (sem liquidacaoId nos TCs)
+                    // Para LP ativa:     tcsIds=todosIds, tcsParticiparamIds=pl.titulosParticiparamIds
                     var payload = {
                         codigo: codigoLp,
-                        estado: mapEstadoPL(pl.estado),
+                        estado: estadoLP,
                         fornecedor: {
                             cnpj: pl.fornecedorCnpj || '',
                             nome: pl.fornecedorNome || '',
                         },
-                        tcsIds: tituloIds,
-                        tcsParticiparamIds: pl.titulosParticiparamIds || [],
-                        orcamento: pl.orcamento || buildOrcamento(tituloIds, titulosMap),
-                        np: pl.np || '',
-                        dataLiquidacao: pl.dataLiquidacao || '',
-                        historico: pl.historico || [],
-                        auditoriaPdf: pl.auditoriaPdf || null,
-                        ativo: pl.ativo !== false,
+                        tcsIds:              cancelada ? [] : todosIds,
+                        tcsParticiparamIds:  cancelada ? todosIds : (pl.titulosParticiparamIds || []),
+                        orcamento:           cancelada ? [] : (pl.orcamento || buildOrcamento(todosIds, titulosMap)),
+                        np:                  pl.np || '',
+                        dataLiquidacao:      pl.dataLiquidacao || '',
+                        historico:           pl.historico || [],
+                        auditoriaPdf:        pl.auditoriaPdf || null,
+                        ativo:               pl.ativo !== false,
                         migradoDePreLiquidacao: true,
-                        preLiquidacaoIdOrigem: plId,
-                        criadoEm: pl.criado_em || firebase.firestore.FieldValue.serverTimestamp(),
+                        preLiquidacaoIdOrigem:  plId,
+                        criadoEm:  pl.criado_em  || firebase.firestore.FieldValue.serverTimestamp(),
                         criadoPor: pl.criado_por || '',
                         editadoEm: pl.editado_em || firebase.firestore.FieldValue.serverTimestamp(),
                         editadoPor: pl.editado_por || '',
                     };
 
-                    log((simular ? '[sim] ' : '') + codigoLp + ' (' + tituloIds.length + ' TCs) → liquidacoes/' + plId);
+                    log((simular ? '[sim] ' : '') + codigoLp
+                        + ' estado=' + estadoLP
+                        + (cancelada ? ' [CANCELADA — TCs não receberão liquidacaoId]' : '')
+                        + ' (' + todosIds.length + ' TCs) → liquidacoes/' + plId);
+
+                    // Diagnóstico detalhado de NE e deduções
+                    if (todosIds.length) {
+                        logDiagnosticos(todosIds, titulosMap, codigoLp);
+                    }
 
                     if (!simular) {
                         var batch = db.batch();
                         batch.set(db.collection('liquidacoes').doc(plId), payload, { merge: true });
-                        tituloIds.forEach(function (tid) {
+
+                        // PLs canceladas: remove preLiquidacaoId dos TCs, mas NÃO vincula liquidacaoId
+                        idsParaVincular.forEach(function (tid) {
                             batch.update(db.collection('titulos').doc(tid), {
-                                liquidacaoId: plId,
+                                liquidacaoId:     plId,
                                 liquidacaoCodigo: codigoLp,
-                                preLiquidacaoId: firebase.firestore.FieldValue.delete(),
-                                preLiquidacaoCodigo: firebase.firestore.FieldValue.delete(),
+                                preLiquidacaoId:       firebase.firestore.FieldValue.delete(),
+                                preLiquidacaoCodigo:   firebase.firestore.FieldValue.delete(),
                                 editado_em: firebase.firestore.FieldValue.serverTimestamp(),
                             });
                         });
+
+                        if (cancelada) {
+                            // Remove apenas o vínculo PL dos TCs (libera para novos lotes)
+                            todosIds.forEach(function (tid) {
+                                if (idsParaVincular.indexOf(tid) === -1) {
+                                    batch.update(db.collection('titulos').doc(tid), {
+                                        preLiquidacaoId:     firebase.firestore.FieldValue.delete(),
+                                        preLiquidacaoCodigo: firebase.firestore.FieldValue.delete(),
+                                        editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+                                    });
+                                }
+                            });
+                        }
+
                         batch.update(db.collection('preLiquidacoes').doc(plId), {
-                            migradoLiquidacao: true,
+                            migradoLiquidacao:  true,
                             liquidacaoIdDestino: plId,
                             editado_em: firebase.firestore.FieldValue.serverTimestamp(),
                         });
                         await batch.commit();
+                        log('  ✓ gravado', 'ok');
                     }
                     migrados++;
                 }

@@ -330,23 +330,41 @@ function esconderLoading() {
     }
 
     function gerarOrcamentoParaIds(ids, anterior) {
-        return (ids || []).map(function (id) {
-            var t   = baseTitulosLP.find(function (tc) { return tc.id === id; }) || {};
-            var ant = (anterior || []).find(function (o) { return o.tcId === id; }) || {};
-            return {
-                tcId:  id,
-                ne:    t.ne    || '—',
-                nd:    t.nd    || '—',
-                sub:   t.sub   || '—',
-                fr:    t.fr    || '—',
-                valor: Number(t.valorNotaFiscal || t.valor || 0),
-                cc:    t.cc    || t.centroCusto    || '—',
-                ug:    t.ug    || t.unidadeGestora || '—',
-                vinc:  ant.vinc || '',
-                lf:    ant.lf   || '',
-                pf:    ant.pf   || '',
-            };
+        var resultado = [];
+        (ids || []).forEach(function (id) {
+            var t    = baseTitulosLP.find(function (tc) { return tc.id === id; }) || {};
+            var emps = (t.empenhosVinculados || []);
+            if (!emps.length) {
+                var ant = (anterior || []).find(function (o) { return o.tcId === id; }) || {};
+                resultado.push({
+                    tcId: id, ne: '—', nd: '—', sub: '—', fr: '—',
+                    valor: Number(t.valorNotaFiscal || t.valor || 0),
+                    cc: '—', ug: '—',
+                    vinc: ant.vinc || '', lf: ant.lf || '', pf: ant.pf || '',
+                });
+            } else {
+                emps.forEach(function (v) {
+                    var neVal = v.numEmpenho || v.numNE || '—';
+                    var ant = (anterior || []).find(function (o) {
+                        return o.tcId === id && o.ne === neVal;
+                    }) || {};
+                    resultado.push({
+                        tcId:  id,
+                        ne:    neVal,
+                        nd:    v.nd          || '—',
+                        sub:   v.subelemento || '—',
+                        fr:    v.fr          || '—',
+                        valor: Number(v.valorVinculado || 0),
+                        cc:    v.centroCustosId || '—',
+                        ug:    v.ugId           || '—',
+                        vinc:  ant.vinc || '',
+                        lf:    ant.lf   || v.lf  || '',
+                        pf:    ant.pf   || v.pf  || '',
+                    });
+                });
+            }
         });
+        return resultado;
     }
 
     function badgeEstado(estado) {
@@ -865,7 +883,9 @@ function esconderLoading() {
 
     function sincronizarCamposEditorAbaB() {
         document.querySelectorAll('#lpOrcamentoContainer tr[data-tcid]').forEach(function (tr) {
-            var entry = lpEditorState.orcamento.find(function (o) { return o.tcId === tr.dataset.tcid; });
+            var entry = lpEditorState.orcamento.find(function (o) {
+                return o.tcId === tr.dataset.tcid && o.ne === tr.dataset.ne;
+            });
             if (!entry) return;
             var iV = tr.querySelector('.inp-vinc'); if (iV) entry.vinc = iV.value;
             var iL = tr.querySelector('.inp-lf');   if (iL) entry.lf   = iL.value;
