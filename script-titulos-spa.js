@@ -3078,13 +3078,11 @@
         const plTx = document.getElementById('plRastroTexto');
         const plLk = document.getElementById('plRastroLink');
         if (plW && plTx && plLk) {
-            var loteCod = t.liquidacaoCodigo || t.preLiquidacaoCodigo;
-            var loteId = t.liquidacaoId || t.preLiquidacaoId;
-            if (loteCod || loteId) {
+            if (t.preLiquidacaoCodigo || t.preLiquidacaoId) {
                 plW.style.display = 'flex';
-                plTx.textContent = loteCod || loteId || '';
-                if (loteId) {
-                    plLk.href = 'liquidacao.html?lp=' + encodeURIComponent(loteId);
+                plTx.textContent = t.preLiquidacaoCodigo || t.preLiquidacaoId || '';
+                if (t.preLiquidacaoId) {
+                    plLk.href = 'preliquidacao.html?pl=' + encodeURIComponent(t.preLiquidacaoId);
                     plLk.style.display = 'inline';
                 } else {
                     plLk.style.display = 'none';

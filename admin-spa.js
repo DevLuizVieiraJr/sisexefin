@@ -11,7 +11,6 @@
         { modulo: 'dashboard', label: 'Dashboard', acoes: ['ler'] },
         { modulo: 'titulos', label: 'Titulos de Credito', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'preliquidacao', label: 'Pre-Liquidacao', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'liquidacao', label: 'Liquidação e Pag. (Beta)', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
         { modulo: 'empenhos', label: 'Empenhos (NE)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'lf', label: 'LF x PF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },

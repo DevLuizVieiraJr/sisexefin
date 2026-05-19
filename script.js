@@ -374,7 +374,7 @@ function temPermissaoUI(perm) {
     // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
     if (permissoesEmCache.includes('acesso_admin')) {
         if (perm === 'dashboard_ler' || perm === 'backup_ler' || perm === 'tramitarTC') return true;
-        if (perm.startsWith('preliquidacao_') || perm.startsWith('liquidacao_')) return true;
+        if (perm.startsWith('preliquidacao_')) return true;
         const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
@@ -514,7 +514,6 @@ auth.onAuthStateChanged(async (user) => {
         const corpoAdmin = document.getElementById('corpo-admin');
         const corpoTitulos = document.getElementById('corpo-titulos');
         const corpoPreLiquidacao = document.getElementById('corpo-preliquidacao');
-        const corpoLiquidacao = document.getElementById('corpo-liquidacao');
         const corpoDashboard = document.getElementById('corpo-dashboard');
         const corpoConta = document.getElementById('corpo-conta');
 
@@ -560,19 +559,6 @@ auth.onAuthStateChanged(async (user) => {
             atualizarSeletorPerfil();
             corpoPreLiquidacao.style.display = 'flex';
             if (typeof inicializarPreLiquidacaoSPA === 'function') inicializarPreLiquidacaoSPA();
-            if (typeof esconderLoading === 'function') esconderLoading();
-        }
-        // Lógica de Rota: Estamos na Liquidação e Pagamento (Beta)?
-        else if (corpoLiquidacao) {
-            if (!permissoesEmCache.includes('liquidacao_ler') && !permissoesEmCache.includes('acesso_admin')) {
-                alert('Acesso negado ao módulo Liquidação e Pagamento.');
-                window.location.replace('dashboard.html');
-                return;
-            }
-            aplicarPermissoesUI();
-            atualizarSeletorPerfil();
-            corpoLiquidacao.style.display = 'flex';
-            if (typeof inicializarModuloLiquidacao === 'function') inicializarModuloLiquidacao();
             if (typeof esconderLoading === 'function') esconderLoading();
         }
         // Lógica de Rota: Estamos no Sistema (Tabelas de Apoio)?

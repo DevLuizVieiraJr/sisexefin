@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup UX — Pré-Liquidação (proposta)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Mockup-only — proposta de layout (não altera produção) */
+        .mock-banner {
+            background: linear-gradient(90deg, #1a5276, #2a81b8);
+            color: #fff;
+            padding: 10px 16px;
+            font-size: 13px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .mock-banner strong { font-weight: 600; }
+        .mock-banner .mock-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+        .mock-banner button {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #fff;
+            padding: 5px 12px;
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .mock-banner button.mock-active { background: #fff; color: #1a5276; font-weight: 600; }
+
+        .badge-pl-rascunho { background: #95a5a6; color: #fff; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pl-fechado { background: #27ae60; color: #fff; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pl-pendente-lf { background: #8e44ad; color: #fff; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 4px; }
+        .badge-pl-inativo { background: #bdc3c7; color: #333; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+        .pl-mock-tela { display: none; }
+        .pl-mock-tela.ativa { display: block; }
+
+        /* Lista */
+        .pl-lista-toolbar { flex-wrap: wrap; gap: 12px; }
+        .pl-lista-toolbar label { display: flex; align-items: center; gap: 6px; font-weight: normal; margin: 0; }
+        .pl-selecao-bar {
+            display: none;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            background: #e8f4f8;
+            border: 1px solid #b8d4e3;
+            border-radius: 4px;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .pl-selecao-bar.visivel { display: flex; }
+        .tabela-gov.pl-lista-compacta { min-width: 900px; }
+        .tabela-gov.pl-lista-compacta .pl-acoes-cell { white-space: nowrap; }
+        .pl-acoes-grupo { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+        /* Editor — cabeçalho */
+        .pl-editor-header {
+            background: #f9fafc;
+            border: 1px solid #e1e5eb;
+            border-radius: 4px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .pl-editor-header-top {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .pl-editor-titulo { margin: 0; font-size: 20px; color: #333; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .pl-editor-meta { font-size: 13px; color: #555; line-height: 1.5; }
+        .pl-editor-meta strong { color: #333; }
+        .pl-kpis {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+        }
+        .pl-kpi { font-size: 12px; color: #666; }
+        .pl-kpi span { display: block; font-size: 15px; font-weight: 600; color: #2c3e50; margin-top: 2px; }
+
+        .pl-acoes-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 0;
+            margin-bottom: 14px;
+            border-bottom: 1px solid #eee;
+        }
+        .pl-acoes-bar .pl-acoes-secundarias { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .pl-editor-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 16px;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .pl-editor-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Abas */
+        .pl-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 12px;
+        }
+        .pl-tabs button {
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            padding: 10px 16px;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+        }
+        .pl-tabs button:hover { color: #337ab7; background: #f5f8fa; }
+        .pl-tabs button.ativa {
+            color: #337ab7;
+            font-weight: 600;
+            border-bottom-color: #337ab7;
+        }
+        .pl-tabs .pl-tab-badge {
+            display: inline-block;
+            min-width: 20px;
+            padding: 1px 6px;
+            margin-left: 6px;
+            background: #e1e5eb;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .pl-tabs button.ativa .pl-tab-badge { background: #337ab7; color: #fff; }
+
+        .pl-painel-tab { display: none; }
+        .pl-painel-tab.ativa { display: block; }
+
+        .tabela-gov tbody tr.pl-row-selected { background: #e8f4fc !important; }
+        .tabela-gov tbody tr.pl-row-selected:hover { background: #dceef8 !important; }
+
+        /* Painel resumo */
+        .pl-resumo-card {
+            position: sticky;
+            top: 12px;
+            border: 1px solid #d2d6de;
+            border-radius: 4px;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .pl-resumo-card h3 {
+            margin: 0;
+            padding: 12px 14px;
+            font-size: 14px;
+            color: #337ab7;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+        }
+        .pl-resumo-body { padding: 12px 14px; font-size: 13px; }
+        .pl-resumo-total {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+        .pl-resumo-datas { color: #666; font-size: 12px; line-height: 1.45; margin-bottom: 12px; }
+        .pl-resumo-lista { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow-y: auto; }
+        .pl-resumo-lista li {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .pl-resumo-lista li:last-child { border-bottom: none; }
+        .pl-resumo-vazio {
+            color: #999;
+            font-size: 12px;
+            text-align: center;
+            padding: 16px 8px;
+            line-height: 1.45;
+        }
+        .pl-fornecedor-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: #eef6fb;
+            border: 1px solid #c5dde9;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        details.pl-auditoria { margin-top: 16px; }
+        details.pl-auditoria summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #337ab7;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .pl-hint {
+            font-size: 12px;
+            color: #888;
+            margin: 0 0 10px 0;
+            padding: 8px 10px;
+            background: #fafbfc;
+            border-left: 3px solid #337ab7;
+        }
+    </style>
+</head>
+<body style="display: flex; flex-direction: column;">
+    <div class="mock-banner" aria-label="Aviso de protótipo">
+        <span><strong>Protótipo UX</strong> — Pré-Liquidação (dados fictícios). Abra este arquivo no navegador (duplo clique ou arraste para o Chrome); não grava no Firebase.</span>
+        <div class="mock-nav">
+            <button type="button" id="btnMockLista" class="mock-active">Lista</button>
+            <button type="button" id="btnMockEditor">Editor (lote)</button>
+            <button type="button" id="btnMockEditorVazio">Editor (novo)</button>
+        </div>
+    </div>
+
+    <header class="topbar">
+        <div class="topbar-logo"><span class="icon-logo">🌐</span> SisExeFin — Mockup Pré-Liquidação</div>
+        <div class="topbar-user">
+            <span class="topbar-item">👤 usuario.demo@exemplo.org</span>
+            <span class="topbar-item" style="opacity:0.85;font-size:12px;">Perfil: Operador</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav class="sidebar colapsado" style="width:56px;" aria-hidden="true">
+            <button type="button" class="sidebar-toggle" disabled><i class="fas fa-bars"></i></button>
+        </nav>
+
+        <main class="content">
+            <!-- ========== TELA LISTA ========== -->
+            <section id="tela-mock-lista" class="card pl-mock-tela ativa">
+                <div class="header-lista">
+                    <div>
+                        <h2 style="margin:0;">Pré-Liquidações</h2>
+                        <p style="color:#666;font-size:13px;margin:6px 0 0 0;">Monte lotes do mesmo fornecedor → gere DAuLiq → informe NP no SIAFI.</p>
+                    </div>
+                    <button type="button" class="btn-primary" onclick="irMockEditor('novo')">+ Nova pré-liquidação</button>
+                </div>
+
+                <div class="toolbar pl-lista-toolbar">
+                    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+                        <label>Exercício <select id="mockFiltroAno"><option>2026</option><option>2025</option><option>Todos</option></select></label>
+                        <label><input type="checkbox" id="mockFiltroInativas"> Mostrar inativas</label>
+                    </div>
+                    <span style="color:#888;font-size:12px;" id="mockContagemLista">4 lotes</span>
+                </div>
+
+                <div id="barraSelecaoLista" class="pl-selecao-bar" role="status" aria-live="polite">
+                    <strong><span id="mockCountSel">0</span> selecionada(s)</strong>
+                    <button type="button" class="btn-default btn-small">📄 DAuLiq em bloco</button>
+                    <button type="button" class="btn-default btn-small" onclick="limparSelecaoLista()">Limpar</button>
+                </div>
+
+                <div style="overflow-x:auto;">
+                    <table class="tabela-gov pl-lista-compacta">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="mockChkTodos" title="Selecionar todos" aria-label="Selecionar todos"></th>
+                                <th>Código</th>
+                                <th>Estado</th>
+                                <th>Fornecedor</th>
+                                <th style="text-align:right;">Valor</th>
+                                <th style="text-align:center;">TCs</th>
+                                <th>Data liq.</th>
+                                <th>NP</th>
+                                <th class="pl-acoes-cell">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyMockLista"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ========== TELA EDITOR ========== -->
+            <section id="tela-mock-editor" class="card pl-mock-tela">
+                <div class="pl-editor-header">
+                    <div class="pl-editor-header-top">
+                        <div>
+                            <h2 class="pl-editor-titulo" id="mockEditorTitulo">
+                                PL-00042/2026
+                                <span class="badge-pl-rascunho" id="mockEditorBadge">Rascunho</span>
+                            </h2>
+                            <p class="pl-editor-meta" id="mockEditorFornecedor">
+                                <strong>Fornecedor:</strong> CONSTRUTORA ALPHA LTDA — 12.345.678/0001-90
+                            </p>
+                        </div>
+                        <button type="button" class="btn-default" onclick="irMockLista()">← Voltar à lista</button>
+                    </div>
+                    <div class="pl-kpis" id="mockEditorKpis">
+                        <div class="pl-kpi">TCs no lote<span id="kpiTcs">3</span></div>
+                        <div class="pl-kpi">Valor total<span id="kpiValor">R$ 48.750,00</span></div>
+                        <div class="pl-kpi">Ateste (mais antigo)<span id="kpiAteste">15/03/2026</span></div>
+                        <div class="pl-kpi">Venc. (+30 d)<span id="kpiVenc">14/04/2026</span></div>
+                    </div>
+                </div>
+
+                <div class="pl-acoes-bar" role="toolbar" aria-label="Ações da pré-liquidação">
+                    <button type="button" class="btn-primary">Salvar pré-liquidação</button>
+                    <button type="button" class="btn-default">Gerar DAuLiq (PDF)</button>
+                    <button type="button" class="btn-primary">Informar NP e data</button>
+                    <div class="pl-acoes-secundarias">
+                        <button type="button" class="btn-default" style="color:#c0392b;">Cancelar</button>
+                    </div>
+                </div>
+
+                <div class="pl-editor-grid">
+                    <div>
+                        <fieldset class="gov-fieldset" id="fieldsetFornecedor">
+                            <legend>Fornecedor do lote</legend>
+                            <p class="pl-hint">Todos os TCs devem ser do mesmo credor. Na edição, o fornecedor fica fixo.</p>
+                            <div id="blocoBuscaFornecedor" style="display:none;">
+                                <div class="form-group flex-1" style="position:relative;max-width:480px;">
+                                    <label for="mockBuscaForn">Buscar por CNPJ ou razão social</label>
+                                    <input type="text" id="mockBuscaForn" placeholder="Digite ao menos 2 caracteres..." value="">
+                                </div>
+                            </div>
+                            <div class="pl-fornecedor-chip" id="chipFornecedor">
+                                <i class="fas fa-building" aria-hidden="true"></i>
+                                <span>CONSTRUTORA ALPHA LTDA (12.345.678/0001-90)</span>
+                                <a href="#" style="font-size:12px;" onclick="return false;">↗ Ver PROCs</a>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="gov-fieldset">
+                            <legend>Títulos do lote</legend>
+                            <div class="pl-tabs" role="tablist">
+                                <button type="button" role="tab" id="tabDisp" class="ativa" aria-selected="true" aria-controls="painelDisp">
+                                    Disponíveis <span class="pl-tab-badge" id="badgeDisp">5</span>
+                                </button>
+                                <button type="button" role="tab" id="tabLote" aria-selected="false" aria-controls="painelLote">
+                                    No lote <span class="pl-tab-badge" id="badgeLote">3</span>
+                                </button>
+                            </div>
+                            <div class="controles-tabela">
+                                <div class="search-box"><input type="text" id="mockBuscaTc" placeholder="Filtrar PROC ou NE..." aria-label="Filtrar"></div>
+                                <span style="font-size:12px;color:#888;" id="mockHintTc">Marque os TCs em «Disponíveis» ou remova em «No lote».</span>
+                            </div>
+
+                            <div id="painelDisp" class="pl-painel-tab ativa" role="tabpanel">
+                                <div style="overflow-x:auto;">
+                                    <table class="tabela-gov" style="min-width:700px;">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:32px;"></th>
+                                                <th>PROC</th>
+                                                <th>TC</th>
+                                                <th>Ateste</th>
+                                                <th style="text-align:right;">Valor</th>
+                                                <th>Outra PL?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyDisp"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div id="painelLote" class="pl-painel-tab" role="tabpanel">
+                                <div style="overflow-x:auto;">
+                                    <table class="tabela-gov" style="min-width:640px;">
+                                        <thead>
+                                            <tr>
+                                                <th>PROC</th>
+                                                <th>TC</th>
+                                                <th>Ateste</th>
+                                                <th style="text-align:right;">Valor</th>
+                                                <th style="width:90px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyLote"></tbody>
+                                    </table>
+                                </div>
+                                <p id="mockLoteVazio" class="pl-resumo-vazio" style="display:none;">Nenhum TC no lote. Use a aba «Disponíveis».</p>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <aside class="pl-resumo-card" aria-label="Resumo do lote">
+                        <h3>Resumo do lote</h3>
+                        <div class="pl-resumo-body">
+                            <div class="pl-resumo-total" id="resumoTotal">R$ 48.750,00</div>
+                            <div class="pl-resumo-datas" id="resumoDatas">
+                                3 títulos · Ateste 15/03/2026 · Venc. 14/04/2026
+                            </div>
+                            <ul class="pl-resumo-lista" id="resumoLista"></ul>
+                            <p class="pl-resumo-vazio" id="resumoVazio" style="display:none;">
+                                Selecione TCs na aba «Disponíveis» para compor o lote.
+                            </p>
+                        </div>
+                    </aside>
+                </div>
+
+                <details class="pl-auditoria gov-fieldset" style="padding:12px 15px;">
+                    <summary>Auditoria desta pré-liquidação (3 registos)</summary>
+                    <table class="tabela-gov" style="min-width:600px;margin-top:10px;">
+                        <thead><tr><th>Data</th><th>Tipo</th><th>Usuário</th><th>Detalhe</th></tr></thead>
+                        <tbody>
+                            <tr><td>15/05/2026 10:22</td><td>salvar</td><td>demo@exemplo.org</td><td>Carrinho atualizado (3 TCs)</td></tr>
+                            <tr><td>14/05/2026 16:05</td><td>criacao</td><td>demo@exemplo.org</td><td>Pré-liquidação criada PL-00042/2026</td></tr>
+                            <tr><td>10/05/2026 09:11</td><td>pdf</td><td>demo@exemplo.org</td><td>DAuLiq gerado (sem histórico)</td></tr>
+                        </tbody>
+                    </table>
+                </details>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        const MOEDA = n => 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const LISTA_PL = [
+            { id: '1', codigo: 'PL-00042/2026', estado: 'Rascunho', fornecedor: 'CONSTRUTORA ALPHA LTDA', valor: 48750, tcs: 3, dataLiq: '—', np: '—', inativo: false },
+            { id: '2', codigo: 'PL-00038/2026', estado: 'Fechado', fin: 'Pendente LF', fornecedor: 'SERVIÇOS BETA S.A.', valor: 125400, tcs: 7, dataLiq: '02/05/2026', np: '741…NP000012', inativo: false },
+            { id: '3', codigo: 'PL-00031/2026', estado: 'Fechado', fin: null, fornecedor: 'TECNOLOGIA GAMMA ME', valor: 8920.5, tcs: 1, dataLiq: '20/04/2026', np: '741…NP000008', inativo: false },
+            { id: '4', codigo: 'PL-00012/2025', estado: 'Rascunho', fornecedor: 'FORNECEDOR INATIVO LTDA', valor: 0, tcs: 0, dataLiq: '—', np: '—', inativo: true }
+        ];
+
+        const TCS = [
+            { id: 't1', proc: 'PROC-2026-0142', tc: 'NF-88421', ateste: '15/03/2026', valor: 18500, outraPl: '', noLote: true },
+            { id: 't2', proc: 'PROC-2026-0158', tc: 'NF-88502', ateste: '22/03/2026', valor: 15250, outraPl: '', noLote: true },
+            { id: 't3', proc: 'PROC-2026-0161', tc: 'NF-88519', ateste: '28/03/2026', valor: 15000, outraPl: '', noLote: true },
+            { id: 't4', proc: 'PROC-2026-0170', tc: 'NF-88601', ateste: '05/04/2026', valor: 22000, outraPl: '', noLote: false },
+            { id: 't5', proc: 'PROC-2026-0172', tc: 'NF-88615', ateste: '08/04/2026', valor: 9800, outraPl: 'PL-00040/2026', noLote: false },
+            { id: 't6', proc: 'PROC-2026-0180', tc: 'NF-88688', ateste: '12/04/2026', valor: 6400, outraPl: '', noLote: false }
+        ];
+
+        let selecionadosLista = new Set();
+        let loteIds = new Set(TCS.filter(t => t.noLote).map(t => t.id));
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function badgeEstado(p) {
+            if (p.estado === 'Fechado') {
+                let h = '<span class="badge-pl-fechado">Fechado</span>';
+                if (p.fin) h += ' <span class="badge-pl-pendente-lf">' + esc(p.fin) + '</span>';
+                return h;
+            }
+            return '<span class="badge-pl-rascunho">Rascunho</span>' + (p.inativo ? ' <span class="badge-pl-inativo">Inativo</span>' : '');
+        }
+
+        function desenharLista() {
+            const tbody = document.getElementById('tbodyMockLista');
+            const mostrarInat = document.getElementById('mockFiltroInativas').checked;
+            const rows = LISTA_PL.filter(p => mostrarInat || !p.inativo);
+            document.getElementById('mockContagemLista').textContent = rows.length + ' lote(s)';
+            tbody.innerHTML = rows.map(p => `
+                <tr>
+                    <td><input type="checkbox" class="mock-chk-pl" data-id="${p.id}" ${selecionadosLista.has(p.id) ? 'checked' : ''} ${p.tcs === 0 ? 'disabled title="Sem TCs"' : ''}></td>
+                    <td><strong>${esc(p.codigo)}</strong></td>
+                    <td>${badgeEstado(p)}</td>
+                    <td>${esc(p.fornecedor)}</td>
+                    <td style="text-align:right;white-space:nowrap;">${MOEDA(p.valor)}</td>
+                    <td style="text-align:center;">${p.tcs}</td>
+                    <td>${esc(p.dataLiq)}</td>
+                    <td style="font-size:12px;">${esc(p.np)}</td>
+                    <td class="pl-acoes-cell">
+                        <span class="pl-acoes-grupo">
+                            <button type="button" class="btn-default btn-small" onclick="irMockEditor('ver')">Visualizar</button>
+                            <button type="button" class="btn-primary btn-small" onclick="irMockEditor('edit')">Editar</button>
+                            <button type="button" class="btn-default btn-small" ${p.tcs ? '' : 'disabled'}>DAuLiq</button>
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+            tbody.querySelectorAll('.mock-chk-pl').forEach(chk => {
+                chk.addEventListener('change', function() {
+                    const id = this.dataset.id;
+                    if (this.checked) selecionadosLista.add(id); else selecionadosLista.delete(id);
+                    atualizarBarraSel();
+                });
+            });
+            atualizarBarraSel();
+        }
+
+        function atualizarBarraSel() {
+            const n = selecionadosLista.size;
+            document.getElementById('mockCountSel').textContent = n;
+            document.getElementById('barraSelecaoLista').classList.toggle('visivel', n > 0);
+            const todos = document.querySelectorAll('.mock-chk-pl:not(:disabled)');
+            const chkTodos = document.getElementById('mockChkTodos');
+            if (!todos.length) { chkTodos.checked = false; chkTodos.indeterminate = false; return; }
+            const m = [...todos].filter(c => c.checked).length;
+            chkTodos.checked = m === todos.length;
+            chkTodos.indeterminate = m > 0 && m < todos.length;
+        }
+
+        window.limparSelecaoLista = function() {
+            selecionadosLista.clear();
+            desenharLista();
+        };
+
+        document.getElementById('mockChkTodos').addEventListener('change', function() {
+            document.querySelectorAll('.mock-chk-pl:not(:disabled)').forEach(chk => {
+                chk.checked = this.checked;
+                if (this.checked) selecionadosLista.add(chk.dataset.id);
+                else selecionadosLista.delete(chk.dataset.id);
+            });
+            atualizarBarraSel();
+        });
+
+        document.getElementById('mockFiltroInativas').addEventListener('change', desenharLista);
+
+        function titulosLote() { return TCS.filter(t => loteIds.has(t.id)); }
+        function titulosDisp() { return TCS.filter(t => !loteIds.has(t.id)); }
+
+        function atualizarResumo() {
+            const ts = titulosLote();
+            const total = ts.reduce((s, t) => s + t.valor, 0);
+            document.getElementById('badgeLote').textContent = ts.length;
+            document.getElementById('badgeDisp').textContent = titulosDisp().length;
+            document.getElementById('kpiTcs').textContent = ts.length;
+            document.getElementById('kpiValor').textContent = MOEDA(total);
+            document.getElementById('resumoTotal').textContent = MOEDA(total);
+            document.getElementById('resumoDatas').textContent = ts.length
+                ? ts.length + ' título(s) · Ateste 15/03/2026 · Venc. 14/04/2026'
+                : 'Nenhum TC selecionado';
+            const ul = document.getElementById('resumoLista');
+            const vazio = document.getElementById('resumoVazio');
+            if (!ts.length) {
+                ul.innerHTML = '';
+                vazio.style.display = 'block';
+                return;
+            }
+            vazio.style.display = 'none';
+            ul.innerHTML = ts.map(t => `
+                <li><span>${esc(t.proc)}</span><strong>${MOEDA(t.valor)}</strong></li>
+            `).join('');
+        }
+
+        function desenharTabelasEditor() {
+            const q = (document.getElementById('mockBuscaTc').value || '').toLowerCase();
+            const filtro = t => !q || t.proc.toLowerCase().includes(q) || t.tc.toLowerCase().includes(q);
+
+            document.getElementById('tbodyDisp').innerHTML = titulosDisp().filter(filtro).map(t => `
+                <tr class="${loteIds.has(t.id) ? 'pl-row-selected' : ''}">
+                    <td><input type="checkbox" class="mock-chk-add" data-id="${t.id}" ${t.outraPl ? 'disabled title="Em outra PL"' : ''}></td>
+                    <td>${esc(t.proc)}</td>
+                    <td>${esc(t.tc)}</td>
+                    <td>${esc(t.ateste)}</td>
+                    <td style="text-align:right;">${MOEDA(t.valor)}</td>
+                    <td>${t.outraPl ? esc(t.outraPl) : '—'}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhum TC disponível.</td></tr>';
+
+            document.getElementById('tbodyDisp').querySelectorAll('.mock-chk-add').forEach(chk => {
+                chk.addEventListener('change', function() {
+                    if (this.checked) loteIds.add(this.dataset.id);
+                    desenharTabelasEditor();
+                    atualizarResumo();
+                });
+            });
+
+            const lote = titulosLote().filter(filtro);
+            document.getElementById('mockLoteVazio').style.display = lote.length ? 'none' : 'block';
+            document.getElementById('tbodyLote').innerHTML = lote.map(t => `
+                <tr class="pl-row-selected">
+                    <td>${esc(t.proc)}</td>
+                    <td>${esc(t.tc)}</td>
+                    <td>${esc(t.ateste)}</td>
+                    <td style="text-align:right;">${MOEDA(t.valor)}</td>
+                    <td><button type="button" class="btn-default btn-small mock-rem" data-id="${t.id}">Remover</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('tbodyLote').querySelectorAll('.mock-rem').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    loteIds.delete(this.dataset.id);
+                    desenharTabelasEditor();
+                    atualizarResumo();
+                });
+            });
+            atualizarResumo();
+        }
+
+        function setupTabs() {
+            const tabDisp = document.getElementById('tabDisp');
+            const tabLote = document.getElementById('tabLote');
+            const painelDisp = document.getElementById('painelDisp');
+            const painelLote = document.getElementById('painelLote');
+            function ativar(disp) {
+                tabDisp.classList.toggle('ativa', disp);
+                tabLote.classList.toggle('ativa', !disp);
+                tabDisp.setAttribute('aria-selected', disp);
+                tabLote.setAttribute('aria-selected', !disp);
+                painelDisp.classList.toggle('ativa', disp);
+                painelLote.classList.toggle('ativa', !disp);
+            }
+            tabDisp.addEventListener('click', () => ativar(true));
+            tabLote.addEventListener('click', () => ativar(false));
+        }
+
+        function mostrarTela(id) {
+            document.querySelectorAll('.pl-mock-tela').forEach(el => el.classList.remove('ativa'));
+            document.getElementById(id).classList.add('ativa');
+            document.getElementById('btnMockLista').classList.toggle('mock-active', id === 'tela-mock-lista');
+            document.getElementById('btnMockEditor').classList.toggle('mock-active', id === 'tela-mock-editor' && !window._mockNovo);
+            document.getElementById('btnMockEditorVazio').classList.toggle('mock-active', id === 'tela-mock-editor' && window._mockNovo);
+        }
+
+        window.irMockLista = function() {
+            mostrarTela('tela-mock-lista');
+        };
+
+        window.irMockEditor = function(modo) {
+            window._mockNovo = modo === 'novo';
+            const novo = modo === 'novo';
+            document.getElementById('mockEditorTitulo').innerHTML = novo
+                ? 'Nova pré-liquidação <span class="badge-pl-rascunho">Rascunho</span>'
+                : 'PL-00042/2026 <span class="badge-pl-rascunho">Rascunho</span>';
+            document.getElementById('blocoBuscaFornecedor').style.display = novo ? 'block' : 'none';
+            document.getElementById('chipFornecedor').style.display = novo ? 'none' : 'inline-flex';
+            if (novo) {
+                loteIds = new Set();
+                document.getElementById('mockBuscaForn').value = '';
+            } else {
+                loteIds = new Set(TCS.filter(t => t.noLote).map(t => t.id));
+            }
+            desenharTabelasEditor();
+            mostrarTela('tela-mock-editor');
+        };
+
+        document.getElementById('btnMockLista').addEventListener('click', irMockLista);
+        document.getElementById('btnMockEditor').addEventListener('click', () => irMockEditor('edit'));
+        document.getElementById('btnMockEditorVazio').addEventListener('click', () => irMockEditor('novo'));
+        document.getElementById('mockBuscaTc').addEventListener('input', desenharTabelasEditor);
+
+        desenharLista();
+        setupTabs();
+        desenharTabelasEditor();
+    })();
+    </script>
+</body>
+</html>
