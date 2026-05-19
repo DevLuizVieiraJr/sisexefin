@@ -1,0 +1,482 @@
+/* Liquidação e Pagamento — estilos específicos (prefixo lp-)
+   Complementa style.css e reutiliza .tabela-gov, .btn-*, .form-group, .card, .modal-overlay etc. */
+
+/* ===================== CABEÇALHO DO EDITOR ===================== */
+.lp-editor-header {
+    background: #f9fafc;
+    border: 1px solid #e1e5eb;
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 0;
+}
+.lp-editor-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.lp-editor-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.lp-editor-meta { font-size: 13px; color: #555; margin: 6px 0 0 0; }
+.lp-editor-actions-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.lp-editor-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12px;
+}
+.lp-editor-links button {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 4px 0;
+}
+.lp-editor-links button:hover { color: #337ab7; }
+.lp-editor-links button.lp-link-danger:hover { color: #c0392b; }
+
+/* ===================== KPI ROW ===================== */
+.lp-kpi-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding-top: 10px;
+    border-top: 1px dashed #ddd;
+}
+.lp-kpi { font-size: 11px; color: #888; }
+.lp-kpi-val {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-top: 2px;
+}
+.lp-kpi-val.destaque   { color: #337ab7; }
+.lp-kpi-val.lp-kpi-deducao  { color: #c0392b; }
+.lp-kpi-val.lp-kpi-liquido  { color: #1e8449; }
+
+/* ===================== NAVEGAÇÃO DE ABAS ===================== */
+.lp-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-bottom: 2px solid #ddd;
+    margin-top: 14px;
+    margin-bottom: 0;
+    background: #fff;
+}
+.lp-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #666;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.lp-tab-btn i { font-size: 12px; }
+.lp-tab-btn:hover { color: #337ab7; }
+.lp-tab-btn.ativa {
+    color: #1a5276;
+    border-bottom-color: #1a5276;
+    font-weight: 600;
+}
+.lp-tab-badge {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 6px;
+    margin-left: 2px;
+    background: #e8e8e8;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #555;
+}
+.lp-tab-btn.ativa .lp-tab-badge { background: #1a5276; color: #fff; }
+.lp-badge-darf  { background: #fde8e8 !important; color: #c0392b !important; }
+.lp-badge-liquido { background: #e8f5ec !important; color: #1e8449 !important; }
+.lp-tab-btn.ativa .lp-badge-darf   { background: #c0392b !important; color: #fff !important; }
+.lp-tab-btn.ativa .lp-badge-liquido { background: #1e8449 !important; color: #fff !important; }
+
+/* ===================== PAINÉIS DE ABAS ===================== */
+.lp-painel { display: none; padding: 16px 0 8px; }
+.lp-painel.ativa { display: block; }
+
+/* ===================== HINT / INFO BOXES ===================== */
+.lp-hint {
+    font-size: 12px;
+    color: #555;
+    padding: 8px 12px;
+    background: #f0f6fd;
+    border-left: 3px solid #337ab7;
+    margin-bottom: 14px;
+    line-height: 1.5;
+    border-radius: 0 3px 3px 0;
+}
+.lp-hint.warn {
+    border-left-color: #e67e22;
+    background: #fffbf5;
+    color: #7d4e0f;
+}
+.lp-hint-siafi {
+    border-left-color: #1a5276;
+    background: #eaf1f8;
+    font-size: 12.5px;
+}
+.lp-hint code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    background: rgba(0,0,0,0.07);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11.5px;
+}
+
+/* ===================== TOOLBAR (botões acima de grids) ===================== */
+.lp-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* ===================== FORNECEDOR CHIP ===================== */
+.lp-fornecedor-busca { display: none; }
+.lp-fornecedor-busca.visivel { display: block; }
+.lp-fornecedor-chip-wrap { display: none; }
+.lp-fornecedor-chip-wrap.visivel { display: block; }
+
+.lp-chip-fornecedor {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 7px 14px;
+    background: #e8f4f8;
+    border: 1px solid #c5dde9;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a5276;
+}
+.lp-chip-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #1a5276;
+    flex-shrink: 0;
+}
+.lp-chip-acoes { margin-top: 8px; }
+.lp-btn-link {
+    background: none;
+    border: none;
+    color: #337ab7;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+
+/* ===================== TABELAS ===================== */
+.lp-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 4px;
+}
+/* Rodapé de total nas tabelas */
+.lp-tfoot-total td {
+    background: #f0f3f6;
+    font-size: 12.5px;
+    padding: 7px 8px;
+    border-top: 2px solid #cfd5de;
+}
+
+/* ===================== CÉLULA EDITÁVEL (VINC, LF, PF na Aba B) ===================== */
+.lp-cell-edit {
+    min-width: 72px;
+}
+.lp-cell-edit input {
+    width: 100%;
+    min-width: 64px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 3px 6px;
+    font-size: 11.5px;
+    text-align: center;
+    background: #fffef5;
+    color: #333;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lp-cell-edit input:focus {
+    border-color: #337ab7;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(51,122,183,0.18);
+    background: #fff;
+}
+.lp-editavel-hint {
+    font-size: 9px;
+    color: #999;
+    font-weight: 400;
+    margin-left: 2px;
+}
+
+/* ===================== SEÇÃO META / DATAS REFERÊNCIA ===================== */
+.lp-section-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f9fafc;
+    border-radius: 3px;
+    border: 1px solid #e8ecf0;
+}
+.lp-section-meta span strong { color: #333; }
+
+/* ===================== PAGAMENTO: BLOCO RESUMO ===================== */
+.lp-pagamento-resumo {
+    margin-top: 20px;
+    max-width: 520px;
+}
+.lp-resumo-bloco {
+    border: 1px solid #d5e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.lp-resumo-bloco-titulo {
+    background: #1a5276;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 10px 16px;
+}
+.lp-resumo-bloco-grid {
+    padding: 0 16px 4px;
+    background: #fff;
+}
+.lp-resumo-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f0f3f6;
+    font-size: 13px;
+}
+.lp-resumo-item:last-child { border-bottom: none; }
+.lp-resumo-label { color: #555; }
+.lp-resumo-valor { font-weight: 600; color: #222; white-space: nowrap; }
+.lp-valor-deducao { color: #c0392b !important; }
+.lp-valor-liquido { color: #1e8449 !important; font-size: 16px !important; }
+.lp-resumo-destaque { padding-top: 12px; }
+.lp-resumo-destaque .lp-resumo-label { font-weight: 600; color: #333; }
+
+/* ===================== ESTADO VAZIO ===================== */
+.lp-vazio {
+    text-align: center;
+    color: #aaa;
+    font-size: 12.5px;
+    padding: 18px 10px;
+    font-style: italic;
+}
+
+/* ===================== BADGES DE ESTADO ===================== */
+.badge-lp-rascunho   { background: #95a5a6; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-orcamento  { background: #8e44ad; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-impostos   { background: #c0392b; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-pagamento  { background: #2980b9; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-fechado    { background: #27ae60; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-cancelado  { background: #e74c3c; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+/* Status financeiro (LFxPF) */
+.badge-lp-ag-sem-lf  { background: #7f8c8d; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-ag-com-lf  { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-pparcial   { background: #f39c12; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-para-pag   { background: #16a085; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+/* Badge DEMO na topbar */
+.topbar-demo-badge {
+    font-size: 11px;
+    background: rgba(255,255,255,0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+}
+
+/* ===================== LISTA: linha selecionada ===================== */
+.lp-row-selected td { background: #eef7ff !important; }
+
+/* ===================== ORÇAMENTO: blocos por ND ===================== */
+.lp-nd-bloco {
+    margin-bottom: 20px;
+    border: 1px solid #d5e4f5;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.lp-nd-bloco-titulo {
+    background: #e8f0fa;
+    border-bottom: 1px solid #c0d8ef;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1a3c5e;
+    letter-spacing: 0.3px;
+}
+
+.lp-nd-bloco > .lp-table-wrapper {
+    border-radius: 0;
+    border: none;
+}
+
+.lp-nd-total-geral {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 16px;
+    background: #f0f5fb;
+    border: 1px solid #c8dcee;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1a3c5e;
+    margin-top: 4px;
+}
+
+/* ===================== IMPOSTOS: seções agrupadas ===================== */
+.lp-impostos-secao {
+    margin-bottom: 22px;
+    border: 1px solid #d5e4f5;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.lp-impostos-secao-titulo {
+    background: #eaf2fb;
+    border-bottom: 1px solid #c0d8ef;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1a3c5e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lp-impostos-secao > .lp-table-wrapper {
+    border-radius: 0;
+    border: none;
+}
+
+.lp-impostos-secao > .lp-vazio {
+    margin: 10px 14px;
+    padding: 8px 12px;
+    background: #f7fafd;
+    border-radius: 4px;
+}
+
+.lp-impostos-total-geral {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 16px;
+    margin-top: 4px;
+    padding: 10px 16px;
+    background: #fdf3f3;
+    border: 1px solid #f0c8c8;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #7b1717;
+}
+
+/* ===================== RESPONSIVO ===================== */
+@media (max-width: 860px) {
+    .lp-tabs { flex-wrap: wrap; }
+    .lp-tab-btn { padding: 8px 10px; font-size: 12px; }
+    .lp-kpi-row { gap: 14px; }
+    .lp-pagamento-resumo { max-width: 100%; }
+}
+
+/* ===================== TEMA ESCURO ===================== */
+[data-theme="dark"] .lp-editor-header {
+    background: #1a1f2a;
+    border-color: #2e3648;
+}
+[data-theme="dark"] .lp-editor-title { color: #eef1f6; }
+[data-theme="dark"] .lp-editor-meta  { color: #b8c2d0; }
+[data-theme="dark"] .lp-kpi-val      { color: #eef1f6; }
+[data-theme="dark"] .lp-kpi-val.destaque     { color: #6bb3e0; }
+[data-theme="dark"] .lp-kpi-val.lp-kpi-deducao { color: #e87070; }
+[data-theme="dark"] .lp-kpi-val.lp-kpi-liquido { color: #5dbb80; }
+[data-theme="dark"] .lp-tabs         { border-bottom-color: #2e3648; background: #1a1f2a; }
+[data-theme="dark"] .lp-tab-btn      { color: #8896a8; }
+[data-theme="dark"] .lp-tab-btn:hover { color: #6bb3e0; }
+[data-theme="dark"] .lp-tab-btn.ativa { color: #90c8ee; border-bottom-color: #90c8ee; }
+[data-theme="dark"] .lp-tab-btn.ativa .lp-tab-badge { background: #1e3a52; }
+[data-theme="dark"] .lp-hint          { background: #1e2a3d; color: #b0bfce; }
+[data-theme="dark"] .lp-hint-siafi    { background: #1b2a3b; }
+[data-theme="dark"] .lp-hint code     { background: rgba(255,255,255,0.08); }
+[data-theme="dark"] .lp-chip-fornecedor {
+    background: #1e2a3d;
+    border-color: #3d4f6a;
+    color: #c8ddef;
+}
+[data-theme="dark"] .lp-chip-dot      { background: #6bb3e0; }
+[data-theme="dark"] .lp-section-meta  { background: #1a1f2a; border-color: #2e3648; color: #8896a8; }
+[data-theme="dark"] .lp-tfoot-total td { background: #1e2430; border-top-color: #3d4f6a; }
+[data-theme="dark"] .lp-cell-edit input { background: #1e2430; border-color: #3d4f6a; color: #eef1f6; }
+[data-theme="dark"] .lp-cell-edit input:focus { border-color: #6bb3e0; background: #222a38; }
+[data-theme="dark"] .lp-resumo-bloco  { border-color: #2e3648; }
+[data-theme="dark"] .lp-resumo-bloco-titulo { background: #1e3a52; }
+[data-theme="dark"] .lp-resumo-bloco-grid { background: #1a1f2a; }
+[data-theme="dark"] .lp-resumo-item   { border-bottom-color: #2e3648; }
+[data-theme="dark"] .lp-resumo-label  { color: #8896a8; }
+[data-theme="dark"] .lp-resumo-valor  { color: #eef1f6; }
+[data-theme="dark"] .lp-row-selected td { background: #1b2a3b !important; }
+[data-theme="dark"] .lp-pagamento-resumo .lp-valor-liquido { color: #5dbb80 !important; }
+[data-theme="dark"] .lp-impostos-secao { border-color: #2e3648; }
+[data-theme="dark"] .lp-impostos-secao-titulo { background: #1b2d42; border-bottom-color: #2e3648; color: #90c8ee; }
+[data-theme="dark"] .lp-impostos-total-geral { background: #2a1b1b; border-color: #5a2a2a; color: #e87070; }
+[data-theme="dark"] .lp-nd-bloco { border-color: #2e3648; }
+[data-theme="dark"] .lp-nd-bloco-titulo { background: #1b2d42; border-bottom-color: #2e3648; color: #90c8ee; }
+[data-theme="dark"] .lp-nd-total-geral { background: #1a1f2a; border-color: #2e3648; color: #b8c2d0; }
+
+/* ===================== LFxPF: feedback de auto-preenchimento ===================== */
+.lp-pf-autopreenchido {
+    background: #e6f9ee !important;
+    border-color: #27ae60 !important;
+    transition: background 0.4s, border-color 0.4s;
+}
+[data-theme="dark"] .lp-pf-autopreenchido {
+    background: #1a3a28 !important;
+    border-color: #2ecc71 !important;
+}

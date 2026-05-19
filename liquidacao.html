@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a2f4a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/logo-192.png">
+    <title>SisExeFin - Liquidação e Pagamento</title>
+    <script src="script-tema.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="liquidacao.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .loading-overlay.hide { display: none; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #337ab7; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .autocomplete-list { max-height: 200px; }
+    </style>
+</head>
+<body style="display:none; flex-direction:column;" id="corpo-liquidacao">
+
+    <div id="loadingApp" class="loading-overlay" style="display:none;">
+        <div class="spinner"></div>
+        <p style="margin-top:15px; color:#337ab7; font-weight:bold;">Sincronizando com a nuvem...</p>
+    </div>
+
+    <!-- ==================== TOPBAR ==================== -->
+    <header class="topbar">
+        <div class="topbar-logo">
+            <span class="icon-logo">🌐</span>
+            SisExeFin — Liquidação e Pagamento
+            <span class="topbar-demo-badge">Beta</span>
+        </div>
+        <div class="topbar-user">
+            <span id="nomeUsuarioLogado" class="topbar-item"></span>
+            <a href="dashboard.html" class="topbar-voltar">⬅ Voltar</a>
+            <button type="button" class="topbar-sair" onclick="fazerLogout()">🚪 Sair</button>
+        </div>
+    </header>
+
+    <!-- ==================== APP CONTAINER ==================== -->
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-toggle" onclick="toggleSidebar()"
+                title="Ocultar / Mostrar menu" aria-label="Ocultar ou mostrar menu">
+                <i class="fas fa-bars menu-btn-icon" aria-hidden="true"></i>
+                <span class="sidebar-toggle-text"> Ocultar menu</span>
+            </button>
+            <nav class="sidebar-inner" style="flex:1;overflow:auto;display:flex;flex-direction:column;">
+                <ul></ul>
+            </nav>
+        </nav>
+
+        <main class="content">
+
+            <!-- ============================================================
+                 CARD: LISTA DE LIQUIDAÇÕES
+            ============================================================ -->
+            <div class="card" id="tela-lista-lp">
+                <div class="header-lista">
+                    <h2>Liquidação e Pagamento</h2>
+                    <button type="button" id="btnNovaLP" class="btn-primary" data-permission="liquidacao_inserir">
+                        <i class="fas fa-plus" aria-hidden="true"></i> Nova Liquidação
+                    </button>
+                </div>
+                <p style="color:#666; font-size:13px; margin:0 0 14px 0;">
+                    Monte lotes de TC do mesmo fornecedor, preencha orçamento e impostos, e gere o DAuLiq para operação no SIAFI.
+                </p>
+                <div class="controles-tabela">
+                    <label style="font-size:12px;">
+                        A exibir
+                        <select id="itensPorPaginaLP" onchange="mudarTamanhoPaginaLP()">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </label>
+                    <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                        Exercício
+                        <select id="filtroAnoExercicioLP" title="Filtrar lotes por ano do exercício"></select>
+                    </label>
+                    <div class="search-box">
+                        <input type="text" id="buscaTabelaLP"
+                            placeholder="Pesquisar código LP, fornecedor ou NP…"
+                            aria-label="Pesquisar liquidações">
+                    </div>
+                </div>
+                <div id="containerSelecaoMultiplaLP" style="display:none; margin-bottom:12px; padding:10px; background:#e8f4f8; border-radius:4px;">
+                    <strong>Selecionados: <span id="countSelecionadosLP">0</span></strong>
+                    <button type="button" id="btnImprimirBlocoLP" class="btn-default btn-small" data-permission="liquidacao_gerar_pdf" style="margin-left:15px;">
+                        <i class="fas fa-file-pdf" aria-hidden="true"></i> Imprimir DAuLiq em bloco
+                    </button>
+                </div>
+
+                <table id="tabelaLiquidacoes" class="tabela-gov">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="checkTodosLP" class="check-lp" title="Selecionar todos da página"></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('codigo')">Código <span class="sort-icon" id="sort-lp-codigo"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('estado')">Estado <span class="sort-icon" id="sort-lp-estado"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('fornecedor')">Fornecedor <span class="sort-icon" id="sort-lp-fornecedor"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('valorTotal')" style="text-align:right;">Valor (R$) <span class="sort-icon" id="sort-lp-valorTotal"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('qtdTcs')" style="text-align:center;">TCs <span class="sort-icon" id="sort-lp-qtdTcs"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('dataLiquidacao')">Data Liq. <span class="sort-icon" id="sort-lp-dataLiquidacao"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('editadoEm')">Atualizado <span class="sort-icon" id="sort-lp-editadoEm"></span></th>
+                            <th class="th-sortable" onclick="ordenarListaLP('np')">NP <span class="sort-icon" id="sort-lp-np"></span></th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyListaLP"></tbody>
+                </table>
+                <div class="paginacao">
+                    <span style="margin-right:15px;">Mostrando <strong id="mostrandoDeLP">0</strong> de <strong id="mostrandoTotalLP">0</strong> registros</span>
+                    <button type="button" onclick="irParaPrimeiraPaginaLP()" id="btnPrimeiraLP">Primeiro</button>
+                    <button type="button" onclick="mudarPaginaLP(-1)" id="btnAnteriorLP">Anterior</button>
+                    <span id="infoPaginaLP">Página 1 de 1</span>
+                    <button type="button" onclick="mudarPaginaLP(1)" id="btnProximoLP">Próximo</button>
+                    <button type="button" onclick="irParaUltimaPaginaLP()" id="btnUltimaLP">Último</button>
+                    <label data-permission="liquidacao_status" style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px; margin-left:12px;">
+                        <input type="checkbox" id="filtroLPInativas">
+                        Mostrar inativas (admin)
+                    </label>
+                </div>
+            </div><!-- /card lista -->
+
+            <!-- ============================================================
+                 CARD: EDITOR DE LIQUIDAÇÃO
+            ============================================================ -->
+            <div class="card" id="tela-editor-lp" style="display:none;">
+
+                <!-- Cabeçalho -->
+                <div class="lp-editor-header">
+                    <div class="lp-editor-title-row">
+                        <div>
+                            <h2 class="lp-editor-title" id="tituloEditorLP">Liquidação e Pagamento</h2>
+                            <span id="lpBadgeEstado" style="margin-left:8px;"></span>
+                            <p class="lp-editor-meta" id="resumoEditorLP"></p>
+                        </div>
+                        <div class="lp-editor-actions-top">
+                            <button type="button" id="btnLPSalvar" class="btn-primary" data-permission="liquidacao_editar">
+                                <i class="fas fa-save" aria-hidden="true"></i> Salvar
+                            </button>
+                            <button type="button" id="btnLPGerarPdf" class="btn-default" data-permission="liquidacao_gerar_pdf">
+                                <i class="fas fa-file-pdf" aria-hidden="true"></i> Gerar DAuLiq
+                            </button>
+                            <div class="lp-editor-links">
+                                <button type="button" id="btnVoltarListaLP">← Voltar à lista</button>
+                                <button type="button" id="btnLPInformarNP" data-permission="liquidacao_fechar_np">🔢 Informar NP</button>
+                                <button type="button" id="btnLPCorrigirNP" class="btn-default btn-small" data-permission="liquidacao_fechar_np" style="display:none;">Corrigir NP / data</button>
+                                <button type="button" id="btnLPCancelar" class="lp-link-danger" data-permission="liquidacao_cancelar">Cancelar LP</button>
+                                <button type="button" id="btnLPInativar" data-permission="liquidacao_status" style="display:none;">Inativar / Reativar</button>
+                                <button type="button" id="btnLPExcluir" class="lp-link-danger" data-permission="liquidacao_excluir" style="display:none;">Excluir permanentemente</button>
+                            </div>
+                            <p id="lpHintAcoes" class="lp-editor-meta" style="margin:6px 0 0 0; font-size:12px; color:#666;"></p>
+                        </div>
+                    </div>
+                    <!-- KPIs -->
+                    <div class="lp-kpi-row">
+                        <div class="lp-kpi">
+                            TCs no lote <span class="lp-kpi-val" id="lpKpiTcs">0</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Valor bruto <span class="lp-kpi-val destaque" id="lpKpiValor">R$ 0,00</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Total Impostos <span class="lp-kpi-val lp-kpi-deducao" id="lpKpiDarf">R$ 0,00</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Valor líquido (OB) <span class="lp-kpi-val lp-kpi-liquido" id="lpKpiLiquido">R$ 0,00</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Ateste (+ antigo) <span class="lp-kpi-val" id="lpKpiAteste">—</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Venc. (+30 d) <span class="lp-kpi-val" id="lpKpiVenc">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== NAVEGAÇÃO DAS 5 ABAS ===== -->
+                <nav class="lp-tabs" role="tablist" aria-label="Seções da Liquidação e Pagamento">
+                    <button type="button" class="lp-tab-btn ativa"
+                        id="lpTabBtnA" role="tab" aria-selected="true" aria-controls="lpPainelA"
+                        data-aba="A">
+                        <i class="fas fa-file-alt" aria-hidden="true"></i> Dados Básicos
+                    </button>
+                    <button type="button" class="lp-tab-btn"
+                        id="lpTabBtnB" role="tab" aria-selected="false" aria-controls="lpPainelB"
+                        data-aba="B">
+                        <i class="fas fa-landmark" aria-hidden="true"></i> Orçamento
+                        <span class="lp-tab-badge" id="lpBadgeAbaB">—</span>
+                    </button>
+                    <button type="button" class="lp-tab-btn"
+                        id="lpTabBtnC" role="tab" aria-selected="false" aria-controls="lpPainelC"
+                        data-aba="C">
+                        <i class="fas fa-receipt" aria-hidden="true"></i> Impostos
+                        <span class="lp-tab-badge lp-badge-darf" id="lpBadgeAbaC">—</span>
+                    </button>
+                    <button type="button" class="lp-tab-btn"
+                        id="lpTabBtnD" role="tab" aria-selected="false" aria-controls="lpPainelD"
+                        data-aba="D">
+                        <i class="fas fa-money-bill-wave" aria-hidden="true"></i> Pagamento
+                        <span class="lp-tab-badge lp-badge-liquido" id="lpBadgeAbaD">—</span>
+                    </button>
+                    <button type="button" class="lp-tab-btn"
+                        id="lpTabBtnE" role="tab" aria-selected="false" aria-controls="lpPainelE"
+                        data-aba="E">
+                        <i class="fas fa-layer-group" aria-hidden="true"></i> Deta Custos
+                    </button>
+                    <button type="button" class="lp-tab-btn"
+                        id="lpTabBtnF" role="tab" aria-selected="false" aria-controls="lpPainelF"
+                        data-aba="F">
+                        <i class="fas fa-history" aria-hidden="true"></i> Histórico
+                    </button>
+                </nav>
+
+                <!-- ===== PAINEL A: DADOS BÁSICOS ===== -->
+                <div id="lpPainelA" class="lp-painel ativa" role="tabpanel" aria-labelledby="lpTabBtnA">
+
+                    <!-- a1: Fornecedor -->
+                    <fieldset class="gov-fieldset">
+                        <legend>Fornecedor / Credor</legend>
+                        <div id="lpFornecedorBusca" class="lp-fornecedor-busca visivel">
+                            <p class="lp-hint">Selecione o credor antes de incluir TCs. Todos os títulos do lote devem ser do mesmo CNPJ.</p>
+                            <div class="form-group" style="position:relative; max-width:480px;">
+                                <label for="lpBuscaFornecedor">Buscar por CNPJ ou razão social</label>
+                                <input type="text" id="lpBuscaFornecedor"
+                                    placeholder="Digite para buscar…"
+                                    autocomplete="off"
+                                    aria-autocomplete="list"
+                                    aria-controls="lpListaFornecedores">
+                                <ul id="lpListaFornecedores" class="autocomplete-list" role="listbox"></ul>
+                            </div>
+                        </div>
+                        <div id="lpFornecedorChip" class="lp-fornecedor-chip-wrap">
+                            <div class="lp-chip-fornecedor">
+                                <span class="lp-chip-dot" aria-hidden="true"></span>
+                                <span id="lpChipTexto">—</span>
+                            </div>
+                            <div class="lp-chip-acoes">
+                                <button type="button" id="btnLPTrocarFornecedor" class="lp-btn-link">
+                                    ↩ Trocar fornecedor
+                                </button>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- a2: Documentos de Origem -->
+                    <fieldset class="gov-fieldset" style="margin-top:14px;">
+                        <legend>Documentos de Origem (TCs)</legend>
+                        <p id="lpHintSemFornecedor" class="lp-hint warn">
+                            Selecione o fornecedor acima para incluir TCs elegíveis.
+                        </p>
+                        <div id="lpBlocoTcs" style="display:none;">
+                            <div class="lp-toolbar">
+                                <button type="button" id="btnLPAdicionarTC" class="btn-primary btn-small">
+                                    <i class="fas fa-plus" aria-hidden="true"></i> Adicionar TC
+                                </button>
+                                <button type="button" id="btnLPRemoverTC" class="btn-default btn-small" disabled>
+                                    <i class="fas fa-trash" aria-hidden="true"></i> Remover selecionados
+                                </button>
+                            </div>
+                            <table class="tabela-gov" id="tabelaTCsLote">
+                                <thead>
+                                    <tr>
+                                        <th style="width:36px;">
+                                            <input type="checkbox" id="checkTodosTCs"
+                                                title="Selecionar todos" aria-label="Selecionar todos os TCs do lote">
+                                        </th>
+                                        <th>ID PROC</th>
+                                        <th>Credor (CNPJ)</th>
+                                        <th>Emissão TC</th>
+                                        <th>Documento (tipo-nº)</th>
+                                        <th style="text-align:right;">Valor R$</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyTCsLote"></tbody>
+                                <tfoot>
+                                    <tr class="lp-tfoot-total">
+                                        <td colspan="5" style="text-align:right; font-weight:600; font-size:12.5px;">Total:</td>
+                                        <td style="text-align:right; font-weight:700;" id="totalTCsLote">R$ 0,00</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                            <p id="lpLoteVazio" class="lp-vazio" style="display:none;">
+                                Nenhum TC no lote. Clique em «Adicionar TC» para incluir.
+                            </p>
+                        </div>
+                    </fieldset>
+
+                </div><!-- /painel A -->
+
+                <!-- ===== PAINEL B: ORÇAMENTO ===== -->
+                <div id="lpPainelB" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnB">
+                    <div class="lp-hint lp-hint-siafi">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <strong>Ação no SIAFI:</strong> Registre os empenhos abaixo na transação correspondente.
+                        Preencha os campos <strong>VINC</strong>, <strong>LF</strong> e <strong>PF</strong> conforme o lançamento no sistema.
+                        A LF pode ser digitada em formato completo (<code>2026LF000123</code>) ou apenas a sequência (<code>123</code>).
+                        O campo PF é preenchido automaticamente ao informar a LF.
+                    </div>
+                    <div class="lp-toolbar" id="lpOrcamentoToolbar" style="display:none;">
+                        <button type="button" id="btnBuscarLFs" class="btn-primary btn-small">
+                            <i class="fas fa-search" aria-hidden="true"></i> Buscar LFs (LFxPF)
+                        </button>
+                        <span style="font-size:12px; color:#666;">
+                            Consulta a coleção LFxPF e preenche LF/PF para as NEs deste lote automaticamente.
+                        </span>
+                    </div>
+                    <div class="lp-section-meta" id="lpOrcamentoMeta"></div>
+                    <div id="lpOrcamentoContainer"></div>
+                    <p id="lpOrcamentoVazio" class="lp-vazio" style="display:none;">
+                        Adicione TCs na aba «Dados Básicos» para visualizar os empenhos.
+                    </p>
+                </div><!-- /painel B -->
+
+                <!-- ===== PAINEL C: IMPOSTOS ===== -->
+                <div id="lpPainelC" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnC">
+                    <div class="lp-hint lp-hint-siafi">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <strong>Ação no SIAFI:</strong> Registre as deduções para cada PROC abaixo,
+                        agrupadas por tipo (INSS, ISS e DARF), nas transações correspondentes.
+                    </div>
+                    <div class="lp-section-meta" id="lpImpostosMeta"></div>
+
+                    <!-- Seção INSS -->
+                    <div class="lp-impostos-secao" id="lpSecaoINSS" style="display:none;">
+                        <div class="lp-impostos-secao-titulo">
+                            <i class="fas fa-user-shield" aria-hidden="true"></i> Dedução — INSS — DDF021
+                        </div>
+                        <div class="lp-table-wrapper">
+                            <table class="tabela-gov" id="tabelaINSS">
+                                <thead>
+                                    <tr>
+                                        <th>ID-PROC</th>
+                                        <th>Cod. Receita</th>
+                                        <th style="text-align:right;">Base de Cálculo</th>
+                                        <th style="text-align:right;">Alíquota</th>
+                                        <th style="text-align:right;">Valor a deduzir</th>
+                                        <th>Data (emissão TC)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyINSS"></tbody>
+                                <tfoot>
+                                    <tr class="lp-tfoot-total">
+                                        <td colspan="4" style="text-align:right; font-weight:600; font-size:12.5px;">
+                                            Valor total INSS:
+                                        </td>
+                                        <td style="text-align:right; font-weight:700; color:#c0392b;" id="totalINSS">
+                                            R$ 0,00
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Seção ISS -->
+                    <div class="lp-impostos-secao" id="lpSecaoISS" style="display:none;">
+                        <div class="lp-impostos-secao-titulo">
+                            <i class="fas fa-city" aria-hidden="true"></i> Dedução — ISS — DDR001
+                        </div>
+                        <div class="lp-table-wrapper">
+                            <table class="tabela-gov" id="tabelaISS">
+                                <thead>
+                                    <tr>
+                                        <th>ID-PROC</th>
+                                        <th>Cod. Receita</th>
+                                        <th style="text-align:right;">Base de Cálculo</th>
+                                        <th style="text-align:right;">Alíquota</th>
+                                        <th style="text-align:right;">Valor a deduzir</th>
+                                        <th>Data apuração</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyISS"></tbody>
+                                <tfoot>
+                                    <tr class="lp-tfoot-total">
+                                        <td colspan="4" style="text-align:right; font-weight:600; font-size:12.5px;">
+                                            Valor total ISS:
+                                        </td>
+                                        <td style="text-align:right; font-weight:700; color:#c0392b;" id="totalISS">
+                                            R$ 0,00
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Seção DARF -->
+                    <div class="lp-impostos-secao" id="lpSecaoDARF" style="display:none;">
+                        <div class="lp-impostos-secao-titulo">
+                            <i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> Dedução — DARF — DDF025
+                        </div>
+                        <div class="lp-table-wrapper">
+                            <table class="tabela-gov" id="tabelaImpostos">
+                                <thead>
+                                    <tr>
+                                        <th>ID-PROC</th>
+                                        <th>Cod. Receita</th>
+                                        <th>Nat. Red.</th>
+                                        <th style="text-align:right;">Base</th>
+                                        <th style="text-align:right;">Alíq. tot.</th>
+                                        <th style="text-align:right;">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyImpostos"></tbody>
+                                <tfoot>
+                                    <tr class="lp-tfoot-total">
+                                        <td colspan="5" style="text-align:right; font-weight:600; font-size:12.5px;">
+                                            Valor total DARF:
+                                        </td>
+                                        <td style="text-align:right; font-weight:700; color:#c0392b;" id="totalDarf">
+                                            R$ 0,00
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Total geral -->
+                    <div class="lp-impostos-total-geral" id="lpImpostosTotalGeral" style="display:none;">
+                        <span>Total geral das deduções:</span>
+                        <span id="totalImpostosGeral" style="font-weight:700; color:#c0392b;">R$ 0,00</span>
+                    </div>
+
+                    <p id="lpImpostosVazioGeral" class="lp-vazio" style="display:none;">
+                        Adicione TCs na aba «Dados Básicos» para visualizar as deduções.
+                    </p>
+                </div><!-- /painel C -->
+
+                <!-- ===== PAINEL D: PAGAMENTO ===== -->
+                <div id="lpPainelD" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnD">
+                    <div class="lp-hint lp-hint-siafi">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <strong>Ação no SIAFI:</strong> Utilize os dados abaixo para emissão da Ordem Bancária (OB).
+                        O valor líquido corresponde ao montante bruto menos as deduções (INSS + ISS + DARF).
+                    </div>
+                    <div class="lp-table-wrapper">
+                        <table class="tabela-gov" id="tabelaPagamento">
+                            <thead>
+                                <tr>
+                                    <th>ID PROC</th>
+                                    <th>Documento (tipo-nº)</th>
+                                    <th style="text-align:right;">Valor Bruto</th>
+                                    <th style="text-align:right;">Deduções</th>
+                                    <th style="text-align:right;">Valor Líquido</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyPagamento"></tbody>
+                            <tfoot>
+                                <tr class="lp-tfoot-total">
+                                    <td colspan="2" style="text-align:right; font-weight:600; font-size:12.5px;">Totais:</td>
+                                    <td style="text-align:right; font-weight:700;" id="pgTotalBruto">R$ 0,00</td>
+                                    <td style="text-align:right; font-weight:700; color:#c0392b;" id="pgTotalDeduc">R$ 0,00</td>
+                                    <td style="text-align:right; font-weight:700; color:#1e8449;" id="pgTotalLiquido">R$ 0,00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <p id="lpPagamentoVazio" class="lp-vazio" style="display:none;">
+                        Adicione TCs na aba «Dados Básicos» para calcular o pagamento.
+                    </p>
+
+                    <!-- Bloco resumo OB -->
+                    <div class="lp-pagamento-resumo" id="lpPagamentoResumo" style="display:none;">
+                        <div class="lp-resumo-bloco">
+                            <div class="lp-resumo-bloco-titulo">Dados de Pagamento (OB)</div>
+                            <div class="lp-resumo-bloco-grid">
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Recolhedor / Favorecido (CNPJ)</span>
+                                    <span class="lp-resumo-valor" id="lpRbCnpj">—</span>
+                                </div>
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Nome</span>
+                                    <span class="lp-resumo-valor" id="lpRbNome">—</span>
+                                </div>
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Valor total dos TCs</span>
+                                    <span class="lp-resumo-valor" id="lpRbBruto">R$ 0,00</span>
+                                </div>
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Total das deduções</span>
+                                    <span class="lp-resumo-valor lp-valor-deducao" id="lpRbDeduc">R$ 0,00</span>
+                                </div>
+                                <div class="lp-resumo-item lp-resumo-destaque">
+                                    <span class="lp-resumo-label">Valor líquido (OB)</span>
+                                    <span class="lp-resumo-valor lp-valor-liquido" id="lpRbLiquido">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /painel D -->
+
+                <!-- ===== PAINEL E: DETA CUSTOS ===== -->
+                <div id="lpPainelE" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnE">
+                    <div class="lp-hint lp-hint-siafi">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <strong>Resumo:</strong> Agrupamento dos empenhos por
+                        NE &times; Sub &times; Centro de Custos &times; UG, conforme lançado no SIAFI.
+                    </div>
+                    <div class="lp-table-wrapper">
+                        <table class="tabela-gov" id="tabelaDetaCustos">
+                            <thead>
+                                <tr>
+                                    <th>Nota de Empenho</th>
+                                    <th style="text-align:center;">Sub</th>
+                                    <th>Centro de Custos</th>
+                                    <th style="text-align:center;">UG</th>
+                                    <th style="text-align:right;">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyDetaCustos"></tbody>
+                            <tfoot>
+                                <tr class="lp-tfoot-total">
+                                    <td colspan="4" style="text-align:right; font-weight:600; font-size:12.5px;">
+                                        Valor total:
+                                    </td>
+                                    <td style="text-align:right; font-weight:700;" id="totalDetaCustos">R$ 0,00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <p id="lpDetaCustosVazio" class="lp-vazio" style="display:none;">
+                        Adicione TCs na aba «Dados Básicos» para visualizar o detalhamento de custos.
+                    </p>
+                </div><!-- /painel E -->
+
+                <!-- ===== PAINEL F: HISTÓRICO ===== -->
+                <div id="lpPainelF" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnF">
+                    <table class="tabela-gov" id="tabelaHistorico" style="margin-top:4px;">
+                        <thead>
+                            <tr>
+                                <th>Data / Hora</th>
+                                <th>Tipo</th>
+                                <th>Usuário</th>
+                                <th>Detalhe</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyHistorico"></tbody>
+                    </table>
+                    <p id="lpHistoricoVazio" class="lp-vazio" style="display:none;">
+                        Nenhum registro no histórico.
+                    </p>
+                </div><!-- /painel F -->
+
+            </div><!-- /card editor -->
+
+        </main>
+    </div><!-- /app-container -->
+
+    <!-- ==================== MODAL: ADICIONAR TC ==================== -->
+    <div id="modalLPAdicionarTC" class="modal-overlay" style="display:none;"
+        role="dialog" aria-modal="true" aria-labelledby="modalAdicionarTCTitulo">
+        <div class="modal-content" style="max-width:820px; text-align:left; width:95%;">
+            <h3 id="modalAdicionarTCTitulo" style="margin-bottom:6px;">
+                Adicionar Títulos de Crédito
+            </h3>
+            <p class="lp-hint" style="margin-bottom:12px;">
+                Exibindo TCs com status <strong>Em Liquidação</strong>, do mesmo CNPJ e sem vínculo a outra LP.
+            </p>
+            <div class="controles-tabela" style="margin-bottom:10px;">
+                <div class="search-box">
+                    <input type="text" id="lpBuscaTCModal"
+                        placeholder="Filtrar por PROC ou documento…"
+                        aria-label="Filtrar TCs disponíveis">
+                </div>
+            </div>
+            <div style="max-height:360px; overflow-y:auto;">
+                <table class="tabela-gov" id="tabelaTCsDisponiveis">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;">
+                                <input type="checkbox" id="checkTodosTCsModal"
+                                    title="Selecionar todos" aria-label="Selecionar todos os TCs disponíveis">
+                            </th>
+                            <th>ID PROC</th>
+                            <th>Documento (tipo-nº)</th>
+                            <th>Emissão TC</th>
+                            <th>Ateste</th>
+                            <th style="text-align:right;">Valor R$</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyTCsDisponiveis"></tbody>
+                </table>
+                <p id="lpModalTCsVazio" class="lp-vazio" style="display:none;">
+                    Nenhum TC disponível para este fornecedor.
+                </p>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; margin-top:14px; flex-wrap:wrap;">
+                <span id="lpContadorTCsSelecionados" style="font-size:13px; color:#666;" aria-live="polite">
+                    Nenhum TC selecionado
+                </span>
+                <div style="display:flex; gap:10px;">
+                    <button type="button" id="btnModalTCCancelar" class="btn-default">Cancelar</button>
+                    <button type="button" id="btnModalTCConfirmar" class="btn-primary" disabled>
+                        Adicionar selecionados
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: INFORMAR NP ==================== -->
+    <div id="modalLPNP" class="modal-overlay" style="display:none;"
+        role="dialog" aria-modal="true" aria-labelledby="modalNPTitulo">
+        <div class="modal-content" style="text-align:left; max-width:440px;">
+            <h3 id="modalNPTitulo" style="margin-bottom:12px;">Informar NP (SIAFI)</h3>
+            <div class="form-group">
+                <label for="modalLPnp">NP:</label>
+                <input type="text" id="modalLPnp" placeholder="Ex.: 741000000012026NP000001">
+            </div>
+            <div class="form-group">
+                <label for="modalLPdataLiq">Data de liquidação:</label>
+                <input type="date" id="modalLPdataLiq">
+            </div>
+            <div class="form-group" id="grpModalLPmotivoNP" style="display:none;">
+                <label for="modalLPmotivoNP">Motivo (correção):</label>
+                <textarea id="modalLPmotivoNP" rows="2" style="width:100%; box-sizing:border-box;"></textarea>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="modalNPCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalNPConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalLPMotivo" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+        <div class="modal-content" style="text-align:left; max-width:400px;">
+            <h3 id="modalLPMotivoTitulo" style="margin-bottom:12px;">Motivo</h3>
+            <textarea id="modalLPMotivoTexto" rows="4" placeholder="Obrigatório…" style="width:100%; box-sizing:border-box;"></textarea>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="modalLPMotivoCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalLPMotivoConfirmar" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalLPVarianteDauliq" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+        <div class="modal-content" style="text-align:left; max-width:440px;">
+            <h3 style="margin-bottom:8px;">Gerar DAuLiq</h3>
+            <p style="font-size:13px; color:#555; margin:0 0 14px 0; line-height:1.45;">
+                Escolha o conteúdo do PDF. A geração é registrada no histórico da liquidação.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button type="button" id="btnModalDauliqSemHist" class="btn-default" style="text-align:left; padding:10px 12px;">
+                    <strong>Sem histórico</strong> — só dados do lote (sem tabela de auditoria no PDF).
+                </button>
+                <button type="button" id="btnModalDauliqCompleto" class="btn-primary" style="text-align:left; padding:10px 12px;">
+                    <strong>Completo</strong> — inclui seção de histórico / auditoria da liquidação.
+                </button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="btnModalDauliqCancel" class="btn-default">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
+    <script src="script-menu-lateral.js"></script>
+    <script src="script.js"></script>
+    <script src="script-ano-documento.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script-liquidacao-np.js"></script>
+    <script src="script-liquidacao.js"></script>
+    <script src="pwa-register.js"></script>
+</body>
+</html>

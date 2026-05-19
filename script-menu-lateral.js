@@ -1,7 +1,7 @@
 // ==========================================
 // MENU LATERAL - Padrão AdminLTE 3 (adminlte.io)
 // ==========================================
-// Fonte única do menu. Páginas: dashboard.html, conta.html, sistema.html, titulos.html, preliquidacao.html, admin.html
+// Fonte única do menu. Páginas: dashboard.html, conta.html, sistema.html, titulos.html, liquidacao.html, admin.html
 // Qualquer alteração no menu deve ser feita SOMENTE aqui.
 // ==========================================
 (function() {
@@ -38,10 +38,10 @@
                 <p>Títulos de Crédito</p>
             </a>
         </li>
-        <li class="nav-item" data-permission="preliquidacao_ler">
-            <a href="preliquidacao.html" class="nav-link" data-menu-ativo="preliquidacao" title="Pré-Liquidação">
-                <i class="nav-icon fas fa-layer-group"></i>
-                <p>Pré-Liquidação</p>
+        <li class="nav-item" data-permission="liquidacao_ler">
+            <a href="liquidacao.html" class="nav-link" data-menu-ativo="liquidacao" title="Liquidação e Pagamento">
+                <i class="nav-icon fas fa-file-invoice-dollar"></i>
+                <p>Liquidação e Pagamento</p>
             </a>
         </li>
         <li class="nav-item has-treeview" data-tree="tabelas">
@@ -320,6 +320,7 @@
         }
         if (path.includes('titulos.html')) return 'titulos';
         if (path.includes('preliquidacao.html')) return 'preliquidacao';
+        if (path.includes('liquidacao.html')) return 'liquidacao';
         if (path.includes('sistema.html')) {
             const secao = new URLSearchParams(search).get('secao');
             return secao || 'sistema';

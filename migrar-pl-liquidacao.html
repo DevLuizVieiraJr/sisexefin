@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin — Migrar Pré-Liquidação → Liquidação</title>
+    <script src="script-tema.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #logMigracao { font-family: monospace; font-size: 12px; background: #f8f8f8; border: 1px solid #ddd; padding: 12px; max-height: 400px; overflow: auto; white-space: pre-wrap; }
+        .warn { color: #a94442; }
+        .ok { color: #3c763d; }
+    </style>
+</head>
+<body style="display:none; flex-direction:column;" id="corpo-migrar-pl">
+    <main class="content" style="max-width:900px; margin:24px auto;">
+        <div class="card">
+            <h2>Migração: preLiquidacoes → liquidacoes</h2>
+            <p style="font-size:13px; color:#555;">
+                Converte lotes de Pré-Liquidação para Liquidação e Pagamento, atualiza vínculos em <code>titulos</code>
+                e ajusta o contador <code>liquidacao_{ano}</code>. Requer <strong>acesso_admin</strong>.
+                Documentos PL já migrados (<code>migradoLiquidacao: true</code>) são ignorados.
+            </p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin:16px 0;">
+                <button type="button" id="btnSimular" class="btn-default">Simular (sem gravar)</button>
+                <button type="button" id="btnMigrar" class="btn-primary">Executar migração</button>
+            </div>
+            <div id="logMigracao"></div>
+        </div>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="script.js"></script>
+    <script>
+    (function () {
+        var logEl = document.getElementById('logMigracao');
+        function log(msg, cls) {
+            var line = document.createElement('div');
+            if (cls) line.className = cls;
+            line.textContent = msg;
+            logEl.appendChild(line);
+        }
+
+        function mapEstadoPL(estado) {
+            var e = String(estado || '').trim();
+            var m = {
+                'Rascunho': 'rascunho',
+                'Fechado': 'fechado',
+                'Cancelado': 'cancelado',
+                'Aguardando Financeiro': 'aguardandoFinanceiroSemLF',
+                'Para Pagamento parcial': 'paraPagamentoParcial',
+                'Para Pagamento': 'paraPagamento',
+            };
+            return m[e] || String(e).toLowerCase() || 'rascunho';
+        }
+
+        function codigoPLparaLP(codigo) {
+            return String(codigo || '').replace(/^PL-/i, 'LP-');
+        }
+
+        function buildOrcamento(tituloIds, titulosMap) {
+            return (tituloIds || []).map(function (tid) {
+                var t = titulosMap[tid] || {};
+                return {
+                    tcId: tid,
+                    ne: t.ne || '—',
+                    nd: t.nd || '—',
+                    sub: t.sub || '—',
+                    fr: t.fr || '—',
+                    valor: Number(t.valorNotaFiscal || t.valor || 0),
+                    cc: t.cc || t.centroCusto || '—',
+                    ug: t.ug || t.unidadeGestora || '—',
+                    vinc: '',
+                    lf: '',
+                    pf: '',
+                };
+            });
+        }
+
+        async function carregarTitulos(ids) {
+            var map = {};
+            for (var i = 0; i < ids.length; i++) {
+                var snap = await db.collection('titulos').doc(ids[i]).get();
+                if (snap.exists) map[ids[i]] = snap.data();
+            }
+            return map;
+        }
+
+        async function executarMigracao(simular) {
+            logEl.innerHTML = '';
+            if (!permissoesEmCache.includes('acesso_admin')) {
+                log('Acesso negado: requer acesso_admin.', 'warn');
+                return;
+            }
+            log(simular ? '=== SIMULAÇÃO ===' : '=== MIGRAÇÃO ===');
+            mostrarLoading && mostrarLoading();
+
+            try {
+                var snapPl = await db.collection('preLiquidacoes').get();
+                var pendentes = snapPl.docs.filter(function (d) {
+                    return !d.data().migradoLiquidacao;
+                });
+                log('PL encontradas: ' + snapPl.size + ' | pendentes: ' + pendentes.length);
+
+                var maxSeqPorAno = {};
+                var migrados = 0;
+
+                for (var j = 0; j < pendentes.length; j++) {
+                    var doc = pendentes[j];
+                    var pl = doc.data();
+                    var plId = doc.id;
+                    var tituloIds = (pl.tituloIds || []).slice();
+                    if (!tituloIds.length && (pl.titulosParticiparamIds || []).length) {
+                        tituloIds = pl.titulosParticiparamIds.slice();
+                    }
+                    var codigoLp = codigoPLparaLP(pl.codigo);
+                    var m = codigoLp.match(/LP-(\d{5})\/(\d{4})/);
+                    if (m) {
+                        var ano = parseInt(m[2], 10);
+                        var seq = parseInt(m[1], 10);
+                        maxSeqPorAno[ano] = Math.max(maxSeqPorAno[ano] || 0, seq);
+                    }
+
+                    var titulosMap = await carregarTitulos(tituloIds);
+                    var payload = {
+                        codigo: codigoLp,
+                        estado: mapEstadoPL(pl.estado),
+                        fornecedor: {
+                            cnpj: pl.fornecedorCnpj || '',
+                            nome: pl.fornecedorNome || '',
+                        },
+                        tcsIds: tituloIds,
+                        tcsParticiparamIds: pl.titulosParticiparamIds || [],
+                        orcamento: pl.orcamento || buildOrcamento(tituloIds, titulosMap),
+                        np: pl.np || '',
+                        dataLiquidacao: pl.dataLiquidacao || '',
+                        historico: pl.historico || [],
+                        auditoriaPdf: pl.auditoriaPdf || null,
+                        ativo: pl.ativo !== false,
+                        migradoDePreLiquidacao: true,
+                        preLiquidacaoIdOrigem: plId,
+                        criadoEm: pl.criado_em || firebase.firestore.FieldValue.serverTimestamp(),
+                        criadoPor: pl.criado_por || '',
+                        editadoEm: pl.editado_em || firebase.firestore.FieldValue.serverTimestamp(),
+                        editadoPor: pl.editado_por || '',
+                    };
+
+                    log((simular ? '[sim] ' : '') + codigoLp + ' (' + tituloIds.length + ' TCs) → liquidacoes/' + plId);
+
+                    if (!simular) {
+                        var batch = db.batch();
+                        batch.set(db.collection('liquidacoes').doc(plId), payload, { merge: true });
+                        tituloIds.forEach(function (tid) {
+                            batch.update(db.collection('titulos').doc(tid), {
+                                liquidacaoId: plId,
+                                liquidacaoCodigo: codigoLp,
+                                preLiquidacaoId: firebase.firestore.FieldValue.delete(),
+                                preLiquidacaoCodigo: firebase.firestore.FieldValue.delete(),
+                                editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+                            });
+                        });
+                        batch.update(db.collection('preLiquidacoes').doc(plId), {
+                            migradoLiquidacao: true,
+                            liquidacaoIdDestino: plId,
+                            editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+                        });
+                        await batch.commit();
+                    }
+                    migrados++;
+                }
+
+                if (!simular) {
+                    for (var anoKey in maxSeqPorAno) {
+                        if (!maxSeqPorAno.hasOwnProperty(anoKey)) continue;
+                        var counterRef = db.collection('contadores').doc('liquidacao_' + anoKey);
+                        var cSnap = await counterRef.get();
+                        var atual = cSnap.exists ? (cSnap.data().seq || 0) : 0;
+                        var novo = Math.max(atual, maxSeqPorAno[anoKey]);
+                        if (novo > atual) {
+                            await counterRef.set({ seq: novo, editado_em: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                            log('Contador liquidacao_' + anoKey + ' → seq ' + novo, 'ok');
+                        }
+                    }
+                }
+
+                log('Concluído: ' + migrados + ' lote(s) ' + (simular ? 'simulados' : 'migrados') + '.', 'ok');
+            } catch (err) {
+                log('Erro: ' + (err.message || err), 'warn');
+                console.error(err);
+            } finally {
+                esconderLoading && esconderLoading();
+            }
+        }
+
+        auth.onAuthStateChanged(async function (user) {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            if (typeof carregarPermissoes === 'function') await carregarPermissoes();
+            document.body.style.display = 'flex';
+            document.getElementById('btnSimular').addEventListener('click', function () { executarMigracao(true); });
+            document.getElementById('btnMigrar').addEventListener('click', function () {
+                if (!confirm('Executar migração real no Firestore?')) return;
+                executarMigracao(false);
+            });
+        });
+    })();
+    </script>
+</body>
+</html>
