@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>SisExeFin — Migrar Pré-Liquidação → Liquidação</title>
     <script src="script-tema.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -19,8 +22,14 @@
             <p style="font-size:13px; color:#555;">
                 Converte lotes de Pré-Liquidação para Liquidação e Pagamento, atualiza vínculos em <code>titulos</code>
                 e ajusta o contador <code>liquidacao_{ano}</code>. Requer <strong>acesso_admin</strong>.
-                Documentos PL já migrados (<code>migradoLiquidacao: true</code>) são ignorados.
+                Em modo normal, documentos PL com <code>migradoLiquidacao: true</code> são ignorados.
             </p>
+            <div style="display:flex; align-items:center; gap:8px; margin:12px 0;">
+                <input type="checkbox" id="chkForcar">
+                <label for="chkForcar" style="font-size:13px; color:#a94442;">
+                    Forçar re-migração de <strong>todas</strong> as PLs (ignora <code>migradoLiquidacao</code> e sobrescreve LPs existentes)
+                </label>
+            </div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin:16px 0;">
                 <button type="button" id="btnSimular" class="btn-default">Simular (sem gravar)</button>
                 <button type="button" id="btnMigrar" class="btn-primary">Executar migração</button>
@@ -175,15 +184,60 @@
                 log('Acesso negado: requer acesso_admin.', 'warn');
                 return;
             }
-            log(simular ? '=== SIMULAÇÃO ===' : '=== MIGRAÇÃO ===');
             mostrarLoading && mostrarLoading();
 
             try {
+                var chkEl = document.getElementById('chkForcar');
+                var forcar = !!(chkEl && chkEl.checked);
+
                 var snapPl = await db.collection('preLiquidacoes').get();
-                var pendentes = snapPl.docs.filter(function (d) {
-                    return !d.data().migradoLiquidacao;
+                var snapLp = await db.collection('liquidacoes').get();
+
+                var jaMigradas = snapPl.docs.filter(function (d) { return !!d.data().migradoLiquidacao; });
+                var naoMigradas = snapPl.docs.filter(function (d) { return !d.data().migradoLiquidacao; });
+                var pendentes = forcar ? snapPl.docs.slice() : naoMigradas;
+
+                var idsLP = {};
+                snapLp.docs.forEach(function (d) { idsLP[d.id] = d.data() || {}; });
+
+                log('=== INVENTÁRIO ===');
+                log('Coleção preLiquidacoes: ' + snapPl.size + ' documento(s)');
+                log('  - Já migradas (migradoLiquidacao=true): ' + jaMigradas.length);
+                log('  - Sem flag de migração: ' + naoMigradas.length);
+                log('Coleção liquidacoes: ' + snapLp.size + ' documento(s)');
+
+                // Cruzamento: PLs marcadas como migradas mas sem LP correspondente
+                var migradasSemDestino = jaMigradas.filter(function (d) {
+                    var p = d.data() || {};
+                    var destino = p.liquidacaoIdDestino || d.id;
+                    return !idsLP[destino];
                 });
-                log('PL encontradas: ' + snapPl.size + ' | pendentes: ' + pendentes.length);
+                if (migradasSemDestino.length) {
+                    log('AVISO: ' + migradasSemDestino.length + ' PL(s) marcadas como migradas mas SEM LP correspondente na coleção liquidacoes:', 'warn');
+                    migradasSemDestino.slice(0, 20).forEach(function (d) {
+                        var p = d.data() || {};
+                        log('    - ' + (p.codigo || d.id) + ' → destino esperado: liquidacoes/' + (p.liquidacaoIdDestino || d.id), 'warn');
+                    });
+                    if (migradasSemDestino.length > 20) log('    - ... mais ' + (migradasSemDestino.length - 20) + ' caso(s).', 'warn');
+                    if (!forcar) {
+                        log('Sugestão: marque "Forçar re-migração" para re-migrar essas PLs sem precisar limpar o flag manualmente.', 'warn');
+                    }
+                }
+
+                if (forcar) {
+                    log('MODO FORÇAR ATIVO: ' + pendentes.length + ' PL(s) serão re-migradas (sobrescreve liquidacoes existentes).', 'warn');
+                } else {
+                    log('Serão migradas ' + pendentes.length + ' PL(s) pendente(s).');
+                    if (pendentes.length) {
+                        pendentes.slice(0, 20).forEach(function (d) {
+                            var p = d.data() || {};
+                            log('    - ' + (p.codigo || d.id) + ' (estado: ' + (p.estado || '—') + ')');
+                        });
+                        if (pendentes.length > 20) log('    - ... mais ' + (pendentes.length - 20) + ' pendente(s).');
+                    }
+                }
+
+                log('=== ' + (simular ? 'SIMULAÇÃO' : 'MIGRAÇÃO') + ' ===');
 
                 var maxSeqPorAno = {};
                 var migrados = 0;
@@ -318,7 +372,11 @@
             document.body.style.display = 'flex';
             document.getElementById('btnSimular').addEventListener('click', function () { executarMigracao(true); });
             document.getElementById('btnMigrar').addEventListener('click', function () {
-                if (!confirm('Executar migração real no Firestore?')) return;
+                var forcar = !!document.getElementById('chkForcar').checked;
+                var msg = forcar
+                    ? 'MODO FORÇAR está ativo: TODAS as PLs serão re-migradas e LPs existentes serão SOBRESCRITAS no Firestore. Continuar?'
+                    : 'Executar migração real no Firestore?';
+                if (!confirm(msg)) return;
                 executarMigracao(false);
             });
         });

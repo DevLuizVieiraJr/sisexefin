@@ -18,7 +18,9 @@ function esconderLoading() {
     // ===== FIREBASE DATA (substituem todos os mocks) =====
     var baseTitulosLP  = [];   // onSnapshot 'titulos'
     var baseLfPfLP     = [];   // onSnapshot 'lfpf'
-    var unsubTitulosLP, unsubLfPfLP, unsubLiquidacoes;
+    var baseCCLP       = [];   // onSnapshot 'centroCustos'
+    var baseUGLP       = [];   // onSnapshot 'unidadesGestoras'
+    var unsubTitulosLP, unsubLfPfLP, unsubLiquidacoes, unsubCCLP, unsubUGLP;
 
     // ===== STATE =====
     var lpLista            = [];   // populado via onSnapshot 'liquidacoes'
@@ -172,16 +174,19 @@ function esconderLoading() {
 
     // ===== HELPERS FIREBASE: normalização e acesso a dados =====
 
-    // Normaliza um documento 'titulos' do Firestore para a estrutura esperada pela UI
+    // Normaliza um documento 'titulos' do Firestore para a estrutura esperada pela UI.
+    // Campos canônicos no TC (script-titulos-spa.js): tipoTC, numTC, dataEmissao.
+    // Mantém fallback para tipoDocumento/numeroDocumento/emissao por compatibilidade legada.
     function normalizarTCParaUI(t) {
         var docStr = '';
-        if (t.tipoDocumento && t.numeroDocumento) docStr = t.tipoDocumento + '-' + t.numeroDocumento;
-        else docStr = t.doc || t.numeroDocumento || '';
+        if (t.tipoTC && t.numTC) docStr = t.tipoTC + '-' + t.numTC;
+        else if (t.tipoDocumento && t.numeroDocumento) docStr = t.tipoDocumento + '-' + t.numeroDocumento;
+        else docStr = t.doc || t.numTC || t.numeroDocumento || '';
         return {
             id:      t.id,
             proc:    t.idProc   || t.proc   || t.id,
             cnpj:    t.fornecedorCnpj || t.cnpj || '',
-            emissao: t.emissao  || '',
+            emissao: t.dataEmissao || t.emissao || '',
             ateste:  t.ateste   || '',
             doc:     docStr,
             valor:   Number(t.valorNotaFiscal || t.valor || 0),
@@ -207,6 +212,65 @@ function esconderLoading() {
         return (t.deducoesAplicadas || t.tributacoes || []).filter(function (d) { return d.tipo === tipo; });
     }
 
+    // ===== HELPERS DE DEDUÇÃO =====
+    // O TC grava deduções com os nomes valorCalculado/baseCalculo/aliquota (script-titulos-spa.js).
+    // Mantém fallback para valor/base/aliq por compatibilidade.
+    function valDeducao(d) {
+        if (!d) return 0;
+        var v = (d.valorCalculado != null) ? d.valorCalculado
+              : (d.valor          != null) ? d.valor
+              :  d.total;
+        return Number(v) || 0;
+    }
+    function baseDeducao(d) {
+        if (!d) return 0;
+        var v = (d.baseCalculo != null) ? d.baseCalculo : d.base;
+        return Number(v) || 0;
+    }
+    function aliqDeducao(d) {
+        if (!d) return 0;
+        var v = (d.aliquota != null) ? d.aliquota : d.aliq;
+        return Number(v) || 0;
+    }
+
+    // ===== HELPERS DE LABEL (Centro de Custos e UG) =====
+    // Resolve ID Firestore para o código apresentado ao usuário, como o módulo PL faz.
+    function labelCC(id) {
+        if (!id) return '—';
+        var c = baseCCLP.find(function (x) { return String(x.id) === String(id); });
+        return c ? String(c.codigo || '-') : String(id);
+    }
+    function labelUGComNaval(id) {
+        if (!id) return '—';
+        var u = baseUGLP.find(function (x) { return String(x.id) === String(id); });
+        if (!u) return String(id);
+        var cod = String(u.codigo || '-');
+        var naval = String(u.indicativoNaval || '').trim();
+        return naval ? cod + '-' + naval : cod;
+    }
+
+    // Formata número de empenho como 'AAAANE######' (12 caracteres lógicos).
+    // Aceita: 'AAAANE######' literal, '######AAAA######' (SIAFI 12 dígitos) ou string crua.
+    function neExibicao(numEmpenho) {
+        var s = String(numEmpenho == null ? '' : numEmpenho).trim();
+        if (!s || s === '—') return '—';
+        var mLiteral = s.match(/(\d{4})\s*NE\s*(\d{1,6})/i);
+        if (mLiteral) {
+            var ano = mLiteral[1];
+            var seq = mLiteral[2].padStart(6, '0');
+            return ano + 'NE' + seq;
+        }
+        var core = s.replace(/\D+/g, '');
+        if (core.length === 12) {
+            var ano2 = core.slice(2, 6);
+            var seq2 = core.slice(6, 12);
+            if (/^(19|20)\d{2}$/.test(ano2)) {
+                return ano2 + 'NE' + seq2;
+            }
+        }
+        return s;
+    }
+
     // ===== HELPERS =====
     function moeda(n) {
         var x = Number(n || 0);
@@ -228,8 +292,8 @@ function esconderLoading() {
 
     function fmtDataHora(v) {
         if (!v) return '—';
-        var d = new Date(v);
-        if (isNaN(d.getTime())) return String(v);
+        var d = (v && typeof v.toDate === 'function') ? v.toDate() : new Date(v);
+        if (isNaN(d.getTime())) return '—';
         return fmtData(d) + ', ' +
                String(d.getHours()).padStart(2, '0') + ':' +
                String(d.getMinutes()).padStart(2, '0');
@@ -268,7 +332,7 @@ function esconderLoading() {
     function totalDARF(ids) {
         return (ids || []).reduce(function (s, id) {
             return s + getDeducoesTipo(id, 'DDF025').reduce(function (ss, d) {
-                return ss + (Number(d.total || d.valor) || 0);
+                return ss + valDeducao(d);
             }, 0);
         }, 0);
     }
@@ -276,7 +340,7 @@ function esconderLoading() {
     function totalINSS(ids) {
         return (ids || []).reduce(function (s, id) {
             return s + getDeducoesTipo(id, 'DDF021').reduce(function (ss, d) {
-                return ss + (Number(d.valor) || 0);
+                return ss + valDeducao(d);
             }, 0);
         }, 0);
     }
@@ -284,7 +348,7 @@ function esconderLoading() {
     function totalISS(ids) {
         return (ids || []).reduce(function (s, id) {
             return s + getDeducoesTipo(id, 'DDR001').reduce(function (ss, d) {
-                return ss + (Number(d.valor) || 0);
+                return ss + valDeducao(d);
             }, 0);
         }, 0);
     }
@@ -294,9 +358,9 @@ function esconderLoading() {
     }
 
     function totalImpostosPorTC(tcId) {
-        var darf = getDeducoesTipo(tcId, 'DDF025').reduce(function (s, d) { return s + (Number(d.total || d.valor) || 0); }, 0);
-        var inss = getDeducoesTipo(tcId, 'DDF021').reduce(function (s, d) { return s + (Number(d.valor) || 0); }, 0);
-        var iss  = getDeducoesTipo(tcId, 'DDR001').reduce(function (s, d) { return s + (Number(d.valor) || 0); }, 0);
+        var darf = getDeducoesTipo(tcId, 'DDF025').reduce(function (s, d) { return s + valDeducao(d); }, 0);
+        var inss = getDeducoesTipo(tcId, 'DDF021').reduce(function (s, d) { return s + valDeducao(d); }, 0);
+        var iss  = getDeducoesTipo(tcId, 'DDR001').reduce(function (s, d) { return s + valDeducao(d); }, 0);
         return darf + inss + iss;
     }
 
@@ -344,7 +408,7 @@ function esconderLoading() {
                 });
             } else {
                 emps.forEach(function (v) {
-                    var neVal = v.numEmpenho || v.numNE || '—';
+                    var neVal = neExibicao(v.numEmpenho || v.numNE);
                     var ant = (anterior || []).find(function (o) {
                         return o.tcId === id && o.ne === neVal;
                     }) || {};
@@ -355,8 +419,8 @@ function esconderLoading() {
                         sub:   v.subelemento || '—',
                         fr:    v.fr          || '—',
                         valor: Number(v.valorVinculado || 0),
-                        cc:    v.centroCustosId || '—',
-                        ug:    v.ugId           || '—',
+                        cc:    labelCC(v.centroCustosId),
+                        ug:    labelUGComNaval(v.ugId),
                         vinc:  ant.vinc || '',
                         lf:    ant.lf   || v.lf  || '',
                         pf:    ant.pf   || v.pf  || '',
@@ -850,7 +914,7 @@ function esconderLoading() {
             if (!STATUS_POS_NP.includes(tc.status)) continue;
 
             var novosEmps = (tc.empenhosVinculados || []).map(function (e) {
-                var m = neMap[e.numEmpenho];
+                var m = neMap[neExibicao(e.numEmpenho || e.numNE)];
                 return m ? Object.assign({}, e, { lf: m.lf, pf: m.pf }) : e;
             });
 
@@ -1299,13 +1363,14 @@ function esconderLoading() {
         if (rowsINSS.length && tbodyINSS) {
             tbodyINSS.innerHTML = rowsINSS.map(function(tc){
                 return getDeducoesTipo(tc.id, 'DDF021').map(function(n){
-                    totalINSSv += Number(n.valor) || 0;
+                    var v = valDeducao(n);
+                    totalINSSv += v;
                     return '<tr>' +
                         '<td>' + tc.proc + '</td>' +
                         '<td style="text-align:center;">' + (n.codReceita || '-') + '</td>' +
-                        '<td style="text-align:right;">' + moeda(Number(n.base) || 0) + '</td>' +
-                        '<td style="text-align:right;">' + (Number(n.aliq) || 0).toFixed(2) + '%</td>' +
-                        '<td style="text-align:right;font-weight:600;color:#c0392b;">' + moeda(Number(n.valor) || 0) + '</td>' +
+                        '<td style="text-align:right;">' + moeda(baseDeducao(n)) + '</td>' +
+                        '<td style="text-align:right;">' + aliqDeducao(n).toFixed(2) + '%</td>' +
+                        '<td style="text-align:right;font-weight:600;color:#c0392b;">' + moeda(v) + '</td>' +
                         '<td>' + fmtData(n.dataEmissao || n.dataApuracao) + '</td>' +
                         '</tr>';
                 }).join('');
@@ -1323,13 +1388,14 @@ function esconderLoading() {
         if (rowsISS.length && tbodyISS) {
             tbodyISS.innerHTML = rowsISS.map(function(tc){
                 return getDeducoesTipo(tc.id, 'DDR001').map(function(i){
-                    totalISSv += Number(i.valor) || 0;
+                    var v = valDeducao(i);
+                    totalISSv += v;
                     return '<tr>' +
                         '<td>' + tc.proc + '</td>' +
                         '<td style="text-align:center;">' + (i.codReceita || '-') + '</td>' +
-                        '<td style="text-align:right;">' + moeda(Number(i.base) || 0) + '</td>' +
-                        '<td style="text-align:right;">' + (Number(i.aliq) || 0).toFixed(2) + '%</td>' +
-                        '<td style="text-align:right;font-weight:600;color:#c0392b;">' + moeda(Number(i.valor) || 0) + '</td>' +
+                        '<td style="text-align:right;">' + moeda(baseDeducao(i)) + '</td>' +
+                        '<td style="text-align:right;">' + aliqDeducao(i).toFixed(2) + '%</td>' +
+                        '<td style="text-align:right;font-weight:600;color:#c0392b;">' + moeda(v) + '</td>' +
                         '<td>' + fmtData(i.dataApuracao || i.dataEmissao) + '</td>' +
                         '</tr>';
                 }).join('');
@@ -1347,14 +1413,14 @@ function esconderLoading() {
         if (rowsDARF.length && tbody) {
             tbody.innerHTML = rowsDARF.map(function(tc){
                 return getDeducoesTipo(tc.id, 'DDF025').map(function(d){
-                    var tot = Number(d.total || d.valor) || 0;
+                    var tot = valDeducao(d);
                     totalDARFv += tot;
                     return '<tr>' +
                         '<td>' + tc.proc + '</td>' +
                         '<td style="text-align:center;">' + (d.codReceita || '-') + '</td>' +
-                        '<td style="text-align:center;">' + (d.natRed || '-') + '</td>' +
-                        '<td style="text-align:right;">' + moeda(Number(d.base) || 0) + '</td>' +
-                        '<td style="text-align:right;">' + (Number(d.aliq) || 0).toFixed(2) + '%</td>' +
+                        '<td style="text-align:center;">' + (d.natRed || d.natRendimento || '-') + '</td>' +
+                        '<td style="text-align:right;">' + moeda(baseDeducao(d)) + '</td>' +
+                        '<td style="text-align:right;">' + aliqDeducao(d).toFixed(2) + '%</td>' +
                         '<td style="text-align:right;font-weight:600;color:#c0392b;">' + moeda(tot) + '</td>' +
                         '</tr>';
                 }).join('');
@@ -2073,8 +2139,8 @@ function esconderLoading() {
                 var rowsINSSPdf = [];
                 tcsComINSS.forEach(function(tc){
                     getDeducoesTipo(tc.id, 'DDF021').forEach(function(n){
-                        rowsINSSPdf.push([tc.proc, n.codReceita || '-', m(Number(n.base) || 0),
-                            (Number(n.aliq) || 0).toFixed(2) + '%', m(Number(n.valor) || 0),
+                        rowsINSSPdf.push([tc.proc, n.codReceita || '-', m(baseDeducao(n)),
+                            aliqDeducao(n).toFixed(2) + '%', m(valDeducao(n)),
                             toDateBrPdf(n.dataEmissao || n.dataApuracao)]);
                     });
                 });
@@ -2094,8 +2160,8 @@ function esconderLoading() {
                 var rowsISSPdf = [];
                 tcsComISS.forEach(function(tc){
                     getDeducoesTipo(tc.id, 'DDR001').forEach(function(i){
-                        rowsISSPdf.push([tc.proc, i.codReceita || '-', m(Number(i.base) || 0),
-                            (Number(i.aliq) || 0).toFixed(2) + '%', m(Number(i.valor) || 0),
+                        rowsISSPdf.push([tc.proc, i.codReceita || '-', m(baseDeducao(i)),
+                            aliqDeducao(i).toFixed(2) + '%', m(valDeducao(i)),
                             toDateBrPdf(i.dataApuracao || i.dataEmissao)]);
                     });
                 });
@@ -2115,9 +2181,9 @@ function esconderLoading() {
                 var rowsDARFPdf = [];
                 tcsComDARF.forEach(function(tc){
                     getDeducoesTipo(tc.id, 'DDF025').forEach(function(d){
-                        rowsDARFPdf.push([tc.proc, d.codReceita || '-', d.natRed || '-',
-                            m(Number(d.base) || 0), (Number(d.aliq) || 0).toFixed(2) + '%',
-                            m(Number(d.total || d.valor) || 0)]);
+                        rowsDARFPdf.push([tc.proc, d.codReceita || '-', d.natRed || d.natRendimento || '-',
+                            m(baseDeducao(d)), aliqDeducao(d).toFixed(2) + '%',
+                            m(valDeducao(d))]);
                     });
                 });
                 tabela(['ID-PROC', 'Cod. Receita', 'Nat. Red.', 'Base', 'Alíq. tot.', 'Total'],
@@ -2348,6 +2414,20 @@ function esconderLoading() {
             console.error('[liquidacao] lfpf onSnapshot:', err);
             prontos.lfpf = true; verificarPronto();
         });
+
+        // Centro de Custos e Unidades Gestoras (paralelos — não bloqueiam o boot;
+        // re-renderizam abas Orçamento/Deta Custos quando chegarem)
+        unsubCCLP = db.collection('centroCustos').onSnapshot(function (snap) {
+            baseCCLP = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+            if (lpEditorState) renderizarAbaAtiva();
+            renderizarLista();
+        }, function (err) { console.error('[liquidacao] centroCustos onSnapshot:', err); });
+
+        unsubUGLP = db.collection('unidadesGestoras').onSnapshot(function (snap) {
+            baseUGLP = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+            if (lpEditorState) renderizarAbaAtiva();
+            renderizarLista();
+        }, function (err) { console.error('[liquidacao] unidadesGestoras onSnapshot:', err); });
 
         unsubLiquidacoes = db.collection('liquidacoes').onSnapshot(function (snap) {
             lpLista = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
