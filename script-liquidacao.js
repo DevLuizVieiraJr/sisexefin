@@ -187,7 +187,7 @@ function esconderLoading() {
             proc:    t.idProc   || t.proc   || t.id,
             cnpj:    t.fornecedorCnpj || t.cnpj || '',
             emissao: t.dataEmissao || t.emissao || '',
-            ateste:  t.ateste   || '',
+            ateste:  t.ateste   || t.dataAteste || '',
             doc:     docStr,
             valor:   Number(t.valorNotaFiscal || t.valor || 0),
             status:  t.status   || '',
@@ -247,6 +247,22 @@ function esconderLoading() {
         var cod = String(u.codigo || '-');
         var naval = String(u.indicativoNaval || '').trim();
         return naval ? cod + '-' + naval : cod;
+    }
+
+    // Formato padronizado para o DAuLiq/abas: CC sem pontos (ex.: B6.03.05 -> B60305).
+    function formatarCCSemPontos(id) {
+        var s = labelCC(id);
+        if (!s || s === '—') return s;
+        return String(s).replace(/\./g, '');
+    }
+
+    // Formato padronizado para o DAuLiq/abas: UG só com código prefixado por '7' (ex.: 91609 -> 791609).
+    function formatarUGCodigo7(id) {
+        if (!id) return '—';
+        var u = baseUGLP.find(function (x) { return String(x.id) === String(id); });
+        if (!u) return String(id);
+        var cod = String(u.codigo || '').trim();
+        return cod ? ('7' + cod) : '—';
     }
 
     // Formata número de empenho como 'AAAANE######' (12 caracteres lógicos).
@@ -323,6 +339,33 @@ function esconderLoading() {
     function atesteMinimo(ids) {
         var datas = getTCsPorIds(ids).map(function (t) { return t.ateste; }).filter(Boolean).sort();
         return datas[0] || null;
+    }
+
+    // Monta as linhas do bloco OBSERVAÇÕES (CONCATENADAS) do DAuLiq.
+    // Uma linha por empenho vinculado (ou uma com placeholders quando o TC não tem empenho).
+    // Padrão do token: tipoTC-numTC_DD/MM/YYYY_UG7_CCsemPontos_PTRESouFR
+    function observacoesLinhasLP(ids) {
+        var linhas = [];
+        (ids || []).forEach(function (id) {
+            var t = baseTitulosLP.find(function (tc) { return tc.id === id; });
+            if (!t) return;
+            var tipoTC = String(t.tipoTC || t.tipoDocumento || '').trim();
+            var numTC  = String(t.numTC  || t.numeroDocumento || '').trim();
+            var docTok = (tipoTC || numTC) ? (tipoTC + '-' + numTC) : '-';
+            var emisTok = toDateBrPdf(t.dataEmissao || t.emissao);
+            var emps = (t.empenhosVinculados || []);
+            if (!emps.length) {
+                linhas.push([docTok, emisTok, '-', '-', '-'].join('_'));
+                return;
+            }
+            emps.forEach(function (v) {
+                var ugTok = formatarUGCodigo7(v.ugId);
+                var ccTok = formatarCCSemPontos(v.centroCustosId);
+                var ptresFrTok = String(v.ptres || v.fr || '').trim() || '-';
+                linhas.push([docTok, emisTok, ugTok, ccTok, ptresFrTok].join('_'));
+            });
+        });
+        return linhas;
     }
 
     function valorTotalBruto(ids) {
@@ -419,8 +462,8 @@ function esconderLoading() {
                         sub:   v.subelemento || '—',
                         fr:    v.fr          || '—',
                         valor: Number(v.valorVinculado || 0),
-                        cc:    labelCC(v.centroCustosId),
-                        ug:    labelUGComNaval(v.ugId),
+                        cc:    formatarCCSemPontos(v.centroCustosId),
+                        ug:    formatarUGCodigo7(v.ugId),
                         vinc:  ant.vinc || '',
                         lf:    ant.lf   || v.lf  || '',
                         pf:    ant.pf   || v.pf  || '',
@@ -2044,6 +2087,28 @@ function esconderLoading() {
                 doc.text(label + ': ' + valor, M.l + W, y + 4, { align: 'right' }); y += 6;
             }
 
+            function blocoTextoMultilinha(titulo, linhasTexto) {
+                var texto = (linhasTexto || []).join('\n');
+                if (!texto.trim()) return;
+                var lineH = 3.6;
+                var pad   = 2;
+                var split = doc.splitTextToSize(texto, W - 4);
+                var boxH  = Math.max(14, split.length * lineH + pad * 2 + 5);
+                garantir(boxH + 4);
+                doc.setDrawColor(170, 170, 170);
+                doc.rect(M.l, y, W, boxH);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.3);
+                doc.text(String(titulo || ''), M.l + 1.5, y + 3.8);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.0);
+                var yy = y + 7.5;
+                split.forEach(function (ln) {
+                    if (yy > y + boxH - 2) return;
+                    doc.text(ln, M.l + 1.5, yy);
+                    yy += lineH;
+                });
+                y += boxH + 2;
+            }
+
             // Logo
             var logoData = null;
             try {
@@ -2108,6 +2173,9 @@ function esconderLoading() {
                 tcs.map(function (tc) { return [tc.proc, tc.cnpj, toDateBrPdf(tc.emissao), tc.doc, m(tc.valor)]; }),
                 [22, 28, 22, 42, 20]
             );
+
+            tituloSecao('OBSERVAÇÕES (CONCATENADAS)');
+            blocoTextoMultilinha('Uma linha por combinação (padrão auxiliar)', observacoesLinhasLP(ids));
 
             tituloSecao('FORNECEDOR / FAVORECIDO');
             linhaCampos([
