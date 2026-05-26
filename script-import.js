@@ -285,6 +285,7 @@
             }
             if (!verificarAdmin()) { e.target.value = ''; return; }
             mostrarLoading('Validando arquivo de empenhos...');
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Validando arquivo de empenhos...');
             try {
                 const validacao = await validarArquivoEmpenhos(file);
                 estadoImportEmpenhos = { fileName: file.name, rowsNorm: validacao.rowsNorm };
@@ -298,6 +299,7 @@
                 setStatusImportEmpenhos('Erro ao validar arquivo: ' + (err && err.message ? err.message : err), 'erro');
                 resetEstadoImportEmpenhos();
             } finally {
+                if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
                 esconderLoading();
             }
         });
@@ -319,6 +321,10 @@
                 window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
             }
             mostrarLoading('Importando empenhos...');
+            const totalLinhasImport = estadoImportEmpenhos.rowsNorm.length;
+            if (typeof mostrarBarraLoading === 'function') {
+                mostrarBarraLoading('Importando empenhos... 0/' + totalLinhasImport, { pct: 0 });
+            }
             try {
                 const res = await executarImportacaoEmpenhos(estadoImportEmpenhos.rowsNorm, importAbort);
                 await salvarUltimoImport('empenhos');

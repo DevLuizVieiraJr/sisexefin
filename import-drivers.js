@@ -416,42 +416,66 @@
         return '';
     }
 
-    // Alias por campo do formulario/Firestore. Inclui cabecalho canonico e variacoes legadas.
+    // Alias por campo do formulario/Firestore. Inclui cabecalho canonico, variacoes legadas
+    // e nomes por extenso aceitos no Excel/CSV (ex.: "Fonte de Recurso", "Natureza de Despesa").
     const EMPENHO_FIELD_ALIASES = {
-        numEmpenho:  ['numEmpenho', 'NE', 'ne', 'NumEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE'],
-        tipoNE:      ['tipoNE', 'TIPO NE', 'TipoNE', 'tipo ne'],
-        dataEmissao: ['dataEmissao', 'DATA', 'data', 'Data', 'DataEmissao'],
-        uge:         ['uge', 'UGE', 'ugEmitente', 'UGEMITENTE', 'UG Emitente', 'ugemitente'],
-        ptres:       ['ptres', 'PTRES'],
-        pi:          ['pi', 'PI'],
-        fr:          ['fr', 'FR'],
-        nd:          ['nd', 'ND'],
-        subitem:     ['subitem', 'SUBITEM', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento'],
-        codAmp:      ['codAmp', 'COD AMP', 'CodAmp', 'cod amp', 'codamp'],
-        numModal:    ['numModal', 'NUM MODAL', 'NumModal', 'num modal', 'nummodal'],
-        lei:         ['lei', 'LEI', 'Lei'],
-        descModal:   ['descModal', 'DESC MODAL', 'DescModal', 'desc modal', 'descmodal'],
+        numEmpenho:  ['numEmpenho', 'NE', 'ne', 'NumEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE', 'Nota de Empenho'],
+        tipoNE:      ['tipoNE', 'TIPO NE', 'TipoNE', 'tipo ne', 'Tipo de Empenho', 'Tipo Empenho'],
+        dataEmissao: ['dataEmissao', 'DATA', 'data', 'Data', 'DataEmissao', 'Data de Emissao', 'Data de Emissão', 'Emissao', 'Emissão'],
+        uge:         ['uge', 'UGE', 'ugEmitente', 'UGEMITENTE', 'UG Emitente', 'ugemitente', 'UG'],
+        ptres:       ['ptres', 'PTRES', 'Programa de Trabalho', 'programa', 'Programa'],
+        pi:          ['pi', 'PI', 'Plano Interno', 'plano interno'],
+        fr:          ['fr', 'FR', 'Fonte de Recurso', 'Fonte de Recursos', 'Fonte', 'fonte'],
+        nd:          ['nd', 'ND', 'Natureza de Despesa', 'Natureza Despesa', 'Natureza', 'natureza'],
+        subitem:     ['subitem', 'SUBITEM', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento', 'sub elemento', 'Sub Elemento'],
+        codAmp:      ['codAmp', 'COD AMP', 'CodAmp', 'cod amp', 'codamp', 'Codigo Amparo', 'Código Amparo', 'Codigo do Amparo'],
+        numModal:    ['numModal', 'NUM MODAL', 'NumModal', 'num modal', 'nummodal', 'Numero Modalidade', 'Número Modalidade'],
+        lei:         ['lei', 'LEI', 'Lei', 'Ato Normativo'],
+        descModal:   ['descModal', 'DESC MODAL', 'DescModal', 'desc modal', 'descmodal', 'Modalidade', 'Modalidade de Licitacao', 'Modalidade de Licitação'],
         inciso:      ['inciso', 'INCISO', 'Inciso'],
-        processo:    ['processo', 'PROCESSO', 'Processo'],
-        cnpjCpf:     ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF'],
-        favorecido:  ['favorecido', 'FAVORECIDO', 'Favorecido'],
-        pjPf:        ['pjPf', 'PJ/PF', 'PjPf', 'pj/pf', 'pjpf'],
+        processo:    ['processo', 'PROCESSO', 'Processo', 'NUP', 'Numero do Processo', 'Número do Processo'],
+        cnpjCpf:     ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ'],
+        favorecido:  ['favorecido', 'FAVORECIDO', 'Favorecido', 'Nome do Favorecido'],
+        pjPf:        ['pjPf', 'PJ/PF', 'PjPf', 'pj/pf', 'pjpf', 'Tipo de Pessoa', 'Tipo Pessoa'],
         telefone:    ['telefone', 'TELEFONE', 'Telefone', 'fone', 'Fone'],
         contato:     ['contato', 'CONTATO', 'Contato'],
-        gerencia:    ['gerencia', 'GERENCIA', 'GERÊNCIA', 'Gerencia'],
-        descricao:   ['descricao', 'Descricao', 'DESCRICAO', 'descrição'],
-        docOrig:     ['docOrig', 'AES/SOLEMP', 'DocOrig', 'AES', 'aes', 'solemp', 'aessolemp', 'solempaes', 'aes_solemp', 'solemp_aes'],
-        oi:          ['oi', 'OI'],
-        contrato:    ['contrato', 'CONTRATO', 'Contrato'],
+        gerencia:    ['gerencia', 'GERENCIA', 'GERÊNCIA', 'Gerencia', 'Gerência'],
+        descricao:   ['descricao', 'Descricao', 'DESCRICAO', 'descrição', 'Descrição', 'Historico', 'Histórico'],
+        docOrig:     ['docOrig', 'AES/SOLEMP', 'DocOrig', 'AES', 'aes', 'solemp', 'aessolemp', 'solempaes', 'aes_solemp', 'solemp_aes', 'Documento de Origem', 'Doc Origem'],
+        oi:          ['oi', 'OI', 'Org Interna', 'Organizacao Interna', 'Organização Interna'],
+        contrato:    ['contrato', 'CONTRATO', 'Contrato', 'Numero do Contrato', 'Número do Contrato'],
         projeto:     ['projeto', 'PROJETO', 'Projeto'],
-        altcred:     ['altcred', 'ALTCRED', 'Altcred'],
-        meio:        ['meio', 'MEIO', 'Meio'],
-        observacoes: ['observacoes', 'OBS', 'obs', 'Observacoes', 'OBSERVACOES'],
+        altcred:     ['altcred', 'ALTCRED', 'Altcred', 'Alteracao de Credito', 'Alteração de Crédito'],
+        meio:        ['meio', 'MEIO', 'Meio', 'Meio Naval'],
+        observacoes: ['observacoes', 'OBS', 'obs', 'Observacoes', 'OBSERVACOES', 'Observações'],
         cap:         ['cap', 'CAP', 'Cap'],
-        valorGlobal: ['valorGlobal', 'ValorGlobal', 'valor', 'Valor'],
-        anoEmissao:   ['anoEmissao', 'ANO_EMISSAO', 'AnoEmissao', 'ano_emissao'],
-        anoExercicio: ['anoExercicio', 'ANO_EXERCICIO', 'AnoExercicio', 'ano_exercicio']
+        valorGlobal: ['valorGlobal', 'ValorGlobal', 'valor', 'Valor', 'Valor do Empenho', 'Valor Global', 'Valor Total'],
+        anoEmissao:   ['anoEmissao', 'ANO_EMISSAO', 'AnoEmissao', 'ano_emissao', 'Ano Emissao', 'Ano de Emissao', 'Ano de Emissão'],
+        anoExercicio: ['anoExercicio', 'ANO_EXERCICIO', 'AnoExercicio', 'ano_exercicio', 'Ano Exercicio', 'Ano do Exercicio', 'Ano do Exercício']
     };
+
+    // Gera todas as chaves equivalentes para localizar uma NE no mapa (cobre formato
+    // completo, sufixo 12 e qualquer string crua salva no Firestore). Mantem alinhamento
+    // com formatarNumEmpenhoVisivel() em script.js, que exibe apenas os ultimos 12 chars.
+    function neChavesLookup(numEmpenho) {
+        const out = [];
+        const s = String(numEmpenho || '').trim().toLowerCase();
+        if (!s) return out;
+        const seen = {};
+        const push = function(v) {
+            const k = String(v || '').trim().toLowerCase();
+            if (k && !seen[k]) { seen[k] = true; out.push(k); }
+        };
+        push(s);
+        if (s.length > 12) push(s.slice(-12));
+        // Reconstrucao para o formato completo (UG + Gestao + AAAA + NE + ######)
+        const completo = completarNumEmpenhoIfNeeded(s, { modoCompleto: true });
+        if (completo) push(String(completo).toLowerCase());
+        // Captura padrao AAAAne###### embutido em string maior
+        const m = s.match(/(\d{4}ne\d{6})/);
+        if (m && m[1]) push(m[1]);
+        return out;
+    }
 
     // Le todos os campos canonicos do empenho a partir de uma linha (normalizada ou nao).
     // Retorna objeto plano com strings (sem escape) e valorGlobal numerico.
@@ -561,16 +585,38 @@
         const importAbort = ctx.importAbort || { aborted: false };
         const modoCompleto = modoCompletoNEAtual();
         const baseEmp = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
+
+        // Mapa multi-chave: cada NE da base registra todas as variantes (completo,
+        // sufixo 12, etc.) apontando para o mesmo docId. Evita criar duplicata quando
+        // o formato gravado no Firestore difere do digitado na planilha.
         const mapEmpenhosPorNumero = {};
+        const registrarNoMapa = function(numero, docId) {
+            const chaves = neChavesLookup(numero);
+            chaves.forEach(function(k) { mapEmpenhosPorNumero[k] = docId; });
+        };
         baseEmp.forEach(function(e) {
-            const neBase = String((e && (e.numEmpenho || e.numNE)) ? (e.numEmpenho || e.numNE) : '').toLowerCase().trim();
-            if (neBase && e && e.id) mapEmpenhosPorNumero[neBase] = e.id;
+            if (!e || !e.id) return;
+            registrarNoMapa(e.numEmpenho || e.numNE || '', e.id);
         });
+
+        const localizarDocId = function(numero) {
+            const chaves = neChavesLookup(numero);
+            for (let i = 0; i < chaves.length; i++) {
+                if (mapEmpenhosPorNumero[chaves[i]]) return mapEmpenhosPorNumero[chaves[i]];
+            }
+            return null;
+        };
 
         let pendentes = [];
         const LIMITE_LOTE = 350;
         const totalLinhas = rows.length;
         let processados = 0;
+
+        const reportarProgresso = function() {
+            if (typeof mostrarBarraLoading !== 'function') return;
+            const pct = totalLinhas > 0 ? Math.round((processados / totalLinhas) * 100) : 0;
+            mostrarBarraLoading('Importando empenhos... ' + processados + '/' + totalLinhas, { pct: pct });
+        };
 
         const flushPendentes = async function() {
             if (pendentes.length === 0) return;
@@ -590,16 +636,14 @@
 
         window.__suspenderAtualizacaoEmpenhos = true;
         window.__empenhosRefreshPendente = false;
-        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... 0/' + totalLinhas);
+        reportarProgresso();
 
         try {
             for (let i = 0; i < rows.length; i++) {
                 if (importAbort.aborted) break;
                 processados++;
                 if (processados % 25 === 0) await new Promise(function(resolve) { setTimeout(resolve, 0); });
-                if (processados % 100 === 0 || processados === totalLinhas) {
-                    if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... ' + processados + '/' + totalLinhas);
-                }
+                if (processados % 50 === 0 || processados === totalLinhas) reportarProgresso();
 
                 const rowNorm = isEmpenhoRowAlreadyNormalized(rows[i]) ? rows[i] : normalizeEmpenhoRowKeys(rows[i] || {});
                 const numEmpenhoRaw = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES.numEmpenho);
@@ -609,8 +653,7 @@
                     continue;
                 }
                 const numEmpenho = completarNumEmpenhoIfNeeded(numEmpenhoRaw, { modoCompleto });
-                const neNorm = String(numEmpenho).toLowerCase().trim();
-                const docIdExistente = mapEmpenhosPorNumero[neNorm];
+                const docIdExistente = localizarDocId(numEmpenho) || localizarDocId(numEmpenhoRaw);
 
                 if (docIdExistente) {
                     const updateData = buildEmpenhoUpdateFromRow(rowNorm);
@@ -619,17 +662,20 @@
                     const dados = buildEmpenhoPayloadFromRow(rowNorm, { modoCompleto });
                     const refEmp = db.collection('empenhos').doc();
                     pendentes.push({ tipo: 'set', ref: refEmp, data: dados });
-                    mapEmpenhosPorNumero[neNorm] = refEmp.id;
+                    registrarNoMapa(numEmpenho, refEmp.id);
+                    registrarNoMapa(numEmpenhoRaw, refEmp.id);
                 }
                 if (pendentes.length >= LIMITE_LOTE) await flushPendentes();
             }
             await flushPendentes();
         } finally {
             window.__suspenderAtualizacaoEmpenhos = false;
-            if (window.__empenhosRefreshPendente && typeof atualizarTabelaEmpenhos === 'function') {
-                atualizarTabelaEmpenhos();
-                window.__empenhosRefreshPendente = false;
+            // Refresh garantido: sempre repinta a tabela apos importar, mesmo que o
+            // snapshot do Firestore ainda nao tenha disparado.
+            if (typeof atualizarTabelaEmpenhos === 'function') {
+                try { atualizarTabelaEmpenhos(); } catch (e) {}
             }
+            window.__empenhosRefreshPendente = false;
         }
     }
 

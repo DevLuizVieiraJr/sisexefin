@@ -126,19 +126,44 @@ function criarBarraLoading() {
     bar.id = 'loadingBar';
     bar.className = 'loading-bar';
     bar.style.position = 'relative';
-    bar.innerHTML = '<div class="loading-bar-spinner"></div><span class="loading-bar-text" id="loadingBarText">Processando...</span><div class="loading-bar-progress"></div>';
+    bar.innerHTML = '<div class="loading-bar-spinner"></div>' +
+        '<span class="loading-bar-text" id="loadingBarText">Processando...</span>' +
+        '<span class="loading-bar-pct" id="loadingBarPct" style="display:none;"></span>' +
+        '<div class="loading-bar-progress"><div class="loading-bar-progress-fill" id="loadingBarProgressFill"></div></div>';
     document.body.appendChild(bar);
 }
-function mostrarBarraLoading(texto) {
+function mostrarBarraLoading(texto, opts) {
     criarBarraLoading();
     const bar = document.getElementById('loadingBar');
     const txt = document.getElementById('loadingBarText');
+    const pctEl = document.getElementById('loadingBarPct');
+    const fill = document.getElementById('loadingBarProgressFill');
     if (txt) txt.textContent = texto || 'Processando...';
-    if (bar) bar.classList.add('visivel');
+    const pct = opts && typeof opts.pct === 'number' ? Math.max(0, Math.min(100, opts.pct)) : null;
+    if (bar) {
+        if (pct == null) {
+            bar.classList.remove('loading-bar-determinado');
+            if (pctEl) pctEl.style.display = 'none';
+            if (fill) fill.style.width = '';
+        } else {
+            bar.classList.add('loading-bar-determinado');
+            if (pctEl) { pctEl.style.display = ''; pctEl.textContent = pct + '%'; }
+            if (fill) fill.style.width = pct + '%';
+        }
+        bar.classList.add('visivel');
+    }
 }
 function esconderBarraLoading() {
     const bar = document.getElementById('loadingBar');
-    if (bar) { bar.classList.remove('visivel'); bar.style.display = 'none'; }
+    if (bar) {
+        bar.classList.remove('visivel');
+        bar.classList.remove('loading-bar-determinado');
+        bar.style.display = 'none';
+    }
+    const fill = document.getElementById('loadingBarProgressFill');
+    if (fill) fill.style.width = '';
+    const pctEl = document.getElementById('loadingBarPct');
+    if (pctEl) pctEl.style.display = 'none';
 }
 window.mostrarBarraLoading = mostrarBarraLoading;
 window.esconderBarraLoading = esconderBarraLoading;

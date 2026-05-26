@@ -271,10 +271,14 @@
                 return; // PDF.js ou driver indisponivel: arquivo segue apenas como anexo.
             }
             if (typeof mostrarLoading === 'function') mostrarLoading('Lendo Nota de Empenho...');
+            if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Lendo Nota de Empenho...');
             try {
+                if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Extraindo texto do PDF...', { pct: 25 });
                 const texto = await engine.extractPdfText(file);
+                if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Identificando campos...', { pct: 70 });
                 const parsed = driver.parseEmpenhoPdfToRow(texto);
                 const res = aplicarImportNoFormularioEmpenho(parsed.row);
+                if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Preenchendo formulario...', { pct: 100 });
                 let msg = 'PDF lido. Campos preenchidos: ' + res.aplicados.length + '.';
                 if (parsed.camposNaoEncontrados && parsed.camposNaoEncontrados.length) {
                     msg += '\nNao identificados no PDF: ' + parsed.camposNaoEncontrados.join(', ');
@@ -284,6 +288,7 @@
                 console.error('Falha ao processar PDF de NE:', err);
                 alert('Falha ao ler dados do PDF: ' + (err && err.message ? err.message : err));
             } finally {
+                if (typeof esconderBarraLoading === 'function') esconderBarraLoading();
                 if (typeof esconderLoading === 'function') esconderLoading();
             }
         });
