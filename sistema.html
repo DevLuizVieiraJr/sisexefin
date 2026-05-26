@@ -990,6 +990,12 @@
     <script src="script-centrocustos.js"></script>
     <script src="script-ug.js"></script>
     <script src="script-fornecedores.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     <script src="import-engine.js"></script>
     <script src="import-drivers.js"></script>
     <script src="script-import.js"></script>

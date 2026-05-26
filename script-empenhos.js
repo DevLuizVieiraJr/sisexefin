@@ -164,6 +164,131 @@
 
     document.getElementById('btnCancelarEmpenho')?.addEventListener('click', function() { voltarParaListaEmpenhos(); });
 
+    // Mapeamento dos campos canonicos extraidos do PDF para os inputs do formulario.
+    // Cada entrada define como o valor deve ser escrito no input (texto simples, data,
+    // moeda ou select com normalizacao).
+    const MAPA_CAMPOS_EMPENHO = [
+        { campo: 'tipoNE',      id: 'tipoNEEmpenho',     tipo: 'tipoNE' },
+        { campo: 'dataEmissao', id: 'dataEmpenho',       tipo: 'data' },
+        { campo: 'valorGlobal', id: 'valorEmpenho',      tipo: 'moeda' },
+        { campo: 'uge',         id: 'ugeEmpenho',        tipo: 'texto' },
+        { campo: 'ptres',       id: 'ptresEmpenho',      tipo: 'texto' },
+        { campo: 'pi',          id: 'piEmpenho',         tipo: 'texto' },
+        { campo: 'fr',          id: 'frEmpenho',         tipo: 'texto' },
+        { campo: 'nd',          id: 'ndEmpenho',         tipo: 'texto' },
+        { campo: 'subitem',     id: 'subitemEmpenho',    tipo: 'texto' },
+        { campo: 'codAmp',      id: 'codAmpEmpenho',     tipo: 'texto' },
+        { campo: 'numModal',    id: 'numModalEmpenho',   tipo: 'texto' },
+        { campo: 'lei',         id: 'leiEmpenho',        tipo: 'texto' },
+        { campo: 'descModal',   id: 'descModalEmpenho',  tipo: 'texto' },
+        { campo: 'inciso',      id: 'incisoEmpenho',     tipo: 'texto' },
+        { campo: 'processo',    id: 'processoEmpenho',   tipo: 'texto' },
+        { campo: 'cnpjCpf',     id: 'cnpjEmpenho',       tipo: 'texto' },
+        { campo: 'favorecido',  id: 'favorecidoEmpenho', tipo: 'texto' },
+        { campo: 'pjPf',        id: 'pjPfEmpenho',       tipo: 'pjPf' },
+        { campo: 'telefone',    id: 'telefoneEmpenho',   tipo: 'texto' },
+        { campo: 'contato',     id: 'contatoEmpenho',    tipo: 'texto' },
+        { campo: 'gerencia',    id: 'gerenciaEmpenho',   tipo: 'texto' },
+        { campo: 'descricao',   id: 'descricaoEmpenho',  tipo: 'texto' },
+        { campo: 'docOrig',     id: 'docOrigEmpenho',    tipo: 'texto' },
+        { campo: 'oi',          id: 'oiEmpenho',         tipo: 'texto' },
+        { campo: 'contrato',    id: 'contratoEmpenho',   tipo: 'texto' },
+        { campo: 'projeto',     id: 'projetoEmpenho',    tipo: 'texto' },
+        { campo: 'cap',         id: 'capEmpenho',        tipo: 'texto' },
+        { campo: 'altcred',     id: 'altcredEmpenho',    tipo: 'texto' },
+        { campo: 'meio',        id: 'meioEmpenho',       tipo: 'texto' }
+    ];
+
+    function aplicarImportNoFormularioEmpenho(dados) {
+        const aplicados = [];
+        const pulados = [];
+        if (!dados) return { aplicados, pulados };
+
+        const elNum = document.getElementById('numEmpenho');
+        const numPdf = String(dados.numEmpenho || '').trim();
+        if (elNum && numPdf) {
+            const numAtual = String(elNum.value || '').trim();
+            const numPdfExib = typeof formatarNumEmpenhoVisivel === 'function' ? formatarNumEmpenhoVisivel(numPdf) : numPdf;
+            if (!numAtual) {
+                elNum.value = numPdfExib;
+                aplicados.push('numEmpenho');
+            } else if (numAtual !== numPdfExib && numAtual !== numPdf) {
+                const ok = confirm('Numero da NE no PDF (' + numPdfExib + ') difere do digitado (' + numAtual + '). Substituir?');
+                if (ok) { elNum.value = numPdfExib; aplicados.push('numEmpenho'); }
+                else pulados.push('numEmpenho');
+            }
+        }
+
+        MAPA_CAMPOS_EMPENHO.forEach(function(def) {
+            const el = document.getElementById(def.id);
+            if (!el) return;
+            const raw = dados[def.campo];
+            const isNumeric = def.tipo === 'moeda';
+            const vazio = isNumeric ? !(raw > 0) : (raw == null || String(raw).trim() === '');
+            if (vazio) { pulados.push(def.campo); return; }
+
+            if (def.tipo === 'data') {
+                el.value = dataParaInputDate(raw) || '';
+            } else if (def.tipo === 'moeda') {
+                const n = Number(raw) || 0;
+                el.value = typeof formatarMoedaBR === 'function' ? ('R$ ' + formatarMoedaBR(n)) : String(n);
+            } else if (def.tipo === 'tipoNE') {
+                const tipoNorm = String(raw || '').toUpperCase()
+                    .replace(/[ÁÀÂÃ]/g, 'A').replace(/[ÍÌÎ]/g, 'I')
+                    .replace(/[ÓÒÔÕ]/g, 'O').replace(/[ÉÈÊ]/g, 'E');
+                el.value = (['GLOBAL', 'ORDINARIO', 'ESTIMATIVO'].indexOf(tipoNorm) >= 0) ? tipoNorm : 'GLOBAL';
+            } else if (def.tipo === 'pjPf') {
+                const v = String(raw || '').toUpperCase();
+                if (v.indexOf('FIS') >= 0) el.value = 'PESSOA FISICA';
+                else if (v.indexOf('JUR') >= 0) el.value = 'PESSOA JURIDICA';
+                else el.value = '';
+            } else {
+                el.value = String(raw);
+            }
+            aplicados.push(def.campo);
+        });
+        return { aplicados, pulados };
+    }
+
+    if (inputImportarPdfEmpenho) {
+        inputImportarPdfEmpenho.addEventListener('change', async function(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            if (modoVisualizacaoEmpenho) return;
+            if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+                alert('Selecione um arquivo PDF valido.');
+                e.target.value = '';
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                alert('O PDF deve ter no maximo 5MB.');
+                e.target.value = '';
+                return;
+            }
+            const engine = window.ImportEngine;
+            const driver = window.EmpenhoDriver;
+            if (!engine || typeof engine.extractPdfText !== 'function' || !driver || typeof driver.parseEmpenhoPdfToRow !== 'function') {
+                return; // PDF.js ou driver indisponivel: arquivo segue apenas como anexo.
+            }
+            if (typeof mostrarLoading === 'function') mostrarLoading('Lendo Nota de Empenho...');
+            try {
+                const texto = await engine.extractPdfText(file);
+                const parsed = driver.parseEmpenhoPdfToRow(texto);
+                const res = aplicarImportNoFormularioEmpenho(parsed.row);
+                let msg = 'PDF lido. Campos preenchidos: ' + res.aplicados.length + '.';
+                if (parsed.camposNaoEncontrados && parsed.camposNaoEncontrados.length) {
+                    msg += '\nNao identificados no PDF: ' + parsed.camposNaoEncontrados.join(', ');
+                }
+                alert(msg);
+            } catch (err) {
+                console.error('Falha ao processar PDF de NE:', err);
+                alert('Falha ao ler dados do PDF: ' + (err && err.message ? err.message : err));
+            } finally {
+                if (typeof esconderLoading === 'function') esconderLoading();
+            }
+        });
+    }
+
     document.querySelectorAll('#tabsNE .tab-ne').forEach(function(tab, i) {
         tab.addEventListener('click', function() { ativarTabNE(i); });
     });

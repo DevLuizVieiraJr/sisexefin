@@ -260,170 +260,19 @@
     }
 
     async function executarImportacaoEmpenhos(rowsNorm, importAbort) {
-        const UG_PADRAO = '741000';
-        const GESTAO_PADRAO = '00001';
-        const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO;
-        function modoCompletoNEAtual() {
-            const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : undefined);
-            if (!Array.isArray(baseAtual) || baseAtual.length === 0) return false;
-            return baseAtual.some(e => String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12);
+        const engine = window.ImportEngine;
+        const driver = window.ImportDrivers && window.ImportDrivers.empenhos;
+        if (!engine || !driver || typeof driver.run !== 'function') {
+            throw new Error('Nucleo de importacao indisponivel para Empenhos.');
         }
-        function completarNumEmpenho(numEmpenho) {
-            const s = String(numEmpenho || '').trim();
-            if (!s) return '';
-            if (s.length > 12) return s;
-            const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
-            if (!m) return '';
-            const ano = m[1];
-            const tipoUpper = (m[2] || '').toUpperCase();
-            const seq = m[3];
-            if (tipoUpper !== 'NE') return '';
-            return PREFIX11_PADRAO + ano + 'NE' + seq;
-        }
-        const modoCompleto = modoCompletoNEAtual();
-        const baseEmp = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
-        const mapEmpenhosPorNumero = {};
-        baseEmp.forEach(function(e) {
-            const neBase = String((e && (e.numEmpenho || e.numNE)) ? (e.numEmpenho || e.numNE) : '').toLowerCase().trim();
-            if (neBase && e && e.id) mapEmpenhosPorNumero[neBase] = e.id;
-        });
-
-        let inseridos = 0, atualizados = 0, erros = 0, processados = 0;
-        let pendentes = [];
-        const LIMITE_LOTE = 350;
-        const totalLinhas = rowsNorm.length || 0;
-        const flushPendentes = async function() {
-            if (pendentes.length === 0) return;
-            const batch = db.batch();
-            for (let i = 0; i < pendentes.length; i++) {
-                const op = pendentes[i];
-                if (op.tipo === 'set') batch.set(op.ref, op.data);
-                else batch.update(op.ref, op.data);
-            }
-            await batch.commit();
-            for (let i = 0; i < pendentes.length; i++) {
-                if (pendentes[i].tipo === 'set') inseridos++;
-                else atualizados++;
-            }
-            pendentes = [];
+        const report = engine.createReport();
+        await driver.run({ rows: rowsNorm, report, importAbort });
+        return {
+            inseridos:    report.inserted,
+            atualizados:  report.updated,
+            erros:        report.errors.length,
+            interrompido: !!(importAbort && importAbort.aborted)
         };
-
-        window.__suspenderAtualizacaoEmpenhos = true;
-        window.__empenhosRefreshPendente = false;
-        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... 0/' + totalLinhas);
-
-        try {
-            for (const rowNorm of rowsNorm) {
-                if (importAbort.aborted) break;
-                processados++;
-                if (processados % 25 === 0) await new Promise(resolve => setTimeout(resolve, 0));
-                if (processados % 100 === 0 || processados === totalLinhas) {
-                    if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... ' + processados + '/' + totalLinhas);
-                }
-
-                let numEmpenho = valorPorAliasesImportEmpenho(rowNorm, ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE']);
-                if (!numEmpenho) { erros++; continue; }
-                if (modoCompleto) {
-                    const completo = completarNumEmpenho(numEmpenho);
-                    if (completo) numEmpenho = completo;
-                }
-                const neNorm = String(numEmpenho).toLowerCase().trim();
-                const docIdExistente = mapEmpenhosPorNumero[neNorm];
-                if (docIdExistente) {
-                    const updateData = {};
-                    const subitemImport = valorPorAliasesImportEmpenho(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento']);
-                    const descricaoImportUpd = valorPorAliasesImportEmpenho(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']);
-                    const observacoesImportUpd = valorPorAliasesImportEmpenho(rowNorm, ['OBS', 'obs', 'observacoes', 'Observacoes', 'OBSERVACOES']);
-                    const cnpjCpfImportUpd = valorPorAliasesImportEmpenho(rowNorm, ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF']);
-                    const pjPfImport = valorPorAliasesImportEmpenho(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf', 'pjpf']);
-                    const ugeImportUpd = valorPorAliasesImportEmpenho(rowNorm, ['UGE', 'uge', 'ugEmitente', 'UGEMITENTE']);
-                    if (String(subitemImport || '').trim() !== '') updateData.subitem = escapeHTML(String(subitemImport).trim());
-                    if (String(descricaoImportUpd || '').trim() !== '') updateData.descricao = escapeHTML(String(descricaoImportUpd).trim());
-                    if (String(observacoesImportUpd || '').trim() !== '') updateData.observacoes = escapeHTML(String(observacoesImportUpd).trim());
-                    if (String(cnpjCpfImportUpd || '').trim() !== '') {
-                        const cnpjCpfEsc = escapeHTML(String(cnpjCpfImportUpd).trim());
-                        updateData.cnpjCpf = cnpjCpfEsc;
-                        updateData.cnpj = cnpjCpfEsc;
-                    }
-                    if (String(pjPfImport || '').trim() !== '') updateData.pjPf = escapeHTML(String(pjPfImport).trim());
-                    if (String(ugeImportUpd || '').trim() !== '') {
-                        const ugeEsc = escapeHTML(String(ugeImportUpd).trim());
-                        updateData.uge = ugeEsc;
-                        updateData.ugEmitente = ugeEsc;
-                    }
-                    if (Object.keys(updateData).length > 0) {
-                        pendentes.push({ tipo: 'update', ref: db.collection('empenhos').doc(docIdExistente), data: updateData });
-                        if (pendentes.length >= LIMITE_LOTE) await flushPendentes();
-                    }
-                    continue;
-                }
-
-                const valorRaw = valorPorAliasesImportEmpenho(rowNorm, ['valorGlobal', 'ValorGlobal', 'valor', 'Valor']);
-                const cnpjCpfImport = valorPorAliasesImportEmpenho(rowNorm, ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF']);
-                const observacoesImport = valorPorAliasesImportEmpenho(rowNorm, ['OBS', 'obs', 'observacoes', 'Observacoes', 'OBSERVACOES']);
-                const descricaoImport = valorPorAliasesImportEmpenho(rowNorm, ['descricao', 'Descricao', 'DESCRICAO']) || observacoesImport;
-                const ugeImport = valorPorAliasesImportEmpenho(rowNorm, ['UGE', 'uge', 'ugEmitente', 'UGEMITENTE']);
-                const dados = {
-                    numEmpenho: escapeHTML(numEmpenho),
-                    numNE: escapeHTML(numEmpenho),
-                    dataEmissao: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['DATA', 'data', 'Data', 'dataEmissao', 'DataEmissao'])),
-                    valorGlobal: parseValorMonetarioBR(valorRaw),
-                    nd: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['ND', 'nd'])),
-                    subitem: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['SUBITEM', 'subitem', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento'])),
-                    ptres: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['PTRES', 'ptres'])),
-                    fr: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['FR', 'fr'])),
-                    docOrig: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['AES/SOLEMP', 'docOrig', 'DocOrig', 'AES', 'aes', 'solemp', 'aessolemp', 'solempaes', 'aes_solemp', 'solemp_aes'])),
-                    oi: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['OI', 'oi'])),
-                    contrato: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['CONTRATO', 'contrato', 'Contrato'])),
-                    cap: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['CAP', 'cap'])),
-                    altcred: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['ALTCRED', 'altcred', 'Altcred'])),
-                    meio: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['MEIO', 'meio', 'Meio'])),
-                    descricao: escapeHTML(descricaoImport),
-                    observacoes: escapeHTML(observacoesImport),
-                    pi: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['PI', 'pi'])),
-                    tipoNE: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['TIPO NE', 'tipoNE', 'TipoNE', 'tipo ne'])),
-                    numModal: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['NUM MODAL', 'numModal', 'NumModal', 'num modal'])),
-                    descModal: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['DESC MODAL', 'descModal', 'DescModal', 'desc modal'])),
-                    codAmp: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['COD AMP', 'codAmp', 'CodAmp', 'cod amp'])),
-                    inciso: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['INCISO', 'inciso', 'Inciso'])),
-                    lei: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['LEI', 'lei', 'Lei'])),
-                    processo: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['PROCESSO', 'processo', 'Processo'])),
-                    cnpjCpf: escapeHTML(cnpjCpfImport),
-                    cnpj: escapeHTML(cnpjCpfImport),
-                    favorecido: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['FAVORECIDO', 'favorecido', 'Favorecido'])),
-                    pjPf: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['PJ/PF', 'pjPf', 'PjPf', 'pj/pf'])),
-                    gerencia: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['GERÊNCIA', 'GERENCIA', 'gerencia', 'Gerencia'])),
-                    projeto: escapeHTML(valorPorAliasesImportEmpenho(rowNorm, ['PROJETO', 'projeto', 'Projeto'])),
-                    uge: escapeHTML(ugeImport),
-                    ugEmitente: escapeHTML(ugeImport)
-                };
-                if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosEmpenho === 'function') {
-                    window.sisAnoDocumento.aplicarAnosEmpenho(dados);
-                }
-                const anoEmImp = valorPorAliasesImportEmpenho(rowNorm, ['ANO_EMISSAO', 'AnoEmissao', 'anoEmissao', 'ano_emissao']);
-                const anoExImp = valorPorAliasesImportEmpenho(rowNorm, ['ANO_EXERCICIO', 'AnoExercicio', 'anoExercicio', 'ano_exercicio']);
-                if (window.sisAnoDocumento && anoEmImp) {
-                    const ae = window.sisAnoDocumento.anoValido(anoEmImp);
-                    if (ae != null) dados.anoEmissao = ae;
-                }
-                if (window.sisAnoDocumento && anoExImp) {
-                    const ax = window.sisAnoDocumento.anoValido(anoExImp);
-                    if (ax != null) dados.anoExercicio = ax;
-                }
-                const refEmp = db.collection('empenhos').doc();
-                pendentes.push({ tipo: 'set', ref: refEmp, data: dados });
-                mapEmpenhosPorNumero[neNorm] = refEmp.id;
-                if (pendentes.length >= LIMITE_LOTE) await flushPendentes();
-            }
-            await flushPendentes();
-            return { inseridos, atualizados, erros, interrompido: importAbort.aborted };
-        } finally {
-            window.__suspenderAtualizacaoEmpenhos = false;
-            if (window.__empenhosRefreshPendente && typeof atualizarTabelaEmpenhos === 'function') {
-                atualizarTabelaEmpenhos();
-                window.__empenhosRefreshPendente = false;
-            }
-        }
     }
 
     if (fileImportEmpenhos) {

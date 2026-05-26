@@ -73,6 +73,25 @@
         return msg;
     }
 
+    // Extrai o texto de todas as paginas de um PDF usando PDF.js (carregado via CDN).
+    // Usado pelo modulo de Empenhos para preencher o formulario a partir da Nota de Empenho.
+    async function extractPdfText(file) {
+        if (typeof pdfjsLib === 'undefined') {
+            throw new Error('Biblioteca PDF.js indisponivel.');
+        }
+        const data = await readFileAsArrayBuffer(file);
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+        const pdf = await loadingTask.promise;
+        const partes = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const textoPagina = content.items.map(function(item) { return item.str; }).join(' ');
+            partes.push(textoPagina);
+        }
+        return partes.join('\n');
+    }
+
     window.ImportEngine = {
         readFileAsArrayBuffer,
         parseWorkbookRows,
@@ -80,6 +99,7 @@
         detectLikelyModule,
         createReport,
         formatSummary,
-        normalizeHeaderToken
+        normalizeHeaderToken,
+        extractPdfText
     };
 })();

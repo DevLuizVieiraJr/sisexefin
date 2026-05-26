@@ -370,6 +370,332 @@
         }
     }
 
+    // ==========================================
+    // EMPENHOS (NE) - mapper, payload e driver
+    // Compartilhado entre import Excel/CSV e parser PDF (Nota de Empenho).
+    // ==========================================
+
+    const EMPENHO_UG_PADRAO = '741000';
+    const EMPENHO_GESTAO_PADRAO = '00001';
+    const EMPENHO_PREFIX11_PADRAO = EMPENHO_UG_PADRAO + EMPENHO_GESTAO_PADRAO;
+
+    function empenhoHeaderToken(k) {
+        return String(k || '')
+            .replace(/^\ufeff/, '')
+            .trim()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '')
+            .toLowerCase();
+    }
+
+    function normalizeEmpenhoRowKeys(row) {
+        const norm = {};
+        Object.keys(row || {}).forEach(function(k) {
+            norm[empenhoHeaderToken(k)] = row[k];
+        });
+        return norm;
+    }
+
+    function isEmpenhoRowAlreadyNormalized(row) {
+        const keys = Object.keys(row || {});
+        if (!keys.length) return true;
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (k !== empenhoHeaderToken(k)) return false;
+        }
+        return true;
+    }
+
+    function pickEmpenho(rowNorm, aliases) {
+        for (let i = 0; i < aliases.length; i++) {
+            const key = empenhoHeaderToken(aliases[i]);
+            const val = rowNorm[key];
+            if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
+        }
+        return '';
+    }
+
+    // Alias por campo do formulario/Firestore. Inclui cabecalho canonico e variacoes legadas.
+    const EMPENHO_FIELD_ALIASES = {
+        numEmpenho:  ['numEmpenho', 'NE', 'ne', 'NumEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE'],
+        tipoNE:      ['tipoNE', 'TIPO NE', 'TipoNE', 'tipo ne'],
+        dataEmissao: ['dataEmissao', 'DATA', 'data', 'Data', 'DataEmissao'],
+        uge:         ['uge', 'UGE', 'ugEmitente', 'UGEMITENTE', 'UG Emitente', 'ugemitente'],
+        ptres:       ['ptres', 'PTRES'],
+        pi:          ['pi', 'PI'],
+        fr:          ['fr', 'FR'],
+        nd:          ['nd', 'ND'],
+        subitem:     ['subitem', 'SUBITEM', 'Subitem', 'SubEl', 'subel', 'subelemento', 'Subelemento'],
+        codAmp:      ['codAmp', 'COD AMP', 'CodAmp', 'cod amp', 'codamp'],
+        numModal:    ['numModal', 'NUM MODAL', 'NumModal', 'num modal', 'nummodal'],
+        lei:         ['lei', 'LEI', 'Lei'],
+        descModal:   ['descModal', 'DESC MODAL', 'DescModal', 'desc modal', 'descmodal'],
+        inciso:      ['inciso', 'INCISO', 'Inciso'],
+        processo:    ['processo', 'PROCESSO', 'Processo'],
+        cnpjCpf:     ['cnpjCpf', 'cnpjcpf', 'CNPJCPF', 'cnpj_cpf', 'cpf_cnpj', 'cpfcnpj', 'cnpj', 'CNPJ', 'cpf', 'CPF'],
+        favorecido:  ['favorecido', 'FAVORECIDO', 'Favorecido'],
+        pjPf:        ['pjPf', 'PJ/PF', 'PjPf', 'pj/pf', 'pjpf'],
+        telefone:    ['telefone', 'TELEFONE', 'Telefone', 'fone', 'Fone'],
+        contato:     ['contato', 'CONTATO', 'Contato'],
+        gerencia:    ['gerencia', 'GERENCIA', 'GERÊNCIA', 'Gerencia'],
+        descricao:   ['descricao', 'Descricao', 'DESCRICAO', 'descrição'],
+        docOrig:     ['docOrig', 'AES/SOLEMP', 'DocOrig', 'AES', 'aes', 'solemp', 'aessolemp', 'solempaes', 'aes_solemp', 'solemp_aes'],
+        oi:          ['oi', 'OI'],
+        contrato:    ['contrato', 'CONTRATO', 'Contrato'],
+        projeto:     ['projeto', 'PROJETO', 'Projeto'],
+        altcred:     ['altcred', 'ALTCRED', 'Altcred'],
+        meio:        ['meio', 'MEIO', 'Meio'],
+        observacoes: ['observacoes', 'OBS', 'obs', 'Observacoes', 'OBSERVACOES'],
+        cap:         ['cap', 'CAP', 'Cap'],
+        valorGlobal: ['valorGlobal', 'ValorGlobal', 'valor', 'Valor'],
+        anoEmissao:   ['anoEmissao', 'ANO_EMISSAO', 'AnoEmissao', 'ano_emissao'],
+        anoExercicio: ['anoExercicio', 'ANO_EXERCICIO', 'AnoExercicio', 'ano_exercicio']
+    };
+
+    // Le todos os campos canonicos do empenho a partir de uma linha (normalizada ou nao).
+    // Retorna objeto plano com strings (sem escape) e valorGlobal numerico.
+    function mapEmpenhoRow(row) {
+        const rowNorm = isEmpenhoRowAlreadyNormalized(row) ? (row || {}) : normalizeEmpenhoRowKeys(row);
+        const out = {};
+        Object.keys(EMPENHO_FIELD_ALIASES).forEach(function(field) {
+            out[field] = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES[field]);
+        });
+        // valorGlobal numerico
+        out.valorGlobal = parseValorMonetarioBR(out.valorGlobal);
+        // observacoes/descricao: replicar regra antiga (descricao usa observacoes se vazio)
+        if (!out.descricao && out.observacoes) out.descricao = out.observacoes;
+        return out;
+    }
+
+    // Reconstroi numEmpenho completo (com prefixo de UG/Gestao) quando a base atual estiver
+    // em modo "completo" (algum registro > 12 chars). Caso contrario, mantem o valor original.
+    function completarNumEmpenhoIfNeeded(numEmpenho, opts) {
+        const modoCompleto = !!(opts && opts.modoCompleto);
+        const s = String(numEmpenho || '').trim();
+        if (!s || !modoCompleto || s.length > 12) return s;
+        const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
+        if (!m) return s;
+        const tipoUpper = (m[2] || '').toUpperCase();
+        if (tipoUpper !== 'NE') return s;
+        return EMPENHO_PREFIX11_PADRAO + m[1] + 'NE' + m[3];
+    }
+
+    function modoCompletoNEAtual() {
+        const baseAtual = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : undefined);
+        if (!Array.isArray(baseAtual) || baseAtual.length === 0) return false;
+        return baseAtual.some(function(e) {
+            return String((e && e.numEmpenho) ? e.numEmpenho : '').trim().length > 12;
+        });
+    }
+
+    // Monta payload para insercao no Firestore. Aplica escapeHTML em textos e anos.
+    function buildEmpenhoPayloadFromRow(row, opts) {
+        const dados = mapEmpenhoRow(row);
+        const options = opts || {};
+        const modoCompleto = options.modoCompleto != null ? options.modoCompleto : modoCompletoNEAtual();
+        const numCompleto = completarNumEmpenhoIfNeeded(dados.numEmpenho, { modoCompleto });
+        const payload = {
+            numEmpenho:  escapeHTML(numCompleto),
+            numNE:       escapeHTML(numCompleto),
+            tipoNE:      escapeHTML(dados.tipoNE),
+            dataEmissao: escapeHTML(dados.dataEmissao),
+            valorGlobal: dados.valorGlobal,
+            uge:         escapeHTML(dados.uge),
+            ugEmitente:  escapeHTML(dados.uge),
+            ptres:       escapeHTML(dados.ptres),
+            pi:          escapeHTML(dados.pi),
+            fr:          escapeHTML(dados.fr),
+            nd:          escapeHTML(dados.nd),
+            subitem:     escapeHTML(dados.subitem),
+            codAmp:      escapeHTML(dados.codAmp),
+            numModal:    escapeHTML(dados.numModal),
+            lei:         escapeHTML(dados.lei),
+            descModal:   escapeHTML(dados.descModal),
+            inciso:      escapeHTML(dados.inciso),
+            processo:    escapeHTML(dados.processo),
+            cnpjCpf:     escapeHTML(dados.cnpjCpf),
+            cnpj:        escapeHTML(dados.cnpjCpf),
+            favorecido:  escapeHTML(dados.favorecido),
+            pjPf:        escapeHTML(dados.pjPf),
+            telefone:    escapeHTML(dados.telefone),
+            contato:     escapeHTML(dados.contato),
+            gerencia:    escapeHTML(dados.gerencia),
+            descricao:   escapeHTML(dados.descricao),
+            observacoes: escapeHTML(dados.observacoes),
+            docOrig:     escapeHTML(dados.docOrig),
+            oi:          escapeHTML(dados.oi),
+            contrato:    escapeHTML(dados.contrato),
+            projeto:     escapeHTML(dados.projeto),
+            cap:         escapeHTML(dados.cap),
+            altcred:     escapeHTML(dados.altcred),
+            meio:        escapeHTML(dados.meio)
+        };
+        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.aplicarAnosEmpenho === 'function') {
+            window.sisAnoDocumento.aplicarAnosEmpenho(payload);
+        }
+        if (window.sisAnoDocumento && dados.anoEmissao) {
+            const ae = window.sisAnoDocumento.anoValido(dados.anoEmissao);
+            if (ae != null) payload.anoEmissao = ae;
+        }
+        if (window.sisAnoDocumento && dados.anoExercicio) {
+            const ax = window.sisAnoDocumento.anoValido(dados.anoExercicio);
+            if (ax != null) payload.anoExercicio = ax;
+        }
+        return payload;
+    }
+
+    // Update completo: sobrescreve todos os campos importaveis (vazio = limpa no Firestore),
+    // EXCETO numEmpenho/numNE (chave de identificacao da NE). Tambem nao altera anexo PDF
+    // (notaEmpenhoPdfNome/notaEmpenhoPdfDataUrl), situacao/ativo e timestamps.
+    function buildEmpenhoUpdateFromRow(row) {
+        const payload = buildEmpenhoPayloadFromRow(row);
+        delete payload.numEmpenho;
+        delete payload.numNE;
+        return payload;
+    }
+
+    async function runEmpenhosImport(ctx) {
+        const report = ctx.report;
+        const rows = ctx.rows || [];
+        const importAbort = ctx.importAbort || { aborted: false };
+        const modoCompleto = modoCompletoNEAtual();
+        const baseEmp = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
+        const mapEmpenhosPorNumero = {};
+        baseEmp.forEach(function(e) {
+            const neBase = String((e && (e.numEmpenho || e.numNE)) ? (e.numEmpenho || e.numNE) : '').toLowerCase().trim();
+            if (neBase && e && e.id) mapEmpenhosPorNumero[neBase] = e.id;
+        });
+
+        let pendentes = [];
+        const LIMITE_LOTE = 350;
+        const totalLinhas = rows.length;
+        let processados = 0;
+
+        const flushPendentes = async function() {
+            if (pendentes.length === 0) return;
+            const batch = db.batch();
+            for (let i = 0; i < pendentes.length; i++) {
+                const op = pendentes[i];
+                if (op.tipo === 'set') batch.set(op.ref, op.data);
+                else batch.update(op.ref, op.data);
+            }
+            await batch.commit();
+            for (let i = 0; i < pendentes.length; i++) {
+                if (pendentes[i].tipo === 'set') report.inserted++;
+                else report.updated++;
+            }
+            pendentes = [];
+        };
+
+        window.__suspenderAtualizacaoEmpenhos = true;
+        window.__empenhosRefreshPendente = false;
+        if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... 0/' + totalLinhas);
+
+        try {
+            for (let i = 0; i < rows.length; i++) {
+                if (importAbort.aborted) break;
+                processados++;
+                if (processados % 25 === 0) await new Promise(function(resolve) { setTimeout(resolve, 0); });
+                if (processados % 100 === 0 || processados === totalLinhas) {
+                    if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Importando empenhos... ' + processados + '/' + totalLinhas);
+                }
+
+                const rowNorm = isEmpenhoRowAlreadyNormalized(rows[i]) ? rows[i] : normalizeEmpenhoRowKeys(rows[i] || {});
+                const numEmpenhoRaw = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES.numEmpenho);
+                if (!numEmpenhoRaw) {
+                    report.ignored++;
+                    report.errors.push('Linha ' + (i + 2) + ': numEmpenho ausente.');
+                    continue;
+                }
+                const numEmpenho = completarNumEmpenhoIfNeeded(numEmpenhoRaw, { modoCompleto });
+                const neNorm = String(numEmpenho).toLowerCase().trim();
+                const docIdExistente = mapEmpenhosPorNumero[neNorm];
+
+                if (docIdExistente) {
+                    const updateData = buildEmpenhoUpdateFromRow(rowNorm);
+                    pendentes.push({ tipo: 'update', ref: db.collection('empenhos').doc(docIdExistente), data: updateData });
+                } else {
+                    const dados = buildEmpenhoPayloadFromRow(rowNorm, { modoCompleto });
+                    const refEmp = db.collection('empenhos').doc();
+                    pendentes.push({ tipo: 'set', ref: refEmp, data: dados });
+                    mapEmpenhosPorNumero[neNorm] = refEmp.id;
+                }
+                if (pendentes.length >= LIMITE_LOTE) await flushPendentes();
+            }
+            await flushPendentes();
+        } finally {
+            window.__suspenderAtualizacaoEmpenhos = false;
+            if (window.__empenhosRefreshPendente && typeof atualizarTabelaEmpenhos === 'function') {
+                atualizarTabelaEmpenhos();
+                window.__empenhosRefreshPendente = false;
+            }
+        }
+    }
+
+    // ===== PDF: parse de Nota de Empenho (SIAFI) =====
+    // Recebe o texto extraido do PDF e retorna { row, camposExtraidos, camposNaoEncontrados }.
+    // row segue o mesmo formato esperado por mapEmpenhoRow/buildEmpenhoPayloadFromRow.
+    function parseEmpenhoPdfToRow(textoPdf) {
+        const texto = String(textoPdf || '').replace(/\r/g, '').replace(/\u00a0/g, ' ');
+        const linhas = texto.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+        const textoCorrido = linhas.join(' ');
+
+        function matchValor(rxList) {
+            for (let i = 0; i < rxList.length; i++) {
+                const m = textoCorrido.match(rxList[i]);
+                if (m && m[1]) return m[1].trim();
+            }
+            return '';
+        }
+
+        const row = {};
+        // Numero da NE: aceita formato completo (27 chars) ou compacto AAAANE######
+        const neFull = textoCorrido.match(/(\d{11}\d{4}NE\d{6})/);
+        const neShort = textoCorrido.match(/(\d{4}NE\d{6})/);
+        if (neFull) row.numEmpenho = neFull[1];
+        else if (neShort) row.numEmpenho = neShort[1];
+
+        row.dataEmissao  = matchValor([/Emiss[aã]o[:\s]+(\d{2}\/\d{2}\/\d{4})/i, /Data\s+de\s+Emiss[aã]o[:\s]+(\d{2}\/\d{2}\/\d{4})/i]);
+        row.tipoNE       = matchValor([/Tipo\s+(?:da\s+NE|de\s+Empenho|NE)[:\s]+(GLOBAL|ORDIN[AÁ]RIO|ESTIMATIVO)/i]);
+        row.uge          = matchValor([/UG\s+Emitente[:\s]+(\d{6})/i, /(?:^|\s)UGE[:\s]+(\d{6})/i]);
+        row.ptres        = matchValor([/PTRES[:\s]+(\d{4,6})/i]);
+        row.pi           = matchValor([/(?:Plano\s+Interno|PI)[:\s]+([A-Z0-9]{4,20})/i]);
+        row.fr           = matchValor([/(?:Fonte\s+de\s+Recurso|FR)[:\s]+([\d.]{6,15})/i]);
+        row.nd           = matchValor([/(?:Natureza\s+(?:de\s+)?Despesa|ND)[:\s]+(\d{6})/i]);
+        row.subitem      = matchValor([/(?:Subelemento|Subitem|Sub\.\s*Item)[:\s]+(\d{2,4})/i]);
+        row.codAmp       = matchValor([/(?:C[oó]digo\s+(?:do\s+)?Amparo|Cod\.?\s*Amparo|COD\s*AMP)[:\s]+([A-Z0-9-]+)/i]);
+        row.numModal     = matchValor([/(?:N[uú]m(?:ero)?\.?\s*Modalidade|Num\s*Modal)[:\s]+(\d{1,6})/i]);
+        row.lei          = matchValor([/(?:Lei|Ato\s+Normativo)[:\s]+(LEI[^\n]+?\d{4})/i, /(LEI\s+\d{1,3}\.\d{3}\/\d{4})/i]);
+        row.descModal    = matchValor([/(?:Modalidade(?:\s+de\s+Licita[cç][aã]o)?|Desc\s*Modal)[:\s]+([A-Z][A-Z0-9 \/.-]{2,40})/]);
+        row.inciso       = matchValor([/Inciso[:\s]+([IVXLCDM]+|\d+)/i]);
+        row.processo     = matchValor([/(?:Processo|NUP)[:\s]+([\d.\/-]{14,30})/i]);
+        row.cnpjCpf      = matchValor([/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/, /(\d{3}\.\d{3}\.\d{3}-\d{2})/, /CNPJ[:\s]+(\d{14})/i, /CPF[:\s]+(\d{11})/i]);
+        row.favorecido   = matchValor([/Favorecido[:\s]+(.+?)\s+(?:CNPJ|CPF|UG|PTRES|Endere[cç]o|$)/i]);
+        row.pjPf         = matchValor([/(?:PJ\/PF|Tipo\s+de\s+Pessoa)[:\s]+(PESSOA\s+(?:F[IÍ]SICA|JUR[IÍ]DICA))/i]);
+        row.telefone     = matchValor([/(?:Telefone|Fone)[:\s]+([\d() -]{8,20})/i]);
+        row.contato      = matchValor([/Contato[:\s]+([^\n]{3,80})/i]);
+        row.gerencia     = matchValor([/Ger[eê]ncia[:\s]+([^\n]{2,50})/i]);
+        row.docOrig      = matchValor([/(?:Documento\s+de\s+Origem|Doc\.?\s*Origem|AES\/SOLEMP|AES|SOLEMP)[:\s]+([A-Z0-9-]{3,30})/i]);
+        row.oi           = matchValor([/(?:Org\.?\s*Interna|OI)[:\s]+([A-Z0-9 -]{2,30})/i]);
+        row.contrato     = matchValor([/Contrato[:\s]+([A-Z0-9\/.-]{3,30})/i]);
+        row.projeto      = matchValor([/Projeto[:\s]+([^\n]{2,50})/i]);
+        row.cap          = matchValor([/CAP[:\s]+([A-Z0-9]{2,10})/i]);
+        row.altcred      = matchValor([/(?:Alt(?:era[cç][aã]o)?\s*Cred(?:ito)?|ALTCRED)[:\s]+([^\n]{2,80})/i]);
+        row.meio         = matchValor([/(?:Meio\s+Naval|Meio)[:\s]+([^\n]{2,80})/i]);
+        row.descricao    = matchValor([/(?:Hist[oó]rico|Descri[cç][aã]o)[:\s]+([\s\S]+?)(?:\n\s*(?:Observa[cç][oõ]es|OBS|Valor\s+Total|$))/i]);
+        row.observacoes  = matchValor([/(?:Observa[cç][oõ]es|OBS)[:\s]+([\s\S]+?)(?:\n\s*(?:Valor|Total|Assinatura|$))/i]);
+        row.valorGlobal  = matchValor([/Valor\s+(?:Total|do\s+Empenho|Global)[:\s]+R?\$?\s*([\d.,]+)/i, /\bR\$\s*([\d.,]+)/]);
+
+        const camposExtraidos = [];
+        const camposNaoEncontrados = [];
+        Object.keys(row).forEach(function(k) {
+            if (row[k] && String(row[k]).trim() !== '') camposExtraidos.push(k);
+            else camposNaoEncontrados.push(k);
+        });
+        return { row: row, camposExtraidos: camposExtraidos, camposNaoEncontrados: camposNaoEncontrados };
+    }
+
     window.ImportDrivers = {
         centroCustos: {
             acceptedHeaders: ['codigo', 'descricao', 'aplicacao'],
@@ -390,6 +716,23 @@
         fornecedores: {
             acceptedHeaders: ['codigo', 'nome', 'tipoPessoa', 'email'],
             run: runFornecedoresImport
+        },
+        empenhos: {
+            acceptedHeaders: ['numEmpenho', 'tipoNE', 'dataEmissao', 'uge', 'ptres', 'pi', 'fr', 'nd', 'subitem', 'favorecido', 'cnpjCpf'],
+            run: runEmpenhosImport
         }
+    };
+
+    // API publica para fluxo PDF (formulario de NE) e reuso pelo script-import.js
+    window.EmpenhoDriver = {
+        mapEmpenhoRow: mapEmpenhoRow,
+        buildEmpenhoPayloadFromRow: buildEmpenhoPayloadFromRow,
+        buildEmpenhoUpdateFromRow: buildEmpenhoUpdateFromRow,
+        parseEmpenhoPdfToRow: parseEmpenhoPdfToRow,
+        normalizeEmpenhoRowKeys: normalizeEmpenhoRowKeys,
+        completarNumEmpenho: function(ne) {
+            return completarNumEmpenhoIfNeeded(ne, { modoCompleto: modoCompletoNEAtual() });
+        },
+        FIELD_ALIASES: EMPENHO_FIELD_ALIASES
     };
 })();
