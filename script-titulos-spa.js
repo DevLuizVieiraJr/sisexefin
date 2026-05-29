@@ -47,6 +47,92 @@
         listaResultadosCentroCustosT: { itens: [], activeIndex: -1 },
         listaResultadosUGT: { itens: [], activeIndex: -1 }
     };
+    let ultimoContratoPreenchido = null;
+
+    const LABELS_INSTRUMENTO_TC = {
+        Contrato: {
+            legend: 'Dados do Contrato e Fornecedor',
+            instrumento: 'Contrato (Instrumento):',
+            valor: 'Valor do Contrato (R$):',
+            rc: 'RC do Contrato:',
+            fiscal: 'Fiscal do Contrato:',
+            avisoVigencia: 'Atenção: este TC está fora da vigência do contrato.'
+        },
+        Ata: {
+            legend: 'Dados da Ata e Fornecedor',
+            instrumento: 'Ata (Instrumento):',
+            valor: 'Valor da Ata (R$):',
+            rc: 'RC da Ata:',
+            fiscal: 'Fiscal da Ata:',
+            avisoVigencia: 'Atenção: este TC está fora da vigência da ata.'
+        }
+    };
+
+    function obterTipoRegistroContrato(c) {
+        if (typeof window.obterTipoRegistro === 'function') return window.obterTipoRegistro(c);
+        const t = String((c && c.tipoRegistro) || '').trim();
+        return t === 'Ata' ? 'Ata' : 'Contrato';
+    }
+
+    function toYYYYMMDD(d) {
+        if (!d) return '';
+        const s = String(d).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (m) return m[3].length === 2 ? '20' + m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        return '';
+    }
+
+    function estaForaDaVigencia(dataRef, dataInicio, dataFim) {
+        const ref = toYYYYMMDD(dataRef);
+        const ini = toYYYYMMDD(dataInicio);
+        const fim = toYYYYMMDD(dataFim);
+        if (!ref || !ini || !fim) return false;
+        return ref < ini || ref > fim;
+    }
+
+    function aplicarLabelsInstrumentoTC(tipoRegistro) {
+        const tipo = tipoRegistro === 'Ata' ? 'Ata' : 'Contrato';
+        const labels = LABELS_INSTRUMENTO_TC[tipo];
+        const legendText = document.getElementById('legendTextContratoFornecedor');
+        if (legendText) legendText.textContent = labels.legend;
+        const map = [
+            ['labelContratoSelecionado', labels.instrumento],
+            ['labelValorContrato', labels.valor],
+            ['labelRcSelecionada', labels.rc],
+            ['labelFiscalContrato', labels.fiscal]
+        ];
+        map.forEach(function(pair) {
+            const el = document.getElementById(pair[0]);
+            if (el) el.textContent = pair[1];
+        });
+    }
+
+    function atualizarAvisoVigenciaContrato(contrato) {
+        const aviso = document.getElementById('avisoVigenciaContrato');
+        if (!aviso) return;
+        if (!contrato) {
+            aviso.style.display = 'none';
+            aviso.textContent = '';
+            return;
+        }
+        const dataEmissao = (document.getElementById('dataEmissao')?.value || document.getElementById('dataExefin')?.value || '').trim();
+        if (!dataEmissao || !contrato.dataInicio || !contrato.dataFim) {
+            aviso.style.display = 'none';
+            aviso.textContent = '';
+            return;
+        }
+        const fora = estaForaDaVigencia(dataEmissao, contrato.dataInicio, contrato.dataFim);
+        const tipo = obterTipoRegistroContrato(contrato);
+        const labels = LABELS_INSTRUMENTO_TC[tipo] || LABELS_INSTRUMENTO_TC.Contrato;
+        aviso.style.display = fora ? 'block' : 'none';
+        aviso.textContent = fora ? labels.avisoVigencia : '';
+    }
+
+    function textoOpcaoInstrumento(c) {
+        const num = c.numContrato || c.instrumento || '-';
+        return obterTipoRegistroContrato(c) === 'Ata' ? '[Ata] ' + num : num;
+    }
 
     window.baseTitulos = function() { return baseTitulos; };
 
@@ -2553,24 +2639,24 @@
         const sel = document.getElementById('contratoSelecionado');
         if (sel) {
             sel.disabled = !cnpjN;
-            sel.innerHTML = '<option value="">Selecione o contrato</option>';
+            sel.innerHTML = '<option value="">Selecione o instrumento</option>';
             if (cnpjN) {
-                sel.innerHTML = '<option value="">Carregando contratos...</option>';
+                sel.innerHTML = '<option value="">Carregando instrumentos...</option>';
                 try {
                     contratosFornecedorSelecionado = await carregarContratosPorCnpj(cnpjN);
                 } catch (err) {
                     contratosFornecedorSelecionado = [];
                 }
                 if (contratosFornecedorSelecionado.length === 0) {
-                    sel.innerHTML = '<option value="">Nenhum contrato vinculado a este CNPJ</option>';
+                    sel.innerHTML = '<option value="">Nenhum instrumento cadastrado para este CNPJ</option>';
                     sel.disabled = true;
                 } else {
-                    sel.innerHTML = '<option value="">Selecione o contrato</option>';
+                    sel.innerHTML = '<option value="">Selecione o instrumento</option>';
                     sel.disabled = false;
                     contratosFornecedorSelecionado.forEach(c => {
                         const opt = document.createElement('option');
                         opt.value = c.id;
-                        opt.textContent = c.numContrato || c.instrumento || '-';
+                        opt.textContent = textoOpcaoInstrumento(c);
                         sel.appendChild(opt);
                     });
                 }
@@ -2643,17 +2729,20 @@
             return { ano, numero, tipo, status, createdAt };
         };
         if (!contrato) {
+            ultimoContratoPreenchido = null;
+            aplicarLabelsInstrumentoTC('Contrato');
             set('valorContrato', '');
             const rcS = document.getElementById('rcSelecionada');
-            if (rcS) { rcS.innerHTML = '<option value="">Selecione o contrato</option>'; }
+            if (rcS) { rcS.innerHTML = '<option value="">Selecione o instrumento</option>'; }
             set('inicioVigencia', '');
             set('fimVigencia', '');
             set('fiscalContrato', '');
             set('contatoFiscal', '');
-            const av = document.getElementById('avisoVigenciaContrato');
-            if (av) av.style.display = 'none';
+            atualizarAvisoVigenciaContrato(null);
             return;
         }
+        ultimoContratoPreenchido = contrato;
+        aplicarLabelsInstrumentoTC(obterTipoRegistroContrato(contrato));
         set('valorContrato', contrato.valorContrato ? ('R$ ' + fmtMoeda(contrato.valorContrato)) : '');
         const rcs = Array.isArray(contrato.rcs) ? contrato.rcs : [];
         const rcS = document.getElementById('rcSelecionada');
@@ -2675,27 +2764,11 @@
                 rcS.innerHTML = '<option value="">Nenhuma cadastrada para esse ano</option>';
             }
         }
-        const toYYYYMMDD = (d) => {
-            if (!d) return '';
-            const s = String(d).trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-            const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-            if (m) return m[3].length === 2 ? '20' + m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0') : m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
-            return s;
-        };
         set('inicioVigencia', toYYYYMMDD(contrato.dataInicio));
         set('fimVigencia', toYYYYMMDD(contrato.dataFim));
         set('fiscalContrato', contrato.fiscal || contrato.fiscalContrato || '');
         set('contatoFiscal', contrato.contatoFiscal || contrato.contato_fiscal || '');
-        const aviso = document.getElementById('avisoVigenciaContrato');
-        const dataEmissao = (document.getElementById('dataEmissao').value || document.getElementById('dataExefin').value || '').trim();
-        if (aviso && dataEmissao && contrato.dataInicio && contrato.dataFim) {
-            const base = new Date(dataEmissao);
-            const dIni = new Date(contrato.dataInicio);
-            const dFim = new Date(contrato.dataFim);
-            aviso.style.display = (base < dIni || base > dFim) ? 'block' : 'none';
-            aviso.textContent = (base < dIni || base > dFim) ? 'Atenção: este TC está fora da vigência do contrato.' : '';
-        } else if (aviso) aviso.style.display = 'none';
+        atualizarAvisoVigenciaContrato(contrato);
     }
 
     function configurarSelectContrato() {
@@ -3223,7 +3296,7 @@
         if (!dataExefin) return alert("Preencha a Entrada na EXEFIN.");
         if (!numTC) return alert("Preencha o Número do TC.");
         if (!fornecedorCnpj) return alert("Selecione o Fornecedor (CNPJ).");
-        if (!instrumento && !modoSemContratoAtivo()) return alert('Selecione o Contrato ou marque "Continuar sem contrato vinculado".');
+        if (!instrumento && !modoSemContratoAtivo()) return alert('Selecione o Instrumento ou marque "Continuar sem instrumento vinculado".');
         if (!oiEntregou) return alert("Selecione a OI de Origem.");
         const tipoTCVal = (document.getElementById('tipoTC')?.value || '').trim();
         if (!tipoTCVal) return alert("Selecione o Tipo de TC.");
@@ -4042,11 +4115,17 @@
         // 3) Fornecedor e contrato
         const fornecedorFmt = t.fornecedorCnpj ? (typeof formatarCNPJ === 'function' ? formatarCNPJ(t.fornecedorCnpj) : t.fornecedorCnpj) : (t.fornecedor || '-');
         const vigencia = `${toDateBr(t.inicioVigencia)} a ${toDateBr(t.fimVigencia)}`;
-        tituloSecao('FORNECEDOR E CONTRATO');
+        tituloSecao('FORNECEDOR E INSTRUMENTO');
+        const contratoPdf = (baseContratos || []).find(c =>
+            (c.numContrato || c.instrumento || '') === String(t.instrumento || '').trim()
+        );
+        const labelInstrumentoPdf = contratoPdf && obterTipoRegistroContrato(contratoPdf) === 'Ata'
+            ? 'Ata (Instrumento)'
+            : 'Contrato (Instrumento)';
         linhaCampos([
             { label: 'Fornecedor', valor: fornecedorFmt || '-' },
             { label: 'Nome do Fornecedor', valor: t.fornecedorNome || '-' },
-            { label: 'Contrato (Instrumento)', valor: t.instrumento || '-' },
+            { label: labelInstrumentoPdf, valor: t.instrumento || '-' },
             { label: 'Vigência', valor: vigencia },
             { label: 'RC', valor: t.rc || '-' }
         ]);
@@ -4747,11 +4826,28 @@
         }
     }, true);
 
+    function configurarRevalidacaoVigencia() {
+        const dataEmissaoEl = document.getElementById('dataEmissao');
+        const dataExefinEl = document.getElementById('dataExefin');
+        const revalidar = function() {
+            if (ultimoContratoPreenchido) atualizarAvisoVigenciaContrato(ultimoContratoPreenchido);
+        };
+        if (dataEmissaoEl && dataEmissaoEl.dataset.vigenciaBound !== '1') {
+            dataEmissaoEl.dataset.vigenciaBound = '1';
+            dataEmissaoEl.addEventListener('change', revalidar);
+        }
+        if (dataExefinEl && dataExefinEl.dataset.vigenciaBound !== '1') {
+            dataExefinEl.dataset.vigenciaBound = '1';
+            dataExefinEl.addEventListener('change', revalidar);
+        }
+    }
+
     function ligarEventos() {
         configurarAutocompleteOI();
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarToggleSemContrato();
+        configurarRevalidacaoVigencia();
         configurarAutocompleteEmpenho();
         configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();
@@ -4768,6 +4864,7 @@
         configurarAutocompleteFornecedor();
         configurarSelectContrato();
         configurarToggleSemContrato();
+        configurarRevalidacaoVigencia();
         configurarAutocompleteEmpenho();
         configurarAutocompleteCentroCustosEUG();
         configurarAvisoFiltroBuscaNE();

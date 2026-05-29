@@ -1,5 +1,11 @@
-// MÓDULO: CONTRATOS E EMPRESAS
+// MÓDULO: CONTRATOS E ATAS (ARP)
 (function() {
+    function obterTipoRegistro(c) {
+        const t = String((c && c.tipoRegistro) || '').trim();
+        return t === 'Ata' ? 'Ata' : 'Contrato';
+    }
+    window.obterTipoRegistro = obterTipoRegistro;
+
     const CONTAS_CONTRATO_VALIDAS = [
         '8.1.2.3.1.01.01',
         '8.1.2.3.1.02.01',
@@ -13,7 +19,7 @@
         if (typeof XLSX === 'undefined') return alert("Biblioteca XLSX não carregada (SheetJS).");
         try {
             const contratos = (typeof baseContratos !== 'undefined' && Array.isArray(baseContratos)) ? baseContratos : [];
-            if (contratos.length === 0) return alert("Nenhum contrato carregado para exportar.");
+            if (contratos.length === 0) return alert("Nenhum registro carregado para exportar.");
 
             const normalizarCNPJ = (v) => String(v || '').replace(/\D/g, '').slice(0, 14);
             const label = (cnpj, nome) => {
@@ -26,6 +32,7 @@
             const dados = contratos.map(c => ({
                 'ID': c.idContrato || '',
                 'Instrumento': c.numContrato || c.instrumento || '',
+                'Tipo de Registro': obterTipoRegistro(c),
                 'Situação': c.situacao || '',
                 'Fornecedor CNPJ': c.cnpjFornecedor || '',
                 'Fornecedor Nome': c.nomeFornecedor || '',
@@ -74,10 +81,24 @@
     let indicesDedEncSelecionados = new Set();
     let rcsContratoAtual = [];
     let editIndexRcContrato = -1;
+
+    function atualizarTituloFormContrato() {
+        const el = document.getElementById('tituloFormContratos');
+        const sel = document.getElementById('tipoRegistroContrato');
+        const btnSalvar = document.getElementById('btnSalvarContrato');
+        if (!el || !sel) return;
+        const tipo = obterTipoRegistro({ tipoRegistro: sel.value });
+        const emoji = tipo === 'Ata' ? '📋' : '🤝';
+        el.textContent = emoji + ' Cadastro de ' + tipo;
+        if (btnSalvar) btnSalvar.textContent = '💾 Salvar ' + tipo;
+    }
+
     function abrirFormularioContrato(isEdit) {
         if (!isEdit) {
             formContrato.reset();
             document.getElementById('editIndexContrato').value = -1;
+            const tipoEl = document.getElementById('tipoRegistroContrato');
+            if (tipoEl) tipoEl.value = 'Contrato';
             deducoesPermitidasContratoAtual = [];
             indicesDedEncSelecionados = new Set();
             desenharDedEncContrato();
@@ -86,6 +107,7 @@
             limparCamposRcContrato();
             desenharRcContrato();
         }
+        atualizarTituloFormContrato();
         document.getElementById('tela-lista-contratos').style.display = 'none';
         document.getElementById('tela-formulario-contratos').style.display = 'block';
     }
@@ -113,7 +135,7 @@
         var fim = inicio + parseInt(itensPorPaginaContratos, 10);
         var itensExibidos = baseFiltrada.slice(inicio, fim);
         if (itensExibidos.length === 0) {
-            tabelaContratosBody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Nenhum contrato encontrado.</td></tr>';
+            tabelaContratosBody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Nenhum registro encontrado.</td></tr>';
             return;
         }
         itensExibidos.forEach(function(c) {
@@ -123,7 +145,8 @@
             var valorExib = c.valorContrato;
             if (typeof formatarMoedaBR === 'function' && (typeof valorExib === 'number' || !isNaN(parseFloat(valorExib)))) valorExib = 'R$ ' + formatarMoedaBR(valorExib);
             else if (valorExib == null || valorExib === '') valorExib = '-';
-            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + escapeHTML(cnpjFmt) + '</td><td>' + (escapeHTML(c.nomeFornecedor) || '-') + '</td><td>' + (escapeHTML(c.nup) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
+            var tipoReg = obterTipoRegistro(c);
+            tr.innerHTML = '<td>' + (escapeHTML(c.idContrato) || '-') + '</td><td><strong>' + (escapeHTML(c.numContrato) || '-') + '</strong></td><td>' + escapeHTML(tipoReg) + '</td><td>' + escapeHTML(cnpjFmt) + '</td><td>' + (escapeHTML(c.nomeFornecedor) || '-') + '</td><td>' + (escapeHTML(c.nup) || '-') + '</td><td>' + (escapeHTML(c.dataInicio) || '-') + '</td><td>' + (escapeHTML(c.dataFim) || '-') + '</td><td>' + (escapeHTML(String(valorExib))) + '</td><td>' + (escapeHTML(c.situacao) || '-') + '</td><td>' + acoesHTML + '</td>';
             tabelaContratosBody.appendChild(tr);
         });
         var total = Math.ceil(baseFiltrada.length / itensPorPaginaContratos) || 1;
@@ -144,6 +167,9 @@
         if (c) {
             abrirFormularioContrato(true);
             document.getElementById('editIndexContrato').value = c.id;
+            const tipoEl = document.getElementById('tipoRegistroContrato');
+            if (tipoEl) tipoEl.value = obterTipoRegistro(c);
+            atualizarTituloFormContrato();
             document.getElementById('idContrato').value = c.idContrato || '';
             document.getElementById('numContrato').value = c.numContrato || '';
             document.getElementById('situacaoContrato').value = c.situacao || '';
@@ -172,25 +198,35 @@
         if (c && typeof baseTitulos !== 'undefined') {
             var titulosVinculados = baseTitulos.filter(function(t) { return (t.instrumento || '') === (c.numContrato || ''); });
             if (titulosVinculados.length > 0) {
-                alert('Não é possível excluir este Contrato: existem ' + titulosVinculados.length + ' título(s) vinculado(s). Remova o vínculo nos títulos primeiro.');
+                alert('Não é possível excluir este registro: existem ' + titulosVinculados.length + ' título(s) vinculado(s). Remova o vínculo nos títulos primeiro.');
                 return;
             }
         }
-        if (confirm("Apagar Contrato permanentemente?")) {
+        if (confirm("Apagar este registro permanentemente?")) {
             mostrarLoading();
             try { await db.collection('contratos').doc(id).delete(); }
             catch (err) { alert("Acesso Negado ou falha de rede."); }
             finally { esconderLoading(); }
         }
     }
+    const tipoRegistroEl = document.getElementById('tipoRegistroContrato');
+    if (tipoRegistroEl) {
+        tipoRegistroEl.addEventListener('change', atualizarTituloFormContrato);
+    }
+
     formContrato.addEventListener('submit', async function(e) {
         e.preventDefault();
+        const tipoRegistroVal = String(document.getElementById('tipoRegistroContrato')?.value || '').trim();
+        if (tipoRegistroVal !== 'Contrato' && tipoRegistroVal !== 'Ata') {
+            return alert('Selecione o Tipo de Registro (Contrato ou Ata).');
+        }
         mostrarLoading();
         var fbID = document.getElementById('editIndexContrato').value;
         var numVal = typeof valorMoedaParaNumero === 'function' ? valorMoedaParaNumero(document.getElementById('valorContrato').value) : (parseFloat(document.getElementById('valorContrato').value) || 0);
         const cnpjFornecedor = normalizarCNPJ(document.getElementById('cnpjFornecedorContrato').value);
         const nomeFornecedor = document.getElementById('nomeFornecedorContrato').value;
         var dados = {
+            tipoRegistro: escapeHTML(tipoRegistroVal),
             idContrato: escapeHTML(document.getElementById('idContrato').value),
             numContrato: escapeHTML(document.getElementById('numContrato').value),
             situacao: escapeHTML(document.getElementById('situacaoContrato').value),
@@ -207,7 +243,7 @@
             if (fbID == -1 || fbID === "") { await db.collection('contratos').add(dados); }
             else { await db.collection('contratos').doc(fbID).update(dados); }
             voltarParaListaContratos();
-        } catch (err) { alert("Erro ao guardar contrato."); }
+        } catch (err) { alert("Erro ao guardar registro."); }
         finally { esconderLoading(); }
     });
     var inputBuscaDedEncContrato = document.getElementById('buscaDedEncContrato');
@@ -598,11 +634,12 @@
         if (typeof XLSX === 'undefined') return alert("Biblioteca XLSX não carregada (SheetJS).");
         try {
             const contratos = (typeof baseContratos !== 'undefined' && Array.isArray(baseContratos)) ? baseContratos : [];
-            if (contratos.length === 0) return alert("Nenhum contrato carregado para exportar.");
+            if (contratos.length === 0) return alert("Nenhum registro carregado para exportar.");
 
             const dados = contratos.map(c => ({
                 'ID': c.idContrato || '',
                 'Instrumento': c.numContrato || c.instrumento || '',
+                'Tipo de Registro': obterTipoRegistro(c),
                 'Situação': c.situacao || '',
                 'Fornecedor CNPJ': c.cnpjFornecedor || '',
                 'Fornecedor Nome': c.nomeFornecedor || '',

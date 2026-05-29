@@ -93,9 +93,16 @@
         return { codigo, tipo, dados };
     }
 
+    function normalizarTipoRegistroImport(val) {
+        const t = String(val || '').trim().toLowerCase();
+        if (t === 'ata' || t === 'arp' || t.indexOf('ata') === 0) return 'Ata';
+        return 'Contrato';
+    }
+
     function normalizeContratoRow(row) {
         const r = window.ImportEngine ? window.ImportEngine.normalizeRowKeys(row) : (row || {});
         const numContrato = pick(r, ['numContrato', 'NumContrato', 'Instrumento', 'instrumento', 'numero', 'Numero']);
+        const tipoRegistroRaw = pick(r, ['tipoRegistro', 'TipoRegistro', 'Tipo de Registro', 'tipo de registro', 'Tipo', 'tipo']);
         const valorRaw = pick(r, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
         const cnpjFornecedorRaw = pick(r, ['cnpjFornecedor', 'cnpj_fornecedor', 'CNPJ_FORNECEDOR', 'CNPJFornecedor']);
         const nomeFornecedorRaw = pick(r, ['nomeFornecedor', 'nome_fornecedor', 'NOME_FORNECEDOR', 'NomeFornecedor', 'nome', 'Nome', 'FornecedorNome']);
@@ -110,6 +117,7 @@
         return {
             numContrato,
             dados: {
+                tipoRegistro: escapeHTML(normalizarTipoRegistroImport(tipoRegistroRaw)),
                 idContrato: escapeHTML(pick(r, ['idContrato', 'IdContrato', 'ID', 'id'])),
                 numContrato: escapeHTML(numContrato),
                 situacao: escapeHTML(pick(r, ['situacao', 'Situacao', 'situação'])),
@@ -756,7 +764,7 @@
             run: runDeducoesEncargosImport
         },
         contratos: {
-            acceptedHeaders: ['numContrato', 'cnpjFornecedor', 'nomeFornecedor', 'valorContrato'],
+            acceptedHeaders: ['numContrato', 'tipoRegistro', 'cnpjFornecedor', 'nomeFornecedor', 'valorContrato'],
             run: runContratosImport
         },
         fornecedores: {

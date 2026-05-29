@@ -271,7 +271,7 @@
                         </div>
                         <!-- Bloco C -->
                         <fieldset class="gov-fieldset" id="fieldsetContratoFornecedor">
-                            <legend>Dados do Contrato e Fornecedor<span id="badgeSemContratoTC" class="badge-sem-contrato" aria-hidden="true">Sem contrato vinculado</span></legend>
+                            <legend id="legendContratoFornecedor"><span id="legendTextContratoFornecedor">Dados do Contrato e Fornecedor</span><span id="badgeSemContratoTC" class="badge-sem-contrato" aria-hidden="true">Sem instrumento vinculado</span></legend>
                             <div class="form-row">
                                 <div class="form-group flex-1" style="position: relative;">
                                     <label for="buscaFornecedorT">Fornecedor:</label>
@@ -282,26 +282,26 @@
                                     <ul id="listaResultadosFornecedorT" class="autocomplete-list"></ul>
                                 </div>
                                 <div class="form-group flex-1 form-group-contrato-select">
-                                    <label for="contratoSelecionado">Contrato (Instrumento):</label>
+                                    <label for="contratoSelecionado" id="labelContratoSelecionado">Contrato (Instrumento):</label>
                                     <select id="contratoSelecionado" disabled><option value="">Selecione o fornecedor primeiro</option></select>
                                 </div>
-                                <div class="form-group flex-1 form-row-contrato-derivado-inline"><label for="valorContrato">Valor do Contrato (R$):</label><input type="text" id="valorContrato" readonly class="input-readonly" placeholder="Preenchido ao selecionar contrato"></div>
+                                <div class="form-group flex-1 form-row-contrato-derivado-inline"><label for="valorContrato" id="labelValorContrato">Valor do Contrato (R$):</label><input type="text" id="valorContrato" readonly class="input-readonly" placeholder="Preenchido ao selecionar o instrumento"></div>
                                 <div class="form-group flex-1 form-row-contrato-derivado-inline">
-                                    <label for="rcSelecionada">RC do Contrato:</label>
-                                    <select id="rcSelecionada"><option value="">Selecione o contrato</option></select>
+                                    <label for="rcSelecionada" id="labelRcSelecionada">RC do Contrato:</label>
+                                    <select id="rcSelecionada"><option value="">Selecione o instrumento</option></select>
                                 </div>
                             </div>
                             <div id="avisoSemContratoFornecedor" class="aviso-sem-contrato" role="status" aria-live="polite" style="display:none;">
-                                <span>Este fornecedor não possui contrato vinculado. Você pode continuar o registro do TC sem associar a um contrato.</span>
+                                <span>Este fornecedor não possui instrumento cadastrado. Você pode continuar o registro do TC sem associar a um instrumento.</span>
                                 <label class="aviso-sem-contrato-acao" for="chkContinuarSemContrato">
                                     <input type="checkbox" id="chkContinuarSemContrato">
-                                    Continuar sem contrato vinculado
+                                    Continuar sem instrumento vinculado
                                 </label>
                             </div>
                             <div class="form-row form-row-contrato-derivado">
                                 <div class="form-group flex-1"><label for="inicioVigencia">Início da Vigência:</label><input type="date" id="inicioVigencia" readonly class="input-readonly"></div>
                                 <div class="form-group flex-1"><label for="fimVigencia">Fim da Vigência:</label><input type="date" id="fimVigencia" readonly class="input-readonly"></div>
-                                <div class="form-group flex-1"><label for="fiscalContrato">Fiscal do Contrato:</label><input type="text" id="fiscalContrato" readonly class="input-readonly"></div>
+                                <div class="form-group flex-1"><label for="fiscalContrato" id="labelFiscalContrato">Fiscal do Contrato:</label><input type="text" id="fiscalContrato" readonly class="input-readonly"></div>
                                 <div class="form-group flex-1"><label for="contatoFiscal">Contato do Fiscal:</label><input type="text" id="contatoFiscal" readonly class="input-readonly"></div>
                             </div>
                             <p id="avisoVigenciaContrato" style="display:none;color:#e74c3c;font-size:12px;margin-top:4px;"></p>

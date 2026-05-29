@@ -317,8 +317,8 @@
             <section id="secao-contratos" class="secao" data-permission="contratos_ler" >
                 <div id="tela-lista-contratos" class="card">
                     <div class="header-lista">
-                        <h2>Gestão de Contratos</h2>
-                        <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Contrato</button>
+                        <h2>Gestão de Contratos e Atas</h2>
+                        <button onclick="abrirFormularioContrato(false)" class="btn-primary" data-permission="contratos_inserir">+ Novo Registro</button>
                     </div>
                     <div class="toolbar">
                         <div class="import-group" data-permission="acesso_admin"><label>Importar Excel/CSV:</label><input type="file" id="fileImportContratos" accept=".xlsx, .xls, .csv"><a href="#" onclick="downloadModeloContratos(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a><span id="ultimoImportContratos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;"></span></div>
@@ -334,6 +334,7 @@
                             <tr>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'idContrato')">ID <span class="sort-icon" id="sort-contratos-idContrato"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'numContrato')">Instrumento <span class="sort-icon" id="sort-contratos-numContrato"></span></th>
+                                <th class="th-sortable" onclick="ordenarTabela('contratos', 'tipoRegistro')">Tipo de Registro <span class="sort-icon" id="sort-contratos-tipoRegistro"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'cnpjFornecedor')">CNPJ <span class="sort-icon" id="sort-contratos-cnpjFornecedor"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'nomeFornecedor')">Nome do Fornecedor <span class="sort-icon" id="sort-contratos-nomeFornecedor"></span></th>
                                 <th class="th-sortable" onclick="ordenarTabela('contratos', 'nup')">NUP <span class="sort-icon" id="sort-contratos-nup"></span></th>
@@ -356,6 +357,16 @@
                     <h2 id="tituloFormContratos">🤝 Cadastro de Contrato</h2>
                     <form id="formContrato">
                         <input type="hidden" id="editIndexContrato" value="-1">
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="tipoRegistroContrato">Tipo de Registro:</label>
+                                <select id="tipoRegistroContrato" required>
+                                    <option value="">Selecione</option>
+                                    <option value="Contrato">Contrato</option>
+                                    <option value="Ata">Ata</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="form-row">
                             <div class="form-group flex-1"><label>ID Contrato:</label><input type="text" id="idContrato" placeholder="Ex: 479217"></div>
                             <div class="form-group flex-1"><label>Nº Instrumento:</label><input type="text" id="numContrato" placeholder="Ex: 00006/2025"></div>
@@ -449,7 +460,7 @@
                             </div>
                         </fieldset>
                         <div class="form-acoes">
-                            <button type="submit" class="btn-primary">💾 Salvar Contrato</button>
+                            <button type="submit" class="btn-primary" id="btnSalvarContrato">💾 Salvar Registro</button>
                             <button type="button" onclick="voltarParaListaContratos()" class="btn-default">Cancelar</button>
                         </div>
                     </form>

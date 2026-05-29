@@ -81,9 +81,9 @@
                     </a>
                 </li>
                 <li class="nav-item" data-permission="contratos_ler">
-                    <a href="sistema.html?secao=contratos" class="nav-link menu-secao-sistema" data-secao="contratos" title="Gestão de Contratos">
+                    <a href="sistema.html?secao=contratos" class="nav-link menu-secao-sistema" data-secao="contratos" title="Gestão de Contratos e Atas">
                         <i class="far fa-circle nav-icon"></i>
-                        <p>Contratos</p>
+                        <p>Contratos e Atas</p>
                     </a>
                 </li>
                 <li class="nav-item" data-permission="fornecedores_ler">
