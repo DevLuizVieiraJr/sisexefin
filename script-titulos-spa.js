@@ -136,6 +136,22 @@
 
     window.baseTitulos = function() { return baseTitulos; };
 
+    function candidatosNpDocIdTitulos(npValor) {
+        const npInput = String(npValor || '').trim();
+        if (!npInput) return [];
+        const UG_PADRAO = '741000';
+        const GESTAO_PADRAO = '00001';
+        const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO;
+        const candidatos = [npInput];
+        if (npInput.length <= 12) {
+            const m = npInput.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
+            if (m && String(m[2] || '').toUpperCase() === 'NP') {
+                candidatos.push(PREFIX11_PADRAO + m[1] + 'NP' + m[3]);
+            }
+        }
+        return candidatos.filter((v, i, arr) => v && arr.indexOf(v) === i);
+    }
+
     // Vincula o TC à NP (Nota de Pagamento) quando `np` é preenchida.
     // Modelo da coleção `np` (Firestore):
     // - docId = NP
@@ -144,30 +160,7 @@
         const npInput = String(npValor || '').trim();
         if (!npInput) return;
 
-        // Tenta resolver o docId completo do NP.
-        // Se o usuário informar apenas o sufixo de 12, reconstruímos pelo padrão do app.
-        const UG_PADRAO = '741000';
-        const GESTAO_PADRAO = '00001';
-        const PREFIX11_PADRAO = UG_PADRAO + GESTAO_PADRAO; // 11 dígitos
-
-        function completarNpDocIdParaTentativa(valor) {
-            const s = String(valor || '').trim();
-            if (!s) return '';
-            if (s.length > 12) return s;
-            // Sufixo esperado: AAAAxxNNNNNN (ex.: 2026NP000001)
-            const m = s.match(/^(\d{4})([A-Za-z]{2})(\d{6})$/);
-            if (!m) return '';
-            const ano = m[1];
-            const tipo = (m[2] || '').toUpperCase();
-            const num = m[3];
-            if (tipo !== 'NP') return '';
-            return PREFIX11_PADRAO + ano + 'NP' + num;
-        }
-
-        const candidatos = [];
-        if (npInput) candidatos.push(npInput);
-        const completoTentativa = completarNpDocIdParaTentativa(npInput);
-        if (completoTentativa && completoTentativa !== npInput) candidatos.push(completoTentativa);
+        const candidatos = candidatosNpDocIdTitulos(npInput);
 
         // Payload básico: preserva documentosHabeis (se já existir) via merge.
         const tituloIdStr = String(tituloId || '').trim();
@@ -214,6 +207,22 @@
                 Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(npDocIdCriar));
             }
             await db.collection('np').doc(npDocIdCriar).set(payload, { merge: true });
+        }
+    }
+
+    async function desvincularTituloDaNP(tituloId, npValor) {
+        const tituloIdStr = String(tituloId || '').trim();
+        if (!tituloIdStr) return;
+        const candidatos = candidatosNpDocIdTitulos(npValor);
+        for (const npDocId of candidatos) {
+            const ref = db.collection('np').doc(npDocId);
+            const snap = await ref.get();
+            if (!snap.exists) continue;
+            await ref.set({
+                titulosVinculados: firebase.firestore.FieldValue.arrayRemove(tituloIdStr),
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            return;
         }
     }
 
@@ -3658,6 +3667,11 @@
                     falhas.push(`${tc.idProc || id}: status atual "${statusAtual}" não permite retorno para "${destino}".`);
                     continue;
                 }
+                const liquidacaoIdAtual = String(tc.liquidacaoId || '').trim();
+                if ((origemEsperada === 'Liquidado' || origemEsperada === 'Em Liquidação') && liquidacaoIdAtual) {
+                    falhas.push(`${tc.idProc || id}: TC vinculado à LP ${tc.liquidacaoCodigo || liquidacaoIdAtual}. Faça o ajuste pelo módulo Liquidação.`);
+                    continue;
+                }
                 const hist = obterHistorico(tc);
                 const info = [
                     motivo ? `Motivo: ${motivo}` : '',
@@ -3670,12 +3684,24 @@
                     info,
                     aba: null
                 }));
-                await db.collection('titulos').doc(id).update({
+                const updateRetorno = {
                     status: destino,
                     historico: hist,
                     historicoStatus: hist,
                     editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+                if (origemEsperada === 'Liquidado' && destino === 'Em Liquidação') {
+                    if (String(tc.np || '').trim()) await desvincularTituloDaNP(id, tc.np);
+                    updateRetorno.np = firebase.firestore.FieldValue.delete();
+                    updateRetorno.dataLiquidacao = firebase.firestore.FieldValue.delete();
+                }
+                if (origemEsperada === 'Em Liquidação' && destino === 'Em Processamento') {
+                    updateRetorno.liquidacaoId = firebase.firestore.FieldValue.delete();
+                    updateRetorno.liquidacaoCodigo = firebase.firestore.FieldValue.delete();
+                    updateRetorno.np = firebase.firestore.FieldValue.delete();
+                    updateRetorno.dataLiquidacao = firebase.firestore.FieldValue.delete();
+                }
+                await db.collection('titulos').doc(id).update(updateRetorno);
                 okCount++;
             }
             if (okCount > 0) {
