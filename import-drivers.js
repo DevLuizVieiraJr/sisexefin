@@ -10,7 +10,29 @@
             const val = row[key];
             if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
         }
+        const normalizar = window.ImportEngine && typeof window.ImportEngine.normalizeHeaderToken === 'function'
+            ? window.ImportEngine.normalizeHeaderToken
+            : function(v) {
+                return String(v || '')
+                    .trim()
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+            };
+        const normRow = {};
+        Object.keys(row || {}).forEach(function(k) {
+            normRow[normalizar(k)] = row[k];
+        });
+        for (let i = 0; i < aliases.length; i++) {
+            const val = normRow[normalizar(aliases[i])];
+            if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
+        }
         return '';
+    }
+
+    function incluirSeValor(destino, campo, valor, transform) {
+        if (valor === undefined || valor === null || String(valor).trim() === '') return;
+        destino[campo] = transform ? transform(valor) : valor;
     }
 
     function normalizeCentroCustosRow(row) {
@@ -104,31 +126,51 @@
         const numContrato = pick(r, ['numContrato', 'NumContrato', 'Instrumento', 'instrumento', 'numero', 'Numero']);
         const tipoRegistroRaw = pick(r, ['tipoRegistro', 'TipoRegistro', 'Tipo de Registro', 'tipo de registro', 'Tipo', 'tipo']);
         const valorRaw = pick(r, ['valorContrato', 'ValorContrato', 'valor', 'Valor', 'valorGlobal']);
-        const cnpjFornecedorRaw = pick(r, ['cnpjFornecedor', 'cnpj_fornecedor', 'CNPJ_FORNECEDOR', 'CNPJFornecedor']);
-        const nomeFornecedorRaw = pick(r, ['nomeFornecedor', 'nome_fornecedor', 'NOME_FORNECEDOR', 'NomeFornecedor', 'nome', 'Nome', 'FornecedorNome']);
+        const idContratoRaw = pick(r, ['idContrato', 'IdContrato', 'ID', 'id']);
+        const situacaoRaw = pick(r, ['situacao', 'Situacao', 'situação', 'Situação']);
+        const nupRaw = pick(r, ['nup', 'NUP', 'Nup']);
+        const dataInicioRaw = pick(r, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio', 'Data Início', 'Data Inicio']);
+        const dataFimRaw = pick(r, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim', 'Data Fim']);
+        const cnpjFornecedorRaw = pick(r, ['cnpjFornecedor', 'cnpj_fornecedor', 'CNPJ_FORNECEDOR', 'CNPJFornecedor', 'Fornecedor CNPJ', 'CNPJ Fornecedor']);
+        const nomeFornecedorRaw = pick(r, ['nomeFornecedor', 'nome_fornecedor', 'NOME_FORNECEDOR', 'NomeFornecedor', 'nome', 'Nome', 'FornecedorNome', 'Fornecedor Nome', 'Nome Fornecedor']);
+        const fornecedorRaw = pick(r, ['fornecedor', 'Fornecedor']);
         let cnpjFornecedor = normalizarCNPJ(cnpjFornecedorRaw);
         let nomeFornecedor = nomeFornecedorRaw || '';
         if (!cnpjFornecedor || !nomeFornecedor) {
-            const fornecedorRaw = pick(r, ['fornecedor', 'Fornecedor']);
             const parsed = extrairCnpjNomeFornecedor(fornecedorRaw);
-            cnpjFornecedor = normalizarCNPJ(parsed.cnpjFornecedor);
-            nomeFornecedor = parsed.nomeFornecedor;
+            if (!cnpjFornecedor) cnpjFornecedor = normalizarCNPJ(parsed.cnpjFornecedor);
+            if (!nomeFornecedor) nomeFornecedor = parsed.nomeFornecedor;
+        }
+        const dados = {
+            tipoRegistro: escapeHTML(normalizarTipoRegistroImport(tipoRegistroRaw)),
+            idContrato: escapeHTML(idContratoRaw),
+            numContrato: escapeHTML(numContrato),
+            situacao: escapeHTML(situacaoRaw),
+            cnpjFornecedor: escapeHTML(normalizarCNPJ(cnpjFornecedor)),
+            nomeFornecedor: escapeHTML(nomeFornecedor),
+            nup: escapeHTML(nupRaw),
+            dataInicio: escapeHTML(dataInicioRaw),
+            dataFim: escapeHTML(dataFimRaw),
+            valorContrato: parseValorMonetarioBR(valorRaw),
+            deducoesPermitidas: []
+        };
+        const dadosUpdate = {};
+        incluirSeValor(dadosUpdate, 'tipoRegistro', tipoRegistroRaw, function(v) { return escapeHTML(normalizarTipoRegistroImport(v)); });
+        incluirSeValor(dadosUpdate, 'idContrato', idContratoRaw, escapeHTML);
+        incluirSeValor(dadosUpdate, 'numContrato', numContrato, escapeHTML);
+        incluirSeValor(dadosUpdate, 'situacao', situacaoRaw, escapeHTML);
+        incluirSeValor(dadosUpdate, 'cnpjFornecedor', cnpjFornecedor, function(v) { return escapeHTML(normalizarCNPJ(v)); });
+        incluirSeValor(dadosUpdate, 'nomeFornecedor', nomeFornecedor, escapeHTML);
+        incluirSeValor(dadosUpdate, 'nup', nupRaw, escapeHTML);
+        incluirSeValor(dadosUpdate, 'dataInicio', dataInicioRaw, escapeHTML);
+        incluirSeValor(dadosUpdate, 'dataFim', dataFimRaw, escapeHTML);
+        if (valorRaw !== undefined && valorRaw !== null && String(valorRaw).trim() !== '') {
+            dadosUpdate.valorContrato = parseValorMonetarioBR(valorRaw);
         }
         return {
             numContrato,
-            dados: {
-                tipoRegistro: escapeHTML(normalizarTipoRegistroImport(tipoRegistroRaw)),
-                idContrato: escapeHTML(pick(r, ['idContrato', 'IdContrato', 'ID', 'id'])),
-                numContrato: escapeHTML(numContrato),
-                situacao: escapeHTML(pick(r, ['situacao', 'Situacao', 'situação'])),
-                cnpjFornecedor: escapeHTML(normalizarCNPJ(cnpjFornecedor)),
-                nomeFornecedor: escapeHTML(nomeFornecedor),
-                nup: escapeHTML(pick(r, ['nup', 'NUP', 'Nup'])),
-                dataInicio: escapeHTML(pick(r, ['dataInicio', 'DataInicio', 'data_inicio', 'Inicio', 'inicio'])),
-                dataFim: escapeHTML(pick(r, ['dataFim', 'DataFim', 'data_fim', 'Fim', 'fim'])),
-                valorContrato: parseValorMonetarioBR(valorRaw),
-                deducoesPermitidas: []
-            }
+            dados,
+            dadosUpdate
         };
     }
 
@@ -341,8 +383,12 @@
             const key = n.numContrato.toLowerCase();
             const docId = mapByNumero[key];
             if (docId) {
-                await db.collection('contratos').doc(docId).update(n.dados);
-                report.updated++;
+                if (Object.keys(n.dadosUpdate || {}).length > 0) {
+                    await db.collection('contratos').doc(docId).update(n.dadosUpdate);
+                    report.updated++;
+                } else {
+                    report.ignored++;
+                }
             } else {
                 const ref = await db.collection('contratos').add(n.dados);
                 mapByNumero[key] = ref.id;
@@ -577,14 +623,67 @@
         return payload;
     }
 
-    // Update completo: sobrescreve todos os campos importaveis (vazio = limpa no Firestore),
-    // EXCETO numEmpenho/numNE (chave de identificacao da NE). Tambem nao altera anexo PDF
-    // (notaEmpenhoPdfNome/notaEmpenhoPdfDataUrl), situacao/ativo e timestamps.
+    // Update parcial: preserva dados existentes quando a planilha nao traz valor
+    // explicito para um campo importavel. Isso evita limpar NE ja cadastrada ao
+    // reimportar arquivos parciais ou validacoes com poucas colunas.
     function buildEmpenhoUpdateFromRow(row) {
-        const payload = buildEmpenhoPayloadFromRow(row);
-        delete payload.numEmpenho;
-        delete payload.numNE;
-        return payload;
+        const rowNorm = isEmpenhoRowAlreadyNormalized(row) ? (row || {}) : normalizeEmpenhoRowKeys(row);
+        const updateData = {};
+        const setText = function(field, aliases, targetFields) {
+            const raw = pickEmpenho(rowNorm, aliases);
+            if (raw === undefined || raw === null || String(raw).trim() === '') return;
+            const valor = escapeHTML(String(raw).trim());
+            (targetFields || [field]).forEach(function(target) {
+                updateData[target] = valor;
+            });
+        };
+        setText('tipoNE', EMPENHO_FIELD_ALIASES.tipoNE);
+        setText('dataEmissao', EMPENHO_FIELD_ALIASES.dataEmissao);
+        setText('uge', EMPENHO_FIELD_ALIASES.uge, ['uge', 'ugEmitente']);
+        setText('ptres', EMPENHO_FIELD_ALIASES.ptres);
+        setText('pi', EMPENHO_FIELD_ALIASES.pi);
+        setText('fr', EMPENHO_FIELD_ALIASES.fr);
+        setText('nd', EMPENHO_FIELD_ALIASES.nd);
+        setText('subitem', EMPENHO_FIELD_ALIASES.subitem);
+        setText('codAmp', EMPENHO_FIELD_ALIASES.codAmp);
+        setText('numModal', EMPENHO_FIELD_ALIASES.numModal);
+        setText('lei', EMPENHO_FIELD_ALIASES.lei);
+        setText('descModal', EMPENHO_FIELD_ALIASES.descModal);
+        setText('inciso', EMPENHO_FIELD_ALIASES.inciso);
+        setText('processo', EMPENHO_FIELD_ALIASES.processo);
+        setText('cnpjCpf', EMPENHO_FIELD_ALIASES.cnpjCpf, ['cnpjCpf', 'cnpj']);
+        setText('favorecido', EMPENHO_FIELD_ALIASES.favorecido);
+        setText('pjPf', EMPENHO_FIELD_ALIASES.pjPf);
+        setText('telefone', EMPENHO_FIELD_ALIASES.telefone);
+        setText('contato', EMPENHO_FIELD_ALIASES.contato);
+        setText('gerencia', EMPENHO_FIELD_ALIASES.gerencia);
+        setText('descricao', EMPENHO_FIELD_ALIASES.descricao);
+        setText('observacoes', EMPENHO_FIELD_ALIASES.observacoes);
+        setText('docOrig', EMPENHO_FIELD_ALIASES.docOrig);
+        setText('oi', EMPENHO_FIELD_ALIASES.oi);
+        setText('contrato', EMPENHO_FIELD_ALIASES.contrato);
+        setText('projeto', EMPENHO_FIELD_ALIASES.projeto);
+        setText('cap', EMPENHO_FIELD_ALIASES.cap);
+        setText('altcred', EMPENHO_FIELD_ALIASES.altcred);
+        setText('meio', EMPENHO_FIELD_ALIASES.meio);
+
+        const valorRaw = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES.valorGlobal);
+        if (valorRaw !== undefined && valorRaw !== null && String(valorRaw).trim() !== '') {
+            updateData.valorGlobal = parseValorMonetarioBR(valorRaw);
+        }
+        if (window.sisAnoDocumento) {
+            const anoEmissaoRaw = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES.anoEmissao);
+            if (anoEmissaoRaw && typeof window.sisAnoDocumento.anoValido === 'function') {
+                const ae = window.sisAnoDocumento.anoValido(anoEmissaoRaw);
+                if (ae != null) updateData.anoEmissao = ae;
+            }
+            const anoExercicioRaw = pickEmpenho(rowNorm, EMPENHO_FIELD_ALIASES.anoExercicio);
+            if (anoExercicioRaw && typeof window.sisAnoDocumento.anoValido === 'function') {
+                const ax = window.sisAnoDocumento.anoValido(anoExercicioRaw);
+                if (ax != null) updateData.anoExercicio = ax;
+            }
+        }
+        return updateData;
     }
 
     async function runEmpenhosImport(ctx) {
@@ -595,12 +694,21 @@
         const baseEmp = (typeof baseEmpenhos !== 'undefined' ? baseEmpenhos : []);
 
         // Mapa multi-chave: cada NE da base registra todas as variantes (completo,
-        // sufixo 12, etc.) apontando para o mesmo docId. Evita criar duplicata quando
-        // o formato gravado no Firestore difere do digitado na planilha.
+        // sufixo 12, etc.). Chaves compartilhadas por documentos diferentes ficam
+        // marcadas como ambiguas para impedir update no documento errado.
         const mapEmpenhosPorNumero = {};
+        const chavesEmpenhoAmbiguas = {};
         const registrarNoMapa = function(numero, docId) {
             const chaves = neChavesLookup(numero);
-            chaves.forEach(function(k) { mapEmpenhosPorNumero[k] = docId; });
+            chaves.forEach(function(k) {
+                if (!mapEmpenhosPorNumero[k]) {
+                    mapEmpenhosPorNumero[k] = docId;
+                    return;
+                }
+                if (mapEmpenhosPorNumero[k] !== docId) {
+                    chavesEmpenhoAmbiguas[k] = true;
+                }
+            });
         };
         baseEmp.forEach(function(e) {
             if (!e || !e.id) return;
@@ -610,9 +718,10 @@
         const localizarDocId = function(numero) {
             const chaves = neChavesLookup(numero);
             for (let i = 0; i < chaves.length; i++) {
-                if (mapEmpenhosPorNumero[chaves[i]]) return mapEmpenhosPorNumero[chaves[i]];
+                if (chavesEmpenhoAmbiguas[chaves[i]]) return { ambiguousKey: chaves[i] };
+                if (mapEmpenhosPorNumero[chaves[i]]) return { docId: mapEmpenhosPorNumero[chaves[i]] };
             }
-            return null;
+            return { docId: null };
         };
 
         let pendentes = [];
@@ -661,11 +770,22 @@
                     continue;
                 }
                 const numEmpenho = completarNumEmpenhoIfNeeded(numEmpenhoRaw, { modoCompleto });
-                const docIdExistente = localizarDocId(numEmpenho) || localizarDocId(numEmpenhoRaw);
+                const localizacao = localizarDocId(numEmpenho);
+                const localizacaoRaw = localizacao.docId || localizacao.ambiguousKey ? localizacao : localizarDocId(numEmpenhoRaw);
+                if (localizacaoRaw.ambiguousKey) {
+                    report.ignored++;
+                    report.errors.push('Linha ' + (i + 2) + ': NE "' + numEmpenhoRaw + '" corresponde a mais de um empenho existente (chave ' + localizacaoRaw.ambiguousKey + '). Informe o numero completo para atualizar.');
+                    continue;
+                }
+                const docIdExistente = localizacaoRaw.docId;
 
                 if (docIdExistente) {
                     const updateData = buildEmpenhoUpdateFromRow(rowNorm);
-                    pendentes.push({ tipo: 'update', ref: db.collection('empenhos').doc(docIdExistente), data: updateData });
+                    if (Object.keys(updateData).length > 0) {
+                        pendentes.push({ tipo: 'update', ref: db.collection('empenhos').doc(docIdExistente), data: updateData });
+                    } else {
+                        report.ignored++;
+                    }
                 } else {
                     const dados = buildEmpenhoPayloadFromRow(rowNorm, { modoCompleto });
                     const refEmp = db.collection('empenhos').doc();
