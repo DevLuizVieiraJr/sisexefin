@@ -52,6 +52,12 @@
             logEl.appendChild(line);
         }
 
+        function usuarioTemAcessoAdmin() {
+            return typeof permissoesEmCache !== 'undefined'
+                && Array.isArray(permissoesEmCache)
+                && permissoesEmCache.includes('acesso_admin');
+        }
+
         function mapEstadoPL(estado) {
             var e = String(estado || '').trim();
             var m = {
@@ -180,7 +186,7 @@
 
         async function executarMigracao(simular) {
             logEl.innerHTML = '';
-            if (!permissoesEmCache.includes('acesso_admin')) {
+            if (!usuarioTemAcessoAdmin()) {
                 log('Acesso negado: requer acesso_admin.', 'warn');
                 return;
             }
@@ -369,6 +375,12 @@
                 return;
             }
             if (typeof carregarPermissoes === 'function') await carregarPermissoes();
+            if (!usuarioTemAcessoAdmin()) {
+                document.querySelector('main').innerHTML =
+                    '<div class="card"><p style="color:#a94442;font-weight:600;">Acesso negado: requer acesso_admin.</p></div>';
+                document.body.style.display = 'flex';
+                return;
+            }
             document.body.style.display = 'flex';
             document.getElementById('btnSimular').addEventListener('click', function () { executarMigracao(true); });
             document.getElementById('btnMigrar').addEventListener('click', function () {

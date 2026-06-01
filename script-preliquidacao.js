@@ -1866,6 +1866,7 @@
             if (!plIdAtual) {
                 const plRef = db.collection('preLiquidacoes').doc();
                 const novoId = plRef.id;
+                const idsCarrinho = Array.from(carrinhoIds);
                 let codigo = '';
                 await db.runTransaction(async (tx) => {
                     const cSnap = await tx.get(counterRef);
@@ -1881,7 +1882,7 @@
                         ativo: true,
                         fornecedorCnpj: cnpj0,
                         fornecedorNome: fornecedorFiltroNome || ts[0].fornecedorNome || '',
-                        tituloIds: Array.from(carrinhoIds),
+                        tituloIds: idsCarrinho,
                         np: '',
                         dataLiquidacao: '',
                         historico: [plHistoricoEntry('criacao', 'Pré-liquidação criada com código ' + codigo, '')],
@@ -1896,16 +1897,14 @@
                         plPayload.anoEmissao = ano;
                     }
                     tx.set(plRef, plPayload);
-                });
-                const batch = db.batch();
-                Array.from(carrinhoIds).forEach(tid => {
-                    batch.update(db.collection('titulos').doc(tid), {
-                        preLiquidacaoId: novoId,
-                        preLiquidacaoCodigo: codigo,
-                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                    idsCarrinho.forEach(tid => {
+                        tx.update(db.collection('titulos').doc(tid), {
+                            preLiquidacaoId: novoId,
+                            preLiquidacaoCodigo: codigo,
+                            editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                        });
                     });
                 });
-                await batch.commit();
                 await abrirEditorPL(novoId);
                 alert('Pré-liquidação criada: ' + codigo);
             } else {
@@ -1969,43 +1968,103 @@
         mostrarLoading();
         try {
             const plRef = db.collection('preLiquidacoes').doc(plIdAtual);
-            const snap = await plRef.get();
-            const d = snap.data() || {};
-            const npAntiga = String(d.np || '').trim();
-            if (correcao && npAntiga) {
-                for (const tid of ids) {
-                    await desvincularTituloDaNP(tid, npAntiga);
+            const tituloRefs = ids.map(tid => db.collection('titulos').doc(tid));
+            const novaNpRefs = candidatosNpDocId(np).filter(Boolean).map(id => db.collection('np').doc(id));
+            if (!novaNpRefs.length) throw new Error('NP inválida.');
+
+            await db.runTransaction(async (tx) => {
+                const snap = await tx.get(plRef);
+                if (!snap.exists) throw new Error('Pré-liquidação não encontrada.');
+                const d = snap.data() || {};
+                const npAntiga = String(d.np || '').trim();
+                const antigaNpRefs = (correcao && npAntiga)
+                    ? candidatosNpDocId(npAntiga).filter(Boolean).map(id => db.collection('np').doc(id))
+                    : [];
+
+                const tituloSnaps = [];
+                for (const ref of tituloRefs) {
+                    tituloSnaps.push(await tx.get(ref));
                 }
-            }
-            const evTipo = correcao ? 'corrigir_np' : 'fechar_np';
-            const ev = plHistoricoEntry(evTipo, 'NP: ' + np + ' | Data: ' + dataLiq, correcao ? (motivoCorrecao || '') : '');
-            const hist = (d.historico || []).concat([ev]);
-            await plRef.update({
-                estado: 'Fechado',
-                np,
-                dataLiquidacao: dataLiq,
-                historico: hist,
-                editado_em: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            for (const tid of ids) {
-                const tRef = db.collection('titulos').doc(tid);
-                const tSnap = await tRef.get();
-                const td = tSnap.data() || {};
-                const h = entradaHistoricoTC('Liquidado', correcao ? 'Correção NP (PL)' : 'NP via pré-liquidação', (correcao ? (motivoCorrecao || '') + ' | ' : '') + 'NP ' + np);
-                const hists = Array.isArray(td.historicoStatus) ? td.historicoStatus.slice() : [];
-                const histo = Array.isArray(td.historico) ? td.historico.slice() : [];
-                hists.push(h);
-                histo.push(h);
-                await tRef.update({
+                const antigaNpSnaps = [];
+                for (const ref of antigaNpRefs) {
+                    antigaNpSnaps.push(await tx.get(ref));
+                }
+                const novaNpSnaps = [];
+                for (const ref of novaNpRefs) {
+                    novaNpSnaps.push(await tx.get(ref));
+                }
+
+                let antigaNpAlvo = null;
+                for (let i = 0; i < antigaNpRefs.length; i++) {
+                    if (antigaNpSnaps[i].exists) {
+                        antigaNpAlvo = antigaNpRefs[i];
+                        break;
+                    }
+                }
+
+                let novaNpAlvo = novaNpRefs[0];
+                let novaNpExiste = false;
+                for (let i = 0; i < novaNpRefs.length; i++) {
+                    if (novaNpSnaps[i].exists) {
+                        novaNpAlvo = novaNpRefs[i];
+                        novaNpExiste = true;
+                        break;
+                    }
+                }
+
+                const evTipo = correcao ? 'corrigir_np' : 'fechar_np';
+                const ev = plHistoricoEntry(evTipo, 'NP: ' + np + ' | Data: ' + dataLiq, correcao ? (motivoCorrecao || '') : '');
+                const hist = (d.historico || []).concat([ev]);
+                tx.update(plRef, {
+                    estado: 'Fechado',
                     np,
                     dataLiquidacao: dataLiq,
-                    status: 'Liquidado',
-                    historicoStatus: hists,
-                    historico: histo,
+                    historico: hist,
                     editado_em: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                await vincularTituloNaNP(tid, np, dataLiq);
-            }
+
+                for (let i = 0; i < tituloRefs.length; i++) {
+                    const tSnap = tituloSnaps[i];
+                    if (!tSnap.exists) throw new Error('TC não encontrado: ' + ids[i]);
+                    const td = tSnap.data() || {};
+                    const h = entradaHistoricoTC('Liquidado', correcao ? 'Correção NP (PL)' : 'NP via pré-liquidação', (correcao ? (motivoCorrecao || '') + ' | ' : '') + 'NP ' + np);
+                    const hists = Array.isArray(td.historicoStatus) ? td.historicoStatus.slice() : [];
+                    const histo = Array.isArray(td.historico) ? td.historico.slice() : [];
+                    hists.push(h);
+                    histo.push(h);
+                    tx.update(tituloRefs[i], {
+                        np,
+                        dataLiquidacao: dataLiq,
+                        status: 'Liquidado',
+                        historicoStatus: hists,
+                        historico: histo,
+                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                const idsStr = ids.map(tid => String(tid || '').trim()).filter(Boolean);
+                if (antigaNpAlvo && antigaNpAlvo.id !== novaNpAlvo.id) {
+                    tx.set(antigaNpAlvo, {
+                        titulosVinculados: firebase.firestore.FieldValue.arrayRemove.apply(null, idsStr),
+                        editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+                const payloadNp = {
+                    np: novaNpAlvo.id,
+                    titulosVinculados: firebase.firestore.FieldValue.arrayUnion.apply(null, idsStr),
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                if (dataLiq) payloadNp.dataLiquidacao = dataLiq;
+                if (typeof usuarioLogadoEmail === 'string' && usuarioLogadoEmail) payloadNp.editado_por = usuarioLogadoEmail;
+                if (!novaNpExiste) {
+                    payloadNp.documentosHabeis = [];
+                    payloadNp.ativo = true;
+                }
+                if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                    Object.assign(payloadNp, window.sisAnoDocumento.payloadAnosNp(novaNpAlvo.id));
+                }
+                tx.set(novaNpAlvo, payloadNp, { merge: true });
+            });
             document.getElementById('overlayPLFecharNP').style.display = 'none';
             await abrirEditorPL(plIdAtual);
             alert(correcao ? 'NP corrigida.' : 'Lote fechado com NP.');
