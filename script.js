@@ -167,6 +167,76 @@ function esconderBarraLoading() {
 }
 window.mostrarBarraLoading = mostrarBarraLoading;
 window.esconderBarraLoading = esconderBarraLoading;
+
+// ============================================================
+// LOADING IMPORTAÇÃO (overlay imediato + barra com % simulado/real)
+// ============================================================
+let __importBarraState = {
+    timerId: null,
+    pct: 0,
+    maxSimulado: 90,
+    step: 4,
+    intervalMs: 180,
+};
+
+function __pararTimerBarraSimulada() {
+    if (__importBarraState.timerId) clearInterval(__importBarraState.timerId);
+    __importBarraState.timerId = null;
+}
+
+/** Overlay visível na hora (validação/importação CSV). */
+function mostrarLoadingImportacao(texto) {
+    const overlay = __getLoadingOverlayEl();
+    if (!overlay) return;
+    if (__loadingState.showTimerId) clearTimeout(__loadingState.showTimerId);
+    __loadingState.showTimerId = null;
+    __loadingState.active = true;
+    __loadingState.startedAt = Date.now();
+    __setOverlayTexto(texto || 'Processando importação...');
+    __ensureOverlayProgressEl(overlay);
+    overlay.style.display = 'flex';
+    __schedule60sPrompt();
+}
+
+function esconderLoadingImportacao() {
+    __pararTimerBarraSimulada();
+    esconderLoading();
+}
+
+function iniciarBarraProgressoImport(texto, opts) {
+    opts = opts || {};
+    __pararTimerBarraSimulada();
+    __importBarraState.pct = typeof opts.pctInicial === 'number' ? opts.pctInicial : 0;
+    __importBarraState.maxSimulado = typeof opts.maxSimulado === 'number' ? opts.maxSimulado : 90;
+    __importBarraState.step = typeof opts.step === 'number' ? opts.step : 4;
+    __importBarraState.intervalMs = typeof opts.intervalMs === 'number' ? opts.intervalMs : 180;
+    mostrarBarraLoading(texto || 'Processando...', { pct: __importBarraState.pct });
+    if (opts.simulado) {
+        __importBarraState.timerId = setInterval(function() {
+            if (__importBarraState.pct < __importBarraState.maxSimulado) {
+                __importBarraState.pct = Math.min(__importBarraState.maxSimulado, __importBarraState.pct + __importBarraState.step);
+                mostrarBarraLoading(texto || 'Processando...', { pct: __importBarraState.pct });
+            }
+        }, __importBarraState.intervalMs);
+    }
+}
+
+function atualizarBarraProgressoImport(texto, pct) {
+    if (typeof pct === 'number') __importBarraState.pct = Math.max(0, Math.min(100, pct));
+    mostrarBarraLoading(texto || 'Processando...', { pct: __importBarraState.pct });
+}
+
+function pararBarraProgressoImport() {
+    __pararTimerBarraSimulada();
+    esconderBarraLoading();
+}
+
+window.mostrarLoadingImportacao = mostrarLoadingImportacao;
+window.esconderLoadingImportacao = esconderLoadingImportacao;
+window.iniciarBarraProgressoImport = iniciarBarraProgressoImport;
+window.atualizarBarraProgressoImport = atualizarBarraProgressoImport;
+window.pararBarraProgressoImport = pararBarraProgressoImport;
+
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
 function isMobileLayout() {

@@ -505,11 +505,11 @@
     const btnNovaNp = document.getElementById('btnNovaNp');
     const btnSalvarNp = document.getElementById('btnSalvarNp');
     const fileImportNpUi = document.getElementById('fileImportNp');
-    const btnImportNpCsv = document.getElementById('btnImportNpCsv');
+    const btnImportarNpUi = document.getElementById('btnImportarNp');
     if (btnNovaNp && !podeNPAlterar()) btnNovaNp.style.display = 'none';
     if (btnSalvarNp && !podeNPAlterar()) btnSalvarNp.style.display = 'none';
     if (fileImportNpUi && !podeNPAlterar()) fileImportNpUi.disabled = true;
-    if (btnImportNpCsv && !podeNPAlterar()) btnImportNpCsv.style.display = 'none';
+    if (btnImportarNpUi && !podeNPAlterar()) btnImportarNpUi.style.display = 'none';
 
     formNp?.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -644,217 +644,298 @@
         }
     };
 
-    // Importador NP
+    // Importador NP (2 fases: validar arquivo -> importar)
     const fileImportNp = document.getElementById('fileImportNp');
-    if (fileImportNp) {
-        function verificarAdmin() {
-            if (!podeNPAlterar()) {
-                alert('Acesso negado. Sem permissão para importar NP.');
-                return false;
-            }
-            return true;
-        }
+    const btnImportarNp = document.getElementById('btnImportarNp');
+    const statusImportNp = document.getElementById('statusImportNp');
+    let estadoImportNp = null;
+    let importNpEmExecucao = false;
 
-        function readFileAsArrayBuffer(file) {
-            return new Promise(function(resolve, reject) {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.onerror = () => reject(new Error('Erro ao ler ficheiro'));
-                reader.readAsArrayBuffer(file);
+    function setStatusImportNp(msg, tipo) {
+        if (!statusImportNp) return;
+        statusImportNp.textContent = msg || '';
+        statusImportNp.style.color = tipo === 'erro' ? '#e74c3c' : (tipo === 'ok' ? '#27ae60' : '#666');
+    }
+    function resetEstadoImportNp() {
+        estadoImportNp = null;
+        if (btnImportarNp) btnImportarNp.disabled = true;
+    }
+
+    function verificarPermissaoImportNp() {
+        if (!podeNPAlterar()) {
+            alert('Acesso negado. Sem permissão para importar NP.');
+            return false;
+        }
+        return true;
+    }
+
+    function readFileAsArrayBufferNp(file) {
+        return new Promise(function(resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('Erro ao ler ficheiro'));
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    async function salvarUltimoImportNp(modulo) {
+        try {
+            await db.collection('config').doc('imports').set(
+                { [modulo]: firebase.firestore.FieldValue.serverTimestamp() },
+                { merge: true }
+            );
+            const snap = await db.collection('config').doc('imports').get();
+            if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data());
+        } catch (e) { console.warn('Erro ao salvar último import:', e); }
+    }
+
+    function prepararImportacaoNp(rows) {
+        const itensImportadosPorChave = new Map();
+        const isoPorNp = new Map();
+        const npKeysCsv = new Set();
+        let erros = 0;
+        const totalLinhas = rows.length;
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const npRaw = getVal(row, ['NP', 'np']);
+            const npNormRaw = String(npRaw || '').trim();
+            if (!npNormRaw) { erros++; continue; }
+            const npNorm = completarNpDocId(npNormRaw);
+            if (!npNorm) { erros++; continue; }
+            npKeysCsv.add(npNorm);
+
+            const dataLiq = getVal(row, ['DATA LIQUIDAÇÃO', 'DATA LIQUIDACAO', 'Data Liquidação', 'dataLiquidacao', 'Dt Liquidação', 'DT_LIQ']);
+            const iso = formatarDataParaISO(dataLiq);
+            if (iso && !isoPorNp.has(npNorm)) isoPorNp.set(npNorm, iso);
+
+            const op = getVal(row, ['OP', 'op']);
+            const ob = getVal(row, ['OB', 'ob']);
+            const valorNp = valorParaNumero(getVal(row, ['VALOR_NP', 'valorNp', 'VALOR NP', 'Valor NP', 'VALOR']));
+            const valorOb = valorParaNumero(getVal(row, ['VALOR_OB', 'valorOb', 'VALOR OB', 'Valor OB']));
+            const observacao = getVal(row, ['OBSERVACAO', 'OBSERVAÇÃO', 'observacao', 'observação']);
+
+            if (!op || !ob) continue;
+
+            const prefix11 = (npNorm.length >= 23) ? npNorm.slice(0, 11) : PREFIX_DH_11_PADRAO;
+            const opFull = completarOpDocId(op, prefix11);
+            const obFull = completarObDocId(ob, prefix11);
+            if (!opFull || !obFull) { erros++; continue; }
+
+            const chave = npNorm + '|' + opFull + '|' + obFull;
+            itensImportadosPorChave.set(chave, {
+                npNorm: npNorm,
+                op: opFull,
+                ob: obFull,
+                valorNp: valorNp || 0,
+                valorOb: valorOb || 0,
+                observacao: observacao || ''
             });
         }
 
-        async function salvarUltimoImport(modulo) {
-            try {
-                await db.collection('config').doc('imports').set(
-                    { [modulo]: firebase.firestore.FieldValue.serverTimestamp() },
-                    { merge: true }
-                );
-                const snap = await db.collection('config').doc('imports').get();
-                if (snap.exists && typeof atualizarUltimoImportUI === 'function') atualizarUltimoImportUI(snap.data());
-            } catch (e) { console.warn('Erro ao salvar último import:', e); }
+        const baseAll = (typeof baseNp !== 'undefined' ? baseNp : []);
+        const mapBasePorNp = new Map();
+        baseAll.forEach(doc => {
+            const k = String((doc && (doc.np || doc.id)) || '').trim();
+            if (k) mapBasePorNp.set(k, doc);
+        });
+
+        const docsChanges = new Map();
+        function ensureDocChange(npNorm) {
+            if (docsChanges.has(npNorm)) return docsChanges.get(npNorm);
+            const docBase = mapBasePorNp.get(npNorm) || null;
+            const documentosHabeis = docBase && Array.isArray(docBase.documentosHabeis)
+                ? docBase.documentosHabeis.slice()
+                : [];
+            const c = { npNorm, isNew: !docBase, docBase, documentosHabeis, changed: false };
+            docsChanges.set(npNorm, c);
+            return c;
         }
 
+        let importados = 0;
+        let atualizados = 0;
+
+        for (const npNorm of npKeysCsv.values()) {
+            ensureDocChange(npNorm);
+        }
+
+        for (const item of itensImportadosPorChave.values()) {
+            const change = ensureDocChange(item.npNorm);
+            const documentos = change.documentosHabeis;
+            const idx = documentos.findIndex(it =>
+                String(it.op || '').trim() === item.op &&
+                String(it.ob || '').trim() === item.ob
+            );
+            if (idx >= 0) {
+                documentos[idx].op = item.op;
+                documentos[idx].ob = item.ob;
+                change.changed = true;
+                atualizados++;
+            } else {
+                documentos.push({
+                    op: item.op,
+                    ob: item.ob,
+                    valorNp: item.valorNp,
+                    valorOb: item.valorOb,
+                    observacao: item.observacao || ''
+                });
+                change.changed = true;
+                importados++;
+            }
+        }
+
+        return {
+            docsChanges: docsChanges,
+            isoPorNp: isoPorNp,
+            importados: importados,
+            atualizados: atualizados,
+            erros: erros,
+            npValidas: npKeysCsv.size,
+            totalLinhas: totalLinhas
+        };
+    }
+
+    async function persistirImportacaoNp(prep, importAbort) {
+        const docsChanges = prep.docsChanges;
+        const isoPorNp = prep.isoPorNp;
+        const userEmail = (auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
+        const histMsg = 'Importação em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail;
+        const lista = Array.from(docsChanges.values());
+        const total = lista.length;
+        let processados = 0;
+
+        for (const change of lista) {
+            if (importAbort && importAbort.aborted) break;
+            if (!change.isNew && !change.changed && !isoPorNp.has(change.npNorm)) {
+                processados++;
+                continue;
+            }
+
+            const docRef = db.collection('np').doc(change.npNorm);
+            const dhabImport = (window.sisAnoDocumento && typeof window.sisAnoDocumento.enriquecerItensOpOb === 'function')
+                ? window.sisAnoDocumento.enriquecerItensOpOb(change.documentosHabeis)
+                : change.documentosHabeis;
+            if (change.isNew) {
+                const novoDoc = {
+                    np: change.npNorm,
+                    dataLiquidacao: isoPorNp.get(change.npNorm) || '',
+                    documentosHabeis: dhabImport,
+                    ativo: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: userEmail,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: userEmail,
+                    historico: ['Registro criado em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail]
+                };
+                if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                    Object.assign(novoDoc, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
+                }
+                await docRef.set(novoDoc);
+            } else {
+                const historicoAntigo = (change.docBase && Array.isArray(change.docBase.historico)) ? change.docBase.historico : [];
+                const novoHist = historicoAntigo.concat([histMsg]);
+                const payload = {
+                    documentosHabeis: dhabImport,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: userEmail,
+                    historico: novoHist
+                };
+                if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
+                    Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
+                }
+                if (isoPorNp.has(change.npNorm)) payload.dataLiquidacao = isoPorNp.get(change.npNorm);
+                await docRef.set(payload, { merge: true });
+            }
+            processados++;
+            if (typeof atualizarBarraProgressoImport === 'function') {
+                const pct = total > 0 ? Math.round((processados / total) * 100) : 100;
+                atualizarBarraProgressoImport('Gravando NP no banco... ' + processados + '/' + total, pct);
+            }
+        }
+        return { interrompido: !!(importAbort && importAbort.aborted) };
+    }
+
+    if (fileImportNp) {
         fileImportNp.addEventListener('change', async function(e) {
             const file = e.target.files[0];
-            if (!file) return;
-            if (!verificarAdmin()) { e.target.value = ''; return; }
+            resetEstadoImportNp();
+            if (!file) {
+                setStatusImportNp('Nenhum arquivo selecionado.', 'info');
+                return;
+            }
+            if (!verificarPermissaoImportNp()) { e.target.value = ''; return; }
             if (typeof XLSX === 'undefined') { e.target.value = ''; return alert('Biblioteca XLSX não carregada.'); }
 
+            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Validando arquivo NP x OP/OB...');
+            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Validando arquivo NP x OP/OB...', { simulado: true });
+            try {
+                const data = await readFileAsArrayBufferNp(file);
+                const wb = XLSX.read(data, { type: 'array' });
+                const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+                const prep = prepararImportacaoNp(rows);
+                estadoImportNp = {
+                    fileName: file.name,
+                    prep: prep
+                };
+                if (btnImportarNp) btnImportarNp.disabled = prep.npValidas === 0;
+                setStatusImportNp(
+                    prep.npValidas === 0
+                        ? 'Nenhuma NP válida no arquivo. Selecione outro arquivo.'
+                        : 'Arquivo validado: ' + prep.totalLinhas + ' linha(s), ' + prep.npValidas + ' NP válida(s), ' + prep.erros + ' inválida(s). Pronto para importar.',
+                    prep.npValidas === 0 ? 'erro' : 'ok'
+                );
+            } catch (err) {
+                console.error('Falha na validação NP:', err);
+                setStatusImportNp('Erro ao validar arquivo: ' + (err && err.message ? err.message : err), 'erro');
+                resetEstadoImportNp();
+                e.target.value = '';
+            } finally {
+                if (typeof pararBarraProgressoImport === 'function') pararBarraProgressoImport();
+                if (typeof esconderLoadingImportacao === 'function') esconderLoadingImportacao();
+            }
+        });
+    }
+
+    if (btnImportarNp) {
+        btnImportarNp.addEventListener('click', async function() {
+            if (importNpEmExecucao) return;
+            if (!estadoImportNp || !estadoImportNp.prep) {
+                setStatusImportNp('Selecione e valide um arquivo antes de importar.', 'erro');
+                return;
+            }
+            if (!verificarPermissaoImportNp()) return;
+
+            importNpEmExecucao = true;
+            btnImportarNp.disabled = true;
             const importAbort = { aborted: false };
             if (typeof window.__setLoadingAbortFn === 'function') {
                 window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
             }
-
-            mostrarLoading('Carregando...');
+            const prep = estadoImportNp.prep;
+            const totalDocs = prep.docsChanges.size;
+            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Importando NP x OP/OB...');
+            if (typeof iniciarBarraProgressoImport === 'function') {
+                iniciarBarraProgressoImport('Gravando NP no banco... 0/' + totalDocs, { pct: 0, simulado: false });
+            }
             try {
-                const data = await readFileAsArrayBuffer(file);
-                const wb = XLSX.read(data, { type: 'array' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-
-                // Deduplica itens do CSV para contar/atualizar por NP+OP+OB
-                const itensImportadosPorChave = new Map(); // chave -> itemImport
-                const isoPorNp = new Map(); // npNorm -> isoData (primeiro não-vazio)
-                const npKeysCsv = new Set(); // registra NP mesmo se vier sem OP/OB (somente NP é obrigatório)
-
-                let erros = 0;
-
-                for (let i = 0; i < rows.length; i++) {
-                    if (importAbort.aborted) break;
-                    const row = rows[i];
-
-                    const npRaw = getVal(row, ['NP', 'np']);
-                    const npNormRaw = String(npRaw || '').trim();
-                    if (!npNormRaw) { erros++; continue; }
-                    const npNorm = completarNpDocId(npNormRaw);
-                    if (!npNorm) { erros++; continue; }
-                    npKeysCsv.add(npNorm);
-
-                    const dataLiq = getVal(row, ['DATA LIQUIDAÇÃO', 'DATA LIQUIDACAO', 'Data Liquidação', 'dataLiquidacao', 'Dt Liquidação', 'DT_LIQ']);
-                    const iso = formatarDataParaISO(dataLiq);
-                    if (iso && !isoPorNp.has(npNorm)) isoPorNp.set(npNorm, iso);
-
-                    const op = getVal(row, ['OP', 'op']);
-                    const ob = getVal(row, ['OB', 'ob']);
-                    const valorNp = valorParaNumero(getVal(row, ['VALOR_NP', 'valorNp', 'VALOR NP', 'Valor NP', 'VALOR']));
-                    const valorOb = valorParaNumero(getVal(row, ['VALOR_OB', 'valorOb', 'VALOR OB', 'Valor OB']));
-                    const observacao = getVal(row, ['OBSERVACAO', 'OBSERVAÇÃO', 'observacao', 'observação']);
-
-                    // Somente NP é obrigatório, então se OP/OB vier vazio, não criamos item.
-                    if (!op || !ob) continue;
-
-                    const prefix11 = (npNorm.length >= 23) ? npNorm.slice(0, 11) : PREFIX_DH_11_PADRAO;
-                    const opFull = completarOpDocId(op, prefix11);
-                    const obFull = completarObDocId(ob, prefix11);
-                    if (!opFull || !obFull) { erros++; continue; }
-
-                    const chave = npNorm + '|' + opFull + '|' + obFull;
-                    itensImportadosPorChave.set(chave, {
-                        npNorm: npNorm,
-                        op: opFull,
-                        ob: obFull,
-                        valorNp: valorNp || 0,
-                        valorOb: valorOb || 0,
-                        observacao: observacao || ''
-                    });
-                }
-
-                // Base atual (para identificar repetidos) - vem do onSnapshot
-                const baseAll = (typeof baseNp !== 'undefined' ? baseNp : []);
-                const mapBasePorNp = new Map();
-                baseAll.forEach(doc => {
-                    const k = String((doc && (doc.np || doc.id)) || '').trim();
-                    if (k) mapBasePorNp.set(k, doc);
-                });
-
-                // Mudanças por NP (aplica regra: em repetidos, atualiza só OP, OB, Valor_NP, Valor_OB)
-                const docsChanges = new Map(); // npNorm -> { isNew, docBase, documentosHabeis:Array }
-                function ensureDocChange(npNorm) {
-                    if (docsChanges.has(npNorm)) return docsChanges.get(npNorm);
-                    const docBase = mapBasePorNp.get(npNorm) || null;
-                    const documentosHabeis = docBase && Array.isArray(docBase.documentosHabeis)
-                        ? docBase.documentosHabeis.slice()
-                        : [];
-                    const c = { npNorm, isNew: !docBase, docBase, documentosHabeis, changed: false };
-                    docsChanges.set(npNorm, c);
-                    return c;
-                }
-
-                let importados = 0;
-                let atualizados = 0;
-                const userEmail = (auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : '';
-                const histMsg = 'Importação em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail;
-
-                // Garante que uma NP nova será criada mesmo sem itens (quando somente NP veio preenchido).
-                for (const npNorm of npKeysCsv.values()) {
-                    ensureDocChange(npNorm);
-                }
-
-                for (const item of itensImportadosPorChave.values()) {
-                    if (importAbort.aborted) break;
-                    const change = ensureDocChange(item.npNorm);
-                    const documentos = change.documentosHabeis;
-
-                    const idx = documentos.findIndex(it =>
-                        String(it.op || '').trim() === item.op &&
-                        String(it.ob || '').trim() === item.ob
-                    );
-
-                    if (idx >= 0) {
-                        // Atualiza SOMENTE a identificação (OP/OB) do item repetido.
-                        // Mantém os campos já existentes (valores/observação) para não sobrescrever.
-                        documentos[idx].op = item.op;
-                        documentos[idx].ob = item.ob;
-                        change.changed = true;
-                        atualizados++;
-                    } else {
-                        documentos.push({
-                            op: item.op,
-                            ob: item.ob,
-                            valorNp: item.valorNp,
-                            valorOb: item.valorOb,
-                            observacao: item.observacao || ''
-                        });
-                        change.changed = true;
-                        importados++;
-                    }
-                }
-
-                // Persistência (parcial se houver interrupção)
-                for (const change of docsChanges.values()) {
-                    if (importAbort.aborted) break;
-                    // Permite atualizar `dataLiquidacao` mesmo quando não houver mudanças nos itens
-                    // (ex.: arquivo traz apenas NP e DATA LIQUIDAÇÃO).
-                    if (!change.isNew && !change.changed && !isoPorNp.has(change.npNorm)) continue;
-
-                    const docRef = db.collection('np').doc(change.npNorm);
-                    const dhabImport = (window.sisAnoDocumento && typeof window.sisAnoDocumento.enriquecerItensOpOb === 'function')
-                        ? window.sisAnoDocumento.enriquecerItensOpOb(change.documentosHabeis)
-                        : change.documentosHabeis;
-                    if (change.isNew) {
-                        const novoDoc = {
-                            np: change.npNorm,
-                            dataLiquidacao: isoPorNp.get(change.npNorm) || '',
-                            documentosHabeis: dhabImport,
-                            ativo: true,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            createdBy: userEmail,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedBy: userEmail,
-                            historico: ['Registro criado em ' + new Date().toLocaleString('pt-BR') + ' por ' + userEmail]
-                        };
-                        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
-                            Object.assign(novoDoc, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
-                        }
-                        await docRef.set(novoDoc);
-                    } else {
-                        const historicoAntigo = (change.docBase && Array.isArray(change.docBase.historico)) ? change.docBase.historico : [];
-                        const novoHist = historicoAntigo.concat([histMsg]);
-                        const payload = {
-                            documentosHabeis: dhabImport,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedBy: userEmail,
-                            historico: novoHist
-                        };
-                        if (window.sisAnoDocumento && typeof window.sisAnoDocumento.payloadAnosNp === 'function') {
-                            Object.assign(payload, window.sisAnoDocumento.payloadAnosNp(change.npNorm));
-                        }
-                        // Se veio data de liquidação no arquivo, atualiza; caso contrário, preserva o valor existente.
-                        if (isoPorNp.has(change.npNorm)) payload.dataLiquidacao = isoPorNp.get(change.npNorm);
-                        await docRef.set(payload, { merge: true });
-                    }
-                }
-
-                const resumo = (importAbort.aborted ? 'Interrompido. ' : '') +
-                    'Importados ' + importados + '; Atualizados ' + atualizados + '; Erros ' + erros;
+                const resPersist = await persistirImportacaoNp(prep, importAbort);
+                await salvarUltimoImportNp('np');
+                const resumo = (resPersist.interrompido ? 'Interrompido. ' : '') +
+                    'Importados ' + prep.importados + '; Atualizados ' + prep.atualizados + '; Erros ' + prep.erros;
+                setStatusImportNp('Importação concluída. ' + resumo, prep.erros > 0 ? 'info' : 'ok');
                 alert(resumo);
-                await salvarUltimoImport('np');
+                estadoImportNp = null;
+                if (fileImportNp) fileImportNp.value = '';
             } catch (err) {
-                alert('Erro ao tentar carregar dados.');
+                console.error('Falha na importação NP:', err);
+                setStatusImportNp('Erro ao importar: ' + (err && err.message ? err.message : err), 'erro');
+                alert('Erro ao tentar importar dados: ' + (err && err.message ? err.message : err));
             } finally {
-                esconderLoading();
-                e.target.value = '';
+                importNpEmExecucao = false;
+                if (btnImportarNp) btnImportarNp.disabled = !estadoImportNp;
+                if (typeof pararBarraProgressoImport === 'function') pararBarraProgressoImport();
+                if (typeof esconderLoadingImportacao === 'function') esconderLoadingImportacao();
             }
         });
     }
