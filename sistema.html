@@ -1063,31 +1063,50 @@
                     <div id="relDedMsgVazio" role="status" style="display:none; padding:20px; text-align:center; color:#888;">
                         Nenhum registro encontrado com os filtros selecionados.
                     </div>
+                    <div class="controles-tabela">
+                        <label>A exibir
+                            <select id="itensPorPaginaRelDed" onchange="relDedMudarTamanhoPagina()">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                            registros
+                        </label>
+                    </div>
                     <div style="overflow-x:auto;">
-                        <table id="tabelaRelDed" class="tabela-gov" style="font-size:12px; min-width:1200px;">
+                        <table id="tabelaRelDed" class="tabela-gov" style="font-size:12px; min-width:1400px;">
                             <thead>
                                 <tr>
-                                    <th>LP</th>
-                                    <th>NP</th>
-                                    <th>PROC</th>
-                                    <th>Data Liquidação</th>
-                                    <th>CNPJ Fornecedor</th>
-                                    <th>Nome Fornecedor</th>
-                                    <th style="text-align:right;">Valor Bruto LP</th>
-                                    <th style="text-align:right;">Alíquota (%)</th>
-                                    <th style="text-align:right;">Base de Cálculo</th>
-                                    <th style="text-align:right;">Valor Dedução</th>
-                                    <th>Natureza Rendimento</th>
-                                    <th>Cód. Receita</th>
-                                    <th>ID Dedução</th>
-                                    <th>Nome Imposto</th>
-                                    <th>Tipo Imposto</th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('lp')">LP <span class="sort-icon" id="sort-relDed-lp"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('np')">NP <span class="sort-icon" id="sort-relDed-np"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('dataLiquidacaoIso')">Data da Liquidação <span class="sort-icon" id="sort-relDed-dataLiquidacaoIso"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('valorBruto')" style="text-align:right;">Valor Bruto da LP <span class="sort-icon" id="sort-relDed-valorBruto"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('cnpj')">CNPJ do Fornecedor <span class="sort-icon" id="sort-relDed-cnpj"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('nomeFornecedor')">Nome do Fornecedor <span class="sort-icon" id="sort-relDed-nomeFornecedor"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('proc')">PROC <span class="sort-icon" id="sort-relDed-proc"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('docOrigem')">Doc Origem <span class="sort-icon" id="sort-relDed-docOrigem"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('valorProc')" style="text-align:right;">Valor do PROC <span class="sort-icon" id="sort-relDed-valorProc"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('baseCalculo')" style="text-align:right;">Base de Cálculo <span class="sort-icon" id="sort-relDed-baseCalculo"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('aliquota')" style="text-align:right;">Alíquota <span class="sort-icon" id="sort-relDed-aliquota"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('valorDeducao')" style="text-align:right;">Valor da Dedução <span class="sort-icon" id="sort-relDed-valorDeducao"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('natRendimento')">Natureza de Rendimento <span class="sort-icon" id="sort-relDed-natRendimento"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('codReceita')">Código da Receita <span class="sort-icon" id="sort-relDed-codReceita"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('situacao')">Situação <span class="sort-icon" id="sort-relDed-situacao"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('nomeImposto')">Nome do Imposto <span class="sort-icon" id="sort-relDed-nomeImposto"></span></th>
+                                    <th class="th-sortable" onclick="relDedOrdenar('statusLp')">Status LP <span class="sort-icon" id="sort-relDed-statusLp"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyRelDed"></tbody>
                         </table>
                     </div>
-                    <div style="padding:8px 0; font-size:12px; color:#666;" id="relDedContagem" aria-live="polite"></div>
+                    <div class="paginacao">
+                        <span id="mostrandoRelDed" style="margin-right:15px;">Mostrando 0 de 0 registros</span>
+                        <button type="button" onclick="relDedMudarPagina('primeiro')" id="btnPrimeiroRelDed">Primeiro</button>
+                        <button type="button" onclick="relDedMudarPagina(-1)" id="btnAnteriorRelDed">Anterior</button>
+                        <span id="infoPaginaRelDed">Página 1 de 1</span>
+                        <button type="button" onclick="relDedMudarPagina(1)" id="btnProximoRelDed">Próximo</button>
+                        <button type="button" onclick="relDedMudarPagina('ultimo')" id="btnUltimoRelDed">Último</button>
+                    </div>
                 </div>
             </section>
 

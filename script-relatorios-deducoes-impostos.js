@@ -28,11 +28,19 @@
     ];
 
     var COLUNAS_RELATORIO = [
-        'LP', 'NP', 'PROC', 'Data da Liquidação', 'CNPJ do Fornecedor',
-        'Nome do Fornecedor', 'Valor Bruto da LP', 'Alíquota (%)',
-        'Base de Cálculo', 'Valor da Dedução', 'Natureza de Rendimento',
-        'Código da Receita', 'ID da Dedução', 'Nome do Imposto', 'Tipo do Imposto'
+        'LP', 'NP', 'Data da Liquidação', 'Valor Bruto da LP', 'CNPJ do Fornecedor',
+        'Nome do Fornecedor', 'PROC', 'Doc Origem', 'Valor do PROC', 'Base de Cálculo',
+        'Alíquota', 'Valor da Dedução', 'Natureza de Rendimento', 'Código da Receita',
+        'Situação', 'Nome do Imposto', 'Status LP'
     ];
+
+    var COLUNAS_NUMERICAS_SORT = {
+        valorBruto: true, valorProc: true, baseCalculo: true, aliquota: true, valorDeducao: true,
+        docOrigem: true
+    };
+
+    var MAP_ESTADO_LP = {};
+    ESTADOS_DISPONIVEIS.forEach(function (e) { MAP_ESTADO_LP[e.valor] = e.label; });
 
     // ===== Estado interno =====
     var _st = {
@@ -43,6 +51,9 @@
         resultados:            [],
         codigosDisponiveis:    [],
         fornecedoresDisponiveis: [],
+        paginaAtual:           1,
+        itensPorPagina:        10,
+        ordenacao:             { coluna: 'dataLiquidacaoIso', direcao: 'desc' },
         _carregandoCodigos:    false,
         _carregandoFornecedores: false,
         _modalConfirmarCb:     null
@@ -96,6 +107,58 @@
         return d.getFullYear() + '-' +
                String(d.getMonth() + 1).padStart(2, '0') + '-' +
                String(d.getDate()).padStart(2, '0');
+    }
+
+    function extrairDocOrigem(tc) {
+        if (!tc) return '—';
+        var num = String(tc.numTC || tc.numeroDocumento || '').trim();
+        if (num) {
+            var soNum = num.replace(/\D/g, '');
+            return soNum || num;
+        }
+        var tipo = String(tc.tipoTC || tc.tipoDocumento || '').trim();
+        var docStr = (tipo && tc.numTC) ? (tipo + '-' + tc.numTC) : (tc.doc || '');
+        if (!docStr) return '—';
+        var m = String(docStr).match(/-(\d+)\s*$/);
+        if (m) return m[1];
+        var dig = String(docStr).replace(/\D/g, '');
+        return dig || '—';
+    }
+
+    function labelStatusLp(estado) {
+        if (!estado) return '—';
+        return MAP_ESTADO_LP[estado] || String(estado);
+    }
+
+    function toIsoSortData(v) {
+        if (!v) return '';
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+        if (v instanceof Date && !isNaN(v.getTime())) return isoDate(v);
+        if (v && typeof v.toDate === 'function') {
+            var d = v.toDate();
+            if (!isNaN(d.getTime())) return isoDate(d);
+        }
+        return String(v);
+    }
+
+    function valorDeducaoDe(d, base, aliq) {
+        var val = Number(
+            d.valorCalculado != null ? d.valorCalculado :
+            d.valor          != null ? d.valor          :
+            d.total          != null ? d.total          : NaN
+        );
+        if (!isNaN(val) && val !== 0) return val;
+        if (base && aliq) return base * aliq / 100;
+        return 0;
+    }
+
+    function linhaParaExportacao(r) {
+        return [
+            r.lp, r.np, r.dataLiquidacao, moedaBR(r.valorBruto), r.cnpj, r.nomeFornecedor,
+            r.proc, r.docOrigem, moedaBR(r.valorProc), moedaBR(r.baseCalculo),
+            fmtAliquota(r.aliquota), moedaBR(r.valorDeducao), r.natRendimento, r.codReceita,
+            r.situacao, r.nomeImposto, r.statusLp
+        ];
     }
 
     function calcIntervalo(periodo) {
@@ -419,6 +482,7 @@
             });
         }).then(function (res) {
             _st.resultados = _construirLinhas(res.lps, res.tcMap);
+            _st.paginaAtual = 1;
             _renderizarTabela();
             if (btn) { btn.disabled = false; btn.textContent = 'Gerar Relatório'; }
         }).catch(function (e) {
@@ -440,16 +504,18 @@
             var lpCnpj = soDigitos((lp.fornecedor || {}).cnpj || '');
             var lpNome = (lp.fornecedor || {}).nome || '—';
 
-            tcs.forEach(function (tc) {
-                var proc     = tc.idProc || tc.proc || tc.id || '—';
-                var deducoes = (tc.deducoesAplicadas || tc.tributacoes || []).slice();
+            var statusLp = labelStatusLp(lp.estado);
+            var dataIso  = toIsoSortData(lp.dataLiquidacao);
 
-                // Filtro por tipo de imposto
+            tcs.forEach(function (tc) {
+                var proc      = tc.idProc || tc.proc || tc.id || '—';
+                var docOrigem = extrairDocOrigem(tc);
+                var valorProc = Number(tc.valorNotaFiscal != null ? tc.valorNotaFiscal : (tc.valor != null ? tc.valor : 0)) || 0;
+                var deducoes  = (tc.deducoesAplicadas || tc.tributacoes || []).slice();
+
                 if (_st.tiposSel.length) {
                     deducoes = deducoes.filter(function (d) { return _st.tiposSel.indexOf(d.tipo) >= 0; });
                 }
-
-                // Filtro por código de imposto
                 if (_st.codigosSel.length) {
                     deducoes = deducoes.filter(function (d) {
                         return _st.codigosSel.indexOf(d.codigo) >= 0 ||
@@ -460,33 +526,31 @@
                 deducoes.forEach(function (d) {
                     var base = Number(d.baseCalculo != null ? d.baseCalculo : (d.base != null ? d.base : 0)) || 0;
                     var aliq = Number(d.aliquota   != null ? d.aliquota   : (d.aliq  != null ? d.aliq  : 0)) || 0;
-                    var val  = Number(
-                        d.valorCalculado != null ? d.valorCalculado :
-                        d.valor          != null ? d.valor          :
-                        d.total          != null ? d.total          : 0
-                    ) || 0;
-                    var natRend    = d.natRendimento || d.natRed    || '—';
-                    var codRec     = d.codReceita    || d.codigo    || '—';
-                    var idDeduc    = d.dedEncId                     || '—';
+                    var val  = valorDeducaoDe(d, base, aliq);
+                    var natRend     = d.natRendimento || d.natRed || '—';
+                    var codRec      = d.codReceita    || d.codigo || '—';
+                    var situacao    = d.tipo || '—';
                     var nomeImposto = d.descricao || TIPO_LABEL[d.tipo] || d.tipo || '—';
-                    var tipoImposto = TIPO_LABEL[d.tipo] || d.tipo || '—';
 
                     linhas.push({
-                        lp:              lp.codigo         || '—',
-                        np:              lp.np             || '—',
-                        proc:            proc,
-                        dataLiquidacao:  fmtDataISO(lp.dataLiquidacao),
-                        cnpj:            lpCnpj            || '—',
-                        nomeFornecedor:  lpNome,
-                        valorBruto:      valorBruto,
-                        aliquota:        aliq,
-                        baseCalculo:     base,
-                        valorDeducao:    val,
-                        natRendimento:   natRend,
-                        codReceita:      codRec,
-                        idDeducao:       idDeduc,
-                        nomeImposto:     nomeImposto,
-                        tipoImposto:     tipoImposto
+                        lp:                 lp.codigo || '—',
+                        np:                 lp.np || '—',
+                        dataLiquidacao:     fmtDataISO(lp.dataLiquidacao),
+                        dataLiquidacaoIso:  dataIso,
+                        valorBruto:         valorBruto,
+                        cnpj:               lpCnpj || '—',
+                        nomeFornecedor:     lpNome,
+                        proc:               proc,
+                        docOrigem:          docOrigem,
+                        valorProc:          valorProc,
+                        baseCalculo:        base,
+                        aliquota:           aliq,
+                        valorDeducao:       val,
+                        natRendimento:      natRend,
+                        codReceita:         codRec,
+                        situacao:           situacao,
+                        nomeImposto:        nomeImposto,
+                        statusLp:           statusLp
                     });
                 });
             });
@@ -495,69 +559,147 @@
         return linhas;
     }
 
+    // ===== Ordenação e paginação =====
+
+    function _atualizarIconesOrdenacao() {
+        document.querySelectorAll('[id^="sort-relDed-"]').forEach(function (el) { el.textContent = ''; });
+        var col = _st.ordenacao.coluna;
+        var iconEl = document.getElementById('sort-relDed-' + col);
+        if (iconEl) iconEl.textContent = _st.ordenacao.direcao === 'asc' ? '▲' : '▼';
+    }
+
+    function _ordenarResultados(arr) {
+        var col = _st.ordenacao.coluna;
+        var dir = _st.ordenacao.direcao;
+        var num = !!COLUNAS_NUMERICAS_SORT[col];
+        return arr.slice().sort(function (a, b) {
+            var valA = a[col];
+            var valB = b[col];
+            if (num) {
+                valA = Number(valA);
+                valB = Number(valB);
+                if (isNaN(valA)) valA = 0;
+                if (isNaN(valB)) valB = 0;
+            } else {
+                valA = String(valA == null ? '' : valA).toLowerCase();
+                valB = String(valB == null ? '' : valB).toLowerCase();
+            }
+            if (valA < valB) return dir === 'asc' ? -1 : 1;
+            if (valA > valB) return dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    window.relDedOrdenar = function (coluna) {
+        if (_st.ordenacao.coluna === coluna) {
+            _st.ordenacao.direcao = _st.ordenacao.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            _st.ordenacao.coluna = coluna;
+            _st.ordenacao.direcao = 'asc';
+        }
+        _st.paginaAtual = 1;
+        _atualizarIconesOrdenacao();
+        _renderizarTabela();
+    };
+
+    window.relDedMudarTamanhoPagina = function () {
+        var sel = qs('itensPorPaginaRelDed');
+        _st.itensPorPagina = sel ? parseInt(sel.value, 10) || 10 : 10;
+        _st.paginaAtual = 1;
+        _renderizarTabela();
+    };
+
+    window.relDedMudarPagina = function (direcao) {
+        var total = _st.resultados.length;
+        var totalPaginas = Math.max(1, Math.ceil(total / _st.itensPorPagina));
+        if (direcao === 'primeiro') _st.paginaAtual = 1;
+        else if (direcao === 'ultimo') _st.paginaAtual = totalPaginas;
+        else _st.paginaAtual += (direcao || 0);
+        _renderizarTabela();
+    };
+
     // ===== Renderização da grade =====
 
     function _renderizarTabela() {
-        var card    = qs('relDedResultadosCard');
-        var tbody   = qs('tbodyRelDed');
+        var card     = qs('relDedResultadosCard');
+        var tbody    = qs('tbodyRelDed');
         var msgVazio = qs('relDedMsgVazio');
-        var contagem = qs('relDedContagem');
         if (!card || !tbody) return;
 
         card.style.display = '';
-        var linhas = _st.resultados;
+        var totalRegistros = _st.resultados.length;
 
-        if (!linhas.length) {
+        if (!totalRegistros) {
             if (msgVazio) msgVazio.style.display = '';
             tbody.innerHTML = '';
-            if (contagem) contagem.textContent = '';
+            _atualizarControlesPaginacao(0, 0, 1, 1);
             return;
         }
 
         if (msgVazio) msgVazio.style.display = 'none';
 
-        tbody.innerHTML = linhas.map(function (r) {
+        var ordenados = _ordenarResultados(_st.resultados);
+        var totalPaginas = Math.max(1, Math.ceil(totalRegistros / _st.itensPorPagina));
+        var pagina = Math.min(Math.max(1, _st.paginaAtual), totalPaginas);
+        _st.paginaAtual = pagina;
+        var inicio = (pagina - 1) * _st.itensPorPagina;
+        var paginaItens = ordenados.slice(inicio, inicio + _st.itensPorPagina);
+
+        tbody.innerHTML = paginaItens.map(function (r) {
             return '<tr>' +
-                '<td>' + _esc(r.lp)             + '</td>' +
-                '<td>' + _esc(r.np)             + '</td>' +
-                '<td>' + _esc(r.proc)           + '</td>' +
+                '<td>' + _esc(r.lp) + '</td>' +
+                '<td>' + _esc(r.np) + '</td>' +
                 '<td>' + _esc(r.dataLiquidacao) + '</td>' +
-                '<td>' + _esc(r.cnpj)           + '</td>' +
+                '<td style="text-align:right;">' + moedaBR(r.valorBruto) + '</td>' +
+                '<td>' + _esc(r.cnpj) + '</td>' +
                 '<td>' + _esc(r.nomeFornecedor) + '</td>' +
-                '<td style="text-align:right;">' + moedaBR(r.valorBruto)    + '</td>' +
-                '<td style="text-align:right;">' + fmtAliquota(r.aliquota)  + '</td>' +
-                '<td style="text-align:right;">' + moedaBR(r.baseCalculo)   + '</td>' +
-                '<td style="text-align:right;">' + moedaBR(r.valorDeducao)  + '</td>' +
-                '<td>' + _esc(r.natRendimento)  + '</td>' +
-                '<td>' + _esc(r.codReceita)     + '</td>' +
-                '<td>' + _esc(r.idDeducao)      + '</td>' +
-                '<td>' + _esc(r.nomeImposto)    + '</td>' +
-                '<td>' + _esc(r.tipoImposto)    + '</td>' +
+                '<td>' + _esc(r.proc) + '</td>' +
+                '<td>' + _esc(r.docOrigem) + '</td>' +
+                '<td style="text-align:right;">' + moedaBR(r.valorProc) + '</td>' +
+                '<td style="text-align:right;">' + moedaBR(r.baseCalculo) + '</td>' +
+                '<td style="text-align:right;">' + fmtAliquota(r.aliquota) + '</td>' +
+                '<td style="text-align:right;">' + moedaBR(r.valorDeducao) + '</td>' +
+                '<td>' + _esc(r.natRendimento) + '</td>' +
+                '<td>' + _esc(r.codReceita) + '</td>' +
+                '<td>' + _esc(r.situacao) + '</td>' +
+                '<td>' + _esc(r.nomeImposto) + '</td>' +
+                '<td>' + _esc(r.statusLp) + '</td>' +
                 '</tr>';
         }).join('');
 
-        if (contagem) {
-            contagem.textContent = linhas.length + ' linha(s) encontrada(s).';
+        _atualizarControlesPaginacao(totalRegistros, inicio, pagina, totalPaginas);
+        _atualizarIconesOrdenacao();
+    }
+
+    function _atualizarControlesPaginacao(total, inicio, pagina, totalPaginas) {
+        var mostrando = qs('mostrandoRelDed');
+        var info = qs('infoPaginaRelDed');
+        var btnAnt = qs('btnAnteriorRelDed');
+        var btnProx = qs('btnProximoRelDed');
+        var btnPrim = qs('btnPrimeiroRelDed');
+        var btnUlt = qs('btnUltimoRelDed');
+        if (mostrando) {
+            mostrando.textContent = total === 0
+                ? 'Mostrando 0 de 0 registros'
+                : 'Mostrando ' + (inicio + 1) + ' de ' + total + ' registros';
         }
+        if (info) info.textContent = 'Página ' + pagina + ' de ' + totalPaginas;
+        if (btnAnt) btnAnt.disabled = pagina <= 1;
+        if (btnProx) btnProx.disabled = pagina >= totalPaginas;
+        if (btnPrim) btnPrim.disabled = pagina <= 1;
+        if (btnUlt) btnUlt.disabled = pagina >= totalPaginas;
     }
 
     // ===== Exportação =====
 
     window.relDedExportar = function (formato) {
-        var linhas = _st.resultados;
-        if (!linhas.length) {
+        if (!_st.resultados.length) {
             alert('Nenhum dado para exportar. Gere o relatório primeiro.');
             return;
         }
 
         var cabecalhos = COLUNAS_RELATORIO;
-        var dados = linhas.map(function (r) {
-            return [
-                r.lp, r.np, r.proc, r.dataLiquidacao, r.cnpj, r.nomeFornecedor,
-                r.valorBruto, r.aliquota, r.baseCalculo, r.valorDeducao,
-                r.natRendimento, r.codReceita, r.idDeducao, r.nomeImposto, r.tipoImposto
-            ];
-        });
+        var dados = _ordenarResultados(_st.resultados).map(linhaParaExportacao);
 
         var nome = 'relatorio-deducoes-impostos-' + new Date().toISOString().slice(0, 10);
 
@@ -634,9 +776,11 @@
             new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), margin, y);
         y += 7;
 
-        // Proporções de colunas (soma = 1)
-        var proporcoes = [0.065, 0.055, 0.075, 0.065, 0.075, 0.115,
-                          0.07,  0.05,  0.07,  0.07,  0.065, 0.055, 0.05, 0.09, 0.055];
+        // Proporções de colunas (17 colunas, soma = 1)
+        var proporcoes = [
+            0.055, 0.04, 0.055, 0.06, 0.065, 0.08, 0.055, 0.04, 0.055,
+            0.055, 0.04, 0.055, 0.055, 0.05, 0.05, 0.07, 0.06
+        ];
         var usavel    = pageW - 2 * margin;
         var colWidths = proporcoes.map(function (p) { return p * usavel; });
         var rowH      = 5.5;
@@ -678,11 +822,6 @@
             row.forEach(function (cell, i) {
                 var w = colWidths[i];
                 var texto = String(cell == null ? '' : cell);
-                // Formatar números para colunas monetárias e alíquota
-                if (typeof cell === 'number') {
-                    if (i === 6 || i === 8 || i === 9) texto = moedaBR(cell);
-                    else if (i === 7)                  texto = fmtAliquota(cell);
-                }
                 doc.text(texto, x + 1, y + 3.8, { maxWidth: w - 2 });
                 x += w;
             });
@@ -708,4 +847,7 @@
 
     // ===== Inicialização =====
     _atualizarResumos();
+    var selPag = qs('itensPorPaginaRelDed');
+    if (selPag) _st.itensPorPagina = parseInt(selPag.value, 10) || 10;
+    _atualizarIconesOrdenacao();
 })();
