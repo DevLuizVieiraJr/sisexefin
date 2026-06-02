@@ -689,46 +689,112 @@
         } catch (e) { console.warn('Erro ao salvar último import:', e); }
     }
 
-    function prepararImportacaoNp(rows) {
+    const NP_ALIASES = ['NP', 'np'];
+
+    function cabecalhoContemAliasNp(header, aliases) {
+        const hs = (header || []).map(function(h) { return String(h || '').replace(/^\ufeff/, '').trim().toLowerCase(); });
+        return aliases.some(function(a) { return hs.indexOf(String(a).trim().toLowerCase()) !== -1; });
+    }
+
+    // Etapa 1: análise sem gravar. Classifica obrigatoriedade, formato, par OP/OB e duplicidade.
+    function prepararImportacaoNp(rows, header) {
+        const V = window.sisImportValidacao;
+        const rel = V.criarRelatorio();
+        rel.total = rows.length;
+
         const itensImportadosPorChave = new Map();
         const isoPorNp = new Map();
         const npKeysCsv = new Set();
-        let erros = 0;
-        const totalLinhas = rows.length;
+        const chavesVistasArquivo = {};
+
+        if (header && !cabecalhoContemAliasNp(header, NP_ALIASES)) {
+            rel.schemaOk = false;
+            rel.schemaMsg = 'Coluna de NP não encontrada no cabeçalho do arquivo.';
+            return {
+                relatorio: rel,
+                docsChanges: new Map(),
+                isoPorNp: isoPorNp,
+                importados: 0,
+                atualizados: 0,
+                erros: 0,
+                npValidas: 0,
+                totalLinhas: rows.length
+            };
+        }
 
         for (let i = 0; i < rows.length; i++) {
+            const linha = i + 2;
             const row = rows[i];
             const npRaw = getVal(row, ['NP', 'np']);
             const npNormRaw = String(npRaw || '').trim();
-            if (!npNormRaw) { erros++; continue; }
+            if (!npNormRaw) {
+                rel.problemas.obrigatorio.push({ linha: linha, motivo: 'NP é obrigatória.' });
+                continue;
+            }
             const npNorm = completarNpDocId(npNormRaw);
-            if (!npNorm) { erros++; continue; }
-            npKeysCsv.add(npNorm);
+            if (!npNorm) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'NP "' + npNormRaw + '" em formato inválido.' });
+                continue;
+            }
 
+            // Data de liquidação (opcional): valida formato quando preenchida.
             const dataLiq = getVal(row, ['DATA LIQUIDAÇÃO', 'DATA LIQUIDACAO', 'Data Liquidação', 'dataLiquidacao', 'Dt Liquidação', 'DT_LIQ']);
-            const iso = formatarDataParaISO(dataLiq);
-            if (iso && !isoPorNp.has(npNorm)) isoPorNp.set(npNorm, iso);
+            if (!V.dataValida(dataLiq)) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'Data de Liquidação inválida: "' + dataLiq + '".' });
+                continue;
+            }
 
             const op = getVal(row, ['OP', 'op']);
             const ob = getVal(row, ['OB', 'ob']);
-            const valorNp = valorParaNumero(getVal(row, ['VALOR_NP', 'valorNp', 'VALOR NP', 'Valor NP', 'VALOR']));
-            const valorOb = valorParaNumero(getVal(row, ['VALOR_OB', 'valorOb', 'VALOR OB', 'Valor OB']));
+            const valorNpRaw = getVal(row, ['VALOR_NP', 'valorNp', 'VALOR NP', 'Valor NP', 'VALOR']);
+            const valorObRaw = getVal(row, ['VALOR_OB', 'valorOb', 'VALOR OB', 'Valor OB']);
+            const valorNpChk = V.numero(valorNpRaw);
+            const valorObChk = V.numero(valorObRaw);
+            if (!valorNpChk.ok) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'VALOR_NP inválido: "' + valorNpRaw + '".' });
+                continue;
+            }
+            if (!valorObChk.ok) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'VALOR_OB inválido: "' + valorObRaw + '".' });
+                continue;
+            }
             const observacao = getVal(row, ['OBSERVACAO', 'OBSERVAÇÃO', 'observacao', 'observação']);
 
-            if (!op || !ob) continue;
+            const iso = formatarDataParaISO(dataLiq);
+            if (iso && !isoPorNp.has(npNorm)) isoPorNp.set(npNorm, iso);
+
+            // NP válida (mesmo sem OP/OB).
+            npKeysCsv.add(npNorm);
+
+            // OP/OB devem vir em par.
+            if (!op && !ob) {
+                continue; // NP sem item: aceito.
+            }
+            if (!op || !ob) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'OP e OB devem vir em par (um deles está vazio). NP mantida; item ignorado.' });
+                continue;
+            }
 
             const prefix11 = (npNorm.length >= 23) ? npNorm.slice(0, 11) : PREFIX_DH_11_PADRAO;
             const opFull = completarOpDocId(op, prefix11);
             const obFull = completarObDocId(ob, prefix11);
-            if (!opFull || !obFull) { erros++; continue; }
+            if (!opFull || !obFull) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'OP/OB em formato inválido (OP="' + op + '", OB="' + ob + '").' });
+                continue;
+            }
 
             const chave = npNorm + '|' + opFull + '|' + obFull;
+            if (chavesVistasArquivo[chave]) {
+                rel.problemas.duplicado.push({ linha: linha, motivo: 'Item NP/OP/OB repetido no arquivo (visto na linha ' + chavesVistasArquivo[chave] + ').' });
+                continue;
+            }
+            chavesVistasArquivo[chave] = linha;
             itensImportadosPorChave.set(chave, {
                 npNorm: npNorm,
                 op: opFull,
                 ob: obFull,
-                valorNp: valorNp || 0,
-                valorOb: valorOb || 0,
+                valorNp: valorNpChk.valor || 0,
+                valorOb: valorObChk.valor || 0,
                 observacao: observacao || ''
             });
         }
@@ -785,13 +851,14 @@
         }
 
         return {
+            relatorio: rel,
             docsChanges: docsChanges,
             isoPorNp: isoPorNp,
             importados: importados,
             atualizados: atualizados,
-            erros: erros,
+            erros: V.totalProblemas(rel),
             npValidas: npKeysCsv.size,
-            totalLinhas: totalLinhas
+            totalLinhas: rows.length
         };
     }
 
@@ -866,28 +933,36 @@
             if (!verificarPermissaoImportNp()) { e.target.value = ''; return; }
             if (typeof XLSX === 'undefined') { e.target.value = ''; return alert('Biblioteca XLSX não carregada.'); }
 
-            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Validando arquivo NP x OP/OB...');
-            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Validando arquivo NP x OP/OB...', { simulado: true });
+            const V = window.sisImportValidacao;
+            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Analisando arquivo NP x OP/OB...');
+            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Analisando arquivo NP x OP/OB...', { simulado: true });
             try {
                 const data = await readFileAsArrayBufferNp(file);
                 const wb = XLSX.read(data, { type: 'array' });
                 const firstSheet = wb.Sheets[wb.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-                const prep = prepararImportacaoNp(rows);
+                const header = XLSX.utils.sheet_to_json(firstSheet, { header: 1 })[0] || [];
+                const prep = prepararImportacaoNp(rows, header);
+                const rel = prep.relatorio;
+                if (!rel.schemaOk) {
+                    setStatusImportNp(V.statusCurto(rel, 'NP'), 'erro');
+                    alert('Não foi possível analisar o arquivo.\n\n' + V.detalhe(rel));
+                    resetEstadoImportNp();
+                    e.target.value = '';
+                    return;
+                }
                 estadoImportNp = {
                     fileName: file.name,
                     prep: prep
                 };
                 if (btnImportarNp) btnImportarNp.disabled = prep.npValidas === 0;
-                setStatusImportNp(
-                    prep.npValidas === 0
-                        ? 'Nenhuma NP válida no arquivo. Selecione outro arquivo.'
-                        : 'Arquivo validado: ' + prep.totalLinhas + ' linha(s), ' + prep.npValidas + ' NP válida(s), ' + prep.erros + ' inválida(s). Pronto para importar.',
-                    prep.npValidas === 0 ? 'erro' : 'ok'
-                );
+                setStatusImportNp(V.statusCurto(rel, 'NP'), prep.npValidas === 0 ? 'erro' : 'ok');
+                if (V.totalProblemas(rel) > 0) {
+                    alert('Análise do arquivo NP x OP/OB concluída.\n\n' + V.statusCurto(rel, 'NP') + '\n' + V.detalhe(rel));
+                }
             } catch (err) {
-                console.error('Falha na validação NP:', err);
-                setStatusImportNp('Erro ao validar arquivo: ' + (err && err.message ? err.message : err), 'erro');
+                console.error('Falha na análise NP:', err);
+                setStatusImportNp('Erro ao analisar arquivo: ' + (err && err.message ? err.message : err), 'erro');
                 resetEstadoImportNp();
                 e.target.value = '';
             } finally {
@@ -900,8 +975,8 @@
     if (btnImportarNp) {
         btnImportarNp.addEventListener('click', async function() {
             if (importNpEmExecucao) return;
-            if (!estadoImportNp || !estadoImportNp.prep) {
-                setStatusImportNp('Selecione e valide um arquivo antes de importar.', 'erro');
+            if (!estadoImportNp || !estadoImportNp.prep || estadoImportNp.prep.npValidas === 0) {
+                setStatusImportNp('Carregue e analise um arquivo com NP válida antes de importar.', 'erro');
                 return;
             }
             if (!verificarPermissaoImportNp()) return;
@@ -922,7 +997,8 @@
                 const resPersist = await persistirImportacaoNp(prep, importAbort);
                 await salvarUltimoImportNp('np');
                 const resumo = (resPersist.interrompido ? 'Interrompido. ' : '') +
-                    'Importados ' + prep.importados + '; Atualizados ' + prep.atualizados + '; Erros ' + prep.erros;
+                    'Importados ' + prep.importados + '; Atualizados ' + prep.atualizados +
+                    '; Ignorados na análise ' + prep.erros + '.';
                 setStatusImportNp('Importação concluída. ' + resumo, prep.erros > 0 ? 'info' : 'ok');
                 alert(resumo);
                 estadoImportNp = null;

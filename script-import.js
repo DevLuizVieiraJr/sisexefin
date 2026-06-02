@@ -239,24 +239,57 @@
         return '';
     }
 
-    async function validarArquivoEmpenhos(file) {
+    const NE_ALIASES = ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE'];
+    const EMPENHO_VALOR_ALIASES = ['Valor', 'valor', 'Valor (R$)', 'ValorGlobal', 'valorGlobal', 'Valor Global', 'VALOR', 'valorEmpenho'];
+
+    // Etapa 1: análise sem gravar. Classifica esquema, obrigatoriedade (NE), formato e duplicidade.
+    async function analisarArquivoEmpenhos(file) {
+        const V = window.sisImportValidacao;
+        const rel = V.criarRelatorio();
         const data = await readFileAsArrayBuffer(file);
         const wb = XLSX.read(data, { type: 'array' });
         const firstSheet = wb.Sheets[wb.SheetNames[0]];
         const rowsRaw = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-        const rowsNorm = rowsRaw.map(function(row) {
+        const header = XLSX.utils.sheet_to_json(firstSheet, { header: 1 })[0] || [];
+        rel.total = rowsRaw.length;
+
+        const headerNorm = (header || []).map(function(h) { return normalizarCabecalhoImportEmpenho(h); });
+        const temNe = NE_ALIASES.some(function(a) { return headerNorm.indexOf(normalizarCabecalhoImportEmpenho(a)) !== -1; });
+        if (!temNe) {
+            rel.schemaOk = false;
+            rel.schemaMsg = 'Coluna de NE (Número do Empenho) não encontrada no cabeçalho.';
+            return rel;
+        }
+
+        const vistosNoArquivo = {};
+        for (let i = 0; i < rowsRaw.length; i++) {
+            const linha = i + 2;
             const rowNorm = {};
-            Object.keys(row || {}).forEach(function(k) {
-                rowNorm[normalizarCabecalhoImportEmpenho(k)] = row[k];
+            Object.keys(rowsRaw[i] || {}).forEach(function(k) {
+                rowNorm[normalizarCabecalhoImportEmpenho(k)] = rowsRaw[i][k];
             });
-            return rowNorm;
-        });
-        const validas = rowsNorm.reduce((acc, rowNorm) => {
-            const ne = valorPorAliasesImportEmpenho(rowNorm, ['NE', 'ne', 'NumEmpenho', 'numEmpenho', 'numeroEmpenho', 'NumeroEmpenho', 'numNE', 'NUMNE']);
-            return acc + (ne ? 1 : 0);
-        }, 0);
-        const invalidas = rowsNorm.length - validas;
-        return { rowsNorm, validas, invalidas, total: rowsNorm.length };
+            const ne = valorPorAliasesImportEmpenho(rowNorm, NE_ALIASES);
+            if (!ne) {
+                rel.problemas.obrigatorio.push({ linha: linha, motivo: 'NE (Número do Empenho) é obrigatória.' });
+                continue;
+            }
+            const valorRaw = valorPorAliasesImportEmpenho(rowNorm, EMPENHO_VALOR_ALIASES);
+            if (valorRaw) {
+                const valorChk = V.numero(valorRaw);
+                if (!valorChk.ok) {
+                    rel.problemas.formato.push({ linha: linha, motivo: 'Valor do empenho inválido: "' + valorRaw + '".' });
+                    continue;
+                }
+            }
+            const neNorm = String(ne).trim().toLowerCase();
+            if (vistosNoArquivo[neNorm]) {
+                rel.problemas.duplicado.push({ linha: linha, motivo: 'NE "' + ne + '" repetida no arquivo (já vista na linha ' + vistosNoArquivo[neNorm] + ').' });
+                continue;
+            }
+            vistosNoArquivo[neNorm] = linha;
+            rel.validas.push(rowNorm);
+        }
+        return rel;
     }
 
     async function executarImportacaoEmpenhos(rowsNorm, importAbort) {
@@ -284,22 +317,29 @@
                 return;
             }
             if (!verificarAdmin()) { e.target.value = ''; return; }
-            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Validando arquivo de empenhos...');
-            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Validando arquivo de empenhos...', { simulado: true });
+            const V = window.sisImportValidacao;
+            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Analisando arquivo de empenhos...');
+            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Analisando arquivo de empenhos...', { simulado: true });
             try {
-                const validacao = await validarArquivoEmpenhos(file);
-                estadoImportEmpenhos = { fileName: file.name, rowsNorm: validacao.rowsNorm };
-                if (btnImportarEmpenhos) btnImportarEmpenhos.disabled = validacao.validas === 0;
-                setStatusImportEmpenhos(
-                    validacao.validas === 0
-                        ? 'Nenhuma linha válida (NE obrigatória). Selecione outro arquivo.'
-                        : 'Arquivo validado: ' + validacao.total + ' linha(s), ' + validacao.validas + ' válida(s), ' + validacao.invalidas + ' inválida(s). Pronto para importar.',
-                    validacao.validas === 0 ? 'erro' : 'ok'
-                );
+                const rel = await analisarArquivoEmpenhos(file);
+                if (!rel.schemaOk) {
+                    setStatusImportEmpenhos(V.statusCurto(rel, 'NE'), 'erro');
+                    alert('Não foi possível analisar o arquivo.\n\n' + V.detalhe(rel));
+                    resetEstadoImportEmpenhos();
+                    e.target.value = '';
+                    return;
+                }
+                estadoImportEmpenhos = { fileName: file.name, rowsNorm: rel.validas, relatorio: rel };
+                if (btnImportarEmpenhos) btnImportarEmpenhos.disabled = rel.validas.length === 0;
+                setStatusImportEmpenhos(V.statusCurto(rel, 'NE'), rel.validas.length === 0 ? 'erro' : 'ok');
+                if (V.totalProblemas(rel) > 0) {
+                    alert('Análise do arquivo de empenhos concluída.\n\n' + V.statusCurto(rel, 'NE') + '\n' + V.detalhe(rel));
+                }
             } catch (err) {
-                console.error('Falha na validação do arquivo de empenhos:', err);
-                setStatusImportEmpenhos('Erro ao validar arquivo: ' + (err && err.message ? err.message : err), 'erro');
+                console.error('Falha na análise do arquivo de empenhos:', err);
+                setStatusImportEmpenhos('Erro ao analisar arquivo: ' + (err && err.message ? err.message : err), 'erro');
                 resetEstadoImportEmpenhos();
+                e.target.value = '';
             } finally {
                 if (typeof pararBarraProgressoImport === 'function') pararBarraProgressoImport();
                 if (typeof esconderLoadingImportacao === 'function') esconderLoadingImportacao();
@@ -310,8 +350,8 @@
     if (btnImportarEmpenhos) {
         btnImportarEmpenhos.addEventListener('click', async function() {
             if (importEmpenhosEmExecucao) return;
-            if (!estadoImportEmpenhos || !Array.isArray(estadoImportEmpenhos.rowsNorm)) {
-                setStatusImportEmpenhos('Selecione e valide um arquivo antes de importar.', 'erro');
+            if (!estadoImportEmpenhos || !Array.isArray(estadoImportEmpenhos.rowsNorm) || estadoImportEmpenhos.rowsNorm.length === 0) {
+                setStatusImportEmpenhos('Carregue e analise um arquivo com dados válidos antes de importar.', 'erro');
                 return;
             }
             if (!verificarAdmin()) return;
@@ -322,6 +362,8 @@
             if (typeof window.__setLoadingAbortFn === 'function') {
                 window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
             }
+            const rel = estadoImportEmpenhos.relatorio;
+            const problemasAnalise = rel ? window.sisImportValidacao.totalProblemas(rel) : 0;
             if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Importando empenhos...');
             const totalLinhasImport = estadoImportEmpenhos.rowsNorm.length;
             if (typeof iniciarBarraProgressoImport === 'function') {
@@ -331,7 +373,8 @@
                 const res = await executarImportacaoEmpenhos(estadoImportEmpenhos.rowsNorm, importAbort);
                 await salvarUltimoImport('empenhos');
                 const msgResumo = (res.interrompido ? 'Interrompido. ' : '') +
-                    'Importados ' + res.inseridos + '; Atualizados ' + res.atualizados + '; Erros ' + res.erros + '.';
+                    'Importados ' + res.inseridos + '; Atualizados ' + res.atualizados +
+                    '; Ignorados na análise ' + problemasAnalise + '; Erros de gravação ' + res.erros + '.';
                 setStatusImportEmpenhos('Importação concluída. ' + msgResumo, res.erros > 0 ? 'info' : 'ok');
                 alert(msgResumo);
                 estadoImportEmpenhos = null;
@@ -441,12 +484,14 @@
         });
     }
 
-    // --- IMPORT LF/PF (2 fases: validar arquivo -> importar) ---
+    // --- IMPORT LF/PF (2 fases: carregar/analisar arquivo -> importar dados válidos) ---
     const fileImportLfPf = document.getElementById('fileImportLfPf');
     const btnImportarLfPf = document.getElementById('btnImportarLfPf');
     const statusImportLfPf = document.getElementById('statusImportLfPf');
     let estadoImportLfPf = null;
     let importLfPfEmExecucao = false;
+
+    const LF_ALIASES = ['N° do Pedido', 'Nº do Pedido', 'LF', 'lf', 'Numero', 'numero'];
 
     function setStatusImportLfPf(msg, tipo) {
         if (!statusImportLfPf) return;
@@ -464,23 +509,70 @@
         });
         return rowNorm;
     }
-    async function validarArquivoLfPf(file) {
-        const data = await readFileAsArrayBuffer(file);
+    function lerLinhasArquivo(data) {
         const wb = XLSX.read(data, { type: 'array' });
         const firstSheet = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
-        const rowsValidas = [];
-        let invalidas = 0;
+        const header = XLSX.utils.sheet_to_json(firstSheet, { header: 1 })[0] || [];
+        return { rows: rows, header: header };
+    }
+    function cabecalhoContemAlias(header, aliases) {
+        const hs = (header || []).map(function(h) { return String(h || '').replace(/^\ufeff/, '').trim().toLowerCase(); });
+        return aliases.some(function(a) { return hs.indexOf(String(a).trim().toLowerCase()) !== -1; });
+    }
+    // Etapa 1: análise sem gravar no BD. Classifica obrigatoriedade, formato e duplicidade.
+    async function analisarArquivoLfPf(file) {
+        const V = window.sisImportValidacao;
+        const rel = V.criarRelatorio();
+        const data = await readFileAsArrayBuffer(file);
+        const parsed = lerLinhasArquivo(data);
+        const rows = parsed.rows;
+        rel.total = rows.length;
+
+        if (!cabecalhoContemAlias(parsed.header, LF_ALIASES)) {
+            rel.schemaOk = false;
+            rel.schemaMsg = 'Coluna de LF (ex.: "N° do Pedido" ou "LF") não encontrada no cabeçalho.';
+            return rel;
+        }
+
+        const vistosNoArquivo = {};
         for (let i = 0; i < rows.length; i++) {
+            const linha = i + 2;
             const rowNorm = normalizarRowLfPf(rows[i]);
-            const lfNum = getVal(rowNorm, ['N° do Pedido', 'Nº do Pedido', 'LF', 'lf', 'Numero', 'numero']);
+            const lfNum = getVal(rowNorm, LF_ALIASES);
             if (!lfNum || String(lfNum).trim() === '') {
-                invalidas++;
+                rel.problemas.obrigatorio.push({ linha: linha, motivo: 'LF (N° do Pedido) é obrigatória.' });
                 continue;
             }
-            rowsValidas.push({ rowNorm: rowNorm, lineIndex: i + 2 });
+            const lfNorm = String(lfNum).trim().toLowerCase();
+
+            // Formato: valor monetário e datas (quando preenchidos).
+            const valorRaw = getVal(rowNorm, ['Valor (R$)', 'Valor', 'valor']);
+            const valorChk = V.numero(valorRaw);
+            if (!valorChk.ok) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'Valor inválido: "' + valorRaw + '".' });
+                continue;
+            }
+            const dataCriacao = getVal(rowNorm, ['Data de Criação', 'Data de Criacao', 'Data Criacao', 'dataCriacao', 'DT_CRIACAO', 'DtCriacao', 'dt_criacao']);
+            if (!V.dataValida(dataCriacao)) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'Data de Criação inválida: "' + dataCriacao + '" (use dd/mm/aaaa).' });
+                continue;
+            }
+            const ultimaAtual = getVal(rowNorm, ['Última Atualização', 'Ultima Atualizacao', 'ultimaAtualizacao', 'ULTIMA_DT', 'UltimaDt', 'ultima_dt']);
+            if (!V.dataValida(ultimaAtual)) {
+                rel.problemas.formato.push({ linha: linha, motivo: 'Última Atualização inválida: "' + ultimaAtual + '" (use dd/mm/aaaa).' });
+                continue;
+            }
+
+            // Duplicidade no próprio arquivo (mesma LF): mantém a primeira, reporta as demais.
+            if (vistosNoArquivo[lfNorm]) {
+                rel.problemas.duplicado.push({ linha: linha, motivo: 'LF "' + lfNum + '" repetida no arquivo (já vista na linha ' + vistosNoArquivo[lfNorm] + ').' });
+                continue;
+            }
+            vistosNoArquivo[lfNorm] = linha;
+            rel.validas.push({ rowNorm: rowNorm, lineIndex: linha, lfNorm: lfNorm });
         }
-        return { rowsValidas: rowsValidas, invalidas: invalidas, total: rows.length };
+        return rel;
     }
     async function executarImportacaoLfPf(rowsValidas, mapLfPorNumeroInicial, importAbort) {
         const mapLfPorNumero = Object.assign({}, mapLfPorNumeroInicial || {});
@@ -573,14 +665,22 @@
             const file = e.target.files[0];
             resetEstadoImportLfPf();
             if (!file) {
-                setStatusImportLfPf('Nenhum arquivo selecionado.', 'info');
+                setStatusImportLfPf('Selecione um arquivo para análise.', 'info');
                 return;
             }
             if (!verificarAdmin()) { e.target.value = ''; return; }
-            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Validando arquivo LFxPF...');
-            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Validando arquivo LFxPF...', { simulado: true });
+            const V = window.sisImportValidacao;
+            if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Analisando arquivo LFxPF...');
+            if (typeof iniciarBarraProgressoImport === 'function') iniciarBarraProgressoImport('Analisando arquivo LFxPF...', { simulado: true });
             try {
-                const validacao = await validarArquivoLfPf(file);
+                const rel = await analisarArquivoLfPf(file);
+                if (!rel.schemaOk) {
+                    setStatusImportLfPf(V.statusCurto(rel, 'LF'), 'erro');
+                    alert('Não foi possível analisar o arquivo.\n\n' + V.detalhe(rel));
+                    resetEstadoImportLfPf();
+                    e.target.value = '';
+                    return;
+                }
                 const baseLf = typeof baseLfPf !== 'undefined' ? baseLfPf : [];
                 const mapLfPorNumero = {};
                 baseLf.forEach(function(d) {
@@ -589,20 +689,18 @@
                 });
                 estadoImportLfPf = {
                     fileName: file.name,
-                    rowsValidas: validacao.rowsValidas,
+                    rowsValidas: rel.validas,
                     mapLfPorNumero: mapLfPorNumero,
-                    invalidasPrevia: validacao.invalidas
+                    relatorio: rel
                 };
-                if (btnImportarLfPf) btnImportarLfPf.disabled = validacao.rowsValidas.length === 0;
-                setStatusImportLfPf(
-                    validacao.rowsValidas.length === 0
-                        ? 'Nenhuma linha válida (LF obrigatória). Selecione outro arquivo.'
-                        : 'Arquivo validado: ' + validacao.total + ' linha(s), ' + validacao.rowsValidas.length + ' válida(s), ' + validacao.invalidas + ' inválida(s). Pronto para importar.',
-                    validacao.rowsValidas.length === 0 ? 'erro' : 'ok'
-                );
+                if (btnImportarLfPf) btnImportarLfPf.disabled = rel.validas.length === 0;
+                setStatusImportLfPf(V.statusCurto(rel, 'LF'), rel.validas.length === 0 ? 'erro' : 'ok');
+                if (V.totalProblemas(rel) > 0) {
+                    alert('Análise do arquivo LFxPF concluída.\n\n' + V.statusCurto(rel, 'LF') + '\n' + V.detalhe(rel));
+                }
             } catch (err) {
-                console.error('Falha na validação LFxPF:', err);
-                setStatusImportLfPf('Erro ao validar arquivo: ' + (err && err.message ? err.message : err), 'erro');
+                console.error('Falha na análise LFxPF:', err);
+                setStatusImportLfPf('Erro ao analisar arquivo: ' + (err && err.message ? err.message : err), 'erro');
                 resetEstadoImportLfPf();
                 e.target.value = '';
             } finally {
@@ -615,8 +713,8 @@
     if (btnImportarLfPf) {
         btnImportarLfPf.addEventListener('click', async function() {
             if (importLfPfEmExecucao) return;
-            if (!estadoImportLfPf || !Array.isArray(estadoImportLfPf.rowsValidas)) {
-                setStatusImportLfPf('Selecione e valide um arquivo antes de importar.', 'erro');
+            if (!estadoImportLfPf || !Array.isArray(estadoImportLfPf.rowsValidas) || estadoImportLfPf.rowsValidas.length === 0) {
+                setStatusImportLfPf('Carregue e analise um arquivo com dados válidos antes de importar.', 'erro');
                 return;
             }
             if (!verificarAdmin()) return;
@@ -628,6 +726,8 @@
                 window.__setLoadingAbortFn(function() { importAbort.aborted = true; });
             }
             const total = estadoImportLfPf.rowsValidas.length;
+            const rel = estadoImportLfPf.relatorio;
+            const problemasAnalise = rel ? window.sisImportValidacao.totalProblemas(rel) : 0;
             if (typeof mostrarLoadingImportacao === 'function') mostrarLoadingImportacao('Importando LFxPF...');
             if (typeof iniciarBarraProgressoImport === 'function') {
                 iniciarBarraProgressoImport('Gravando LFxPF no banco... 0/' + total, { pct: 0, simulado: false });
@@ -640,9 +740,9 @@
                 );
                 await salvarUltimoImport('lfpf');
                 const errosPersist = res.erros.length;
-                const invalidasTotais = (estadoImportLfPf.invalidasPrevia || 0) + errosPersist;
                 let msg = (res.interrompido ? 'Interrompido. ' : '') +
-                    'Importados ' + res.inseridos + '; Atualizados ' + res.atualizados + '; Erros ' + invalidasTotais;
+                    'Importados ' + res.inseridos + '; Atualizados ' + res.atualizados +
+                    '; Ignorados na análise ' + problemasAnalise + '; Erros de gravação ' + errosPersist + '.';
                 if (res.erros.length > 0) {
                     msg += '\n\nErros na gravação (' + res.erros.length + '):\n' + res.erros.slice(0, 20).join('\n') + (res.erros.length > 20 ? '\n...' : '');
                 }

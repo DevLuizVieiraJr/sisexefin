@@ -78,10 +78,10 @@
                     <div class="toolbar">
                         <div class="import-group">
                             <span data-permission="lf_inserir" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                                <label>Importar Excel/CSV:</label>
-                                <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls">
-                                <button type="button" id="btnImportarLfPf" class="btn-primary btn-small" disabled>Importar</button>
-                                <span id="statusImportLfPf" style="font-size:12px; color:#666;" aria-live="polite">Selecione e valide um arquivo.</span>
+                                <label for="fileImportLfPf">Carregar arquivo (CSV/Excel):</label>
+                                <input type="file" id="fileImportLfPf" accept=".csv,.xlsx,.xls" title="Selecione o arquivo para análise antes da importação">
+                                <button type="button" id="btnImportarLfPf" class="btn-primary btn-small" disabled>Importar dados válidos</button>
+                                <span id="statusImportLfPf" style="font-size:12px; color:#666;" aria-live="polite">Selecione um arquivo para análise.</span>
                             </span>
                             <span id="ultimoImportLfPf" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
                         </div>
@@ -197,10 +197,10 @@
 
                     <div class="toolbar">
                         <div class="import-group" data-permission="op_ler" style="flex:1; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <label>Importar Excel/CSV:</label>
-                            <input type="file" id="fileImportNp" accept=".csv,.xlsx,.xls">
-                            <button type="button" id="btnImportarNp" class="btn-primary btn-small" disabled>Importar</button>
-                            <span id="statusImportNp" style="font-size:12px; color:#666;" aria-live="polite">Selecione e valide um arquivo.</span>
+                            <label for="fileImportNp">Carregar arquivo (CSV/Excel):</label>
+                            <input type="file" id="fileImportNp" accept=".csv,.xlsx,.xls" title="Selecione o arquivo para análise antes da importação">
+                            <button type="button" id="btnImportarNp" class="btn-primary btn-small" disabled>Importar dados válidos</button>
+                            <span id="statusImportNp" style="font-size:12px; color:#666;" aria-live="polite">Selecione um arquivo para análise.</span>
                             <span id="ultimoImportNp" class="ultimo-import" style="font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
                             <a href="#" onclick="downloadModeloNP(); return false;" class="btn-modelo-csv btn-outline" title="Descarregar modelo CSV">📄 Ver modelo</a>
                         </div>
@@ -598,10 +598,10 @@
                     <div class="toolbar">
                         <div class="import-group">
                             <span data-permission="acesso_admin" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                                <label>Importar Excel/CSV:</label>
-                                <input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv">
-                                <button type="button" id="btnImportarEmpenhos" class="btn-primary btn-small" disabled>Importar</button>
-                                <span id="statusImportEmpenhos" style="font-size:12px; color:#666;" aria-live="polite">Selecione e valide um arquivo.</span>
+                                <label for="fileImportEmpenhos">Carregar arquivo (CSV/Excel):</label>
+                                <input type="file" id="fileImportEmpenhos" accept=".xlsx, .xls, .csv" title="Selecione o arquivo para análise antes da importação">
+                                <button type="button" id="btnImportarEmpenhos" class="btn-primary btn-small" disabled>Importar dados válidos</button>
+                                <span id="statusImportEmpenhos" style="font-size:12px; color:#666;" aria-live="polite">Selecione um arquivo para análise.</span>
                             </span>
                             <span id="ultimoImportEmpenhos" class="ultimo-import" style="margin-left:8px;font-size:12px;color:#666;" title="Data/hora do último import">Último upload: —</span>
                         </div>

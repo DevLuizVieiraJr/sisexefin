@@ -150,6 +150,8 @@ function mostrarBarraLoading(texto, opts) {
             if (pctEl) { pctEl.style.display = ''; pctEl.textContent = pct + '%'; }
             if (fill) fill.style.width = pct + '%';
         }
+        // Limpa o display:none inline deixado por esconderBarraLoading() para que a classe .visivel volte a valer.
+        bar.style.display = '';
         bar.classList.add('visivel');
     }
 }
@@ -206,7 +208,7 @@ function esconderLoadingImportacao() {
 function iniciarBarraProgressoImport(texto, opts) {
     opts = opts || {};
     __pararTimerBarraSimulada();
-    __importBarraState.pct = typeof opts.pctInicial === 'number' ? opts.pctInicial : 0;
+    __importBarraState.pct = typeof opts.pctInicial === 'number' ? opts.pctInicial : (typeof opts.pct === 'number' ? opts.pct : 0);
     __importBarraState.maxSimulado = typeof opts.maxSimulado === 'number' ? opts.maxSimulado : 90;
     __importBarraState.step = typeof opts.step === 'number' ? opts.step : 4;
     __importBarraState.intervalMs = typeof opts.intervalMs === 'number' ? opts.intervalMs : 180;
@@ -236,6 +238,86 @@ window.esconderLoadingImportacao = esconderLoadingImportacao;
 window.iniciarBarraProgressoImport = iniciarBarraProgressoImport;
 window.atualizarBarraProgressoImport = atualizarBarraProgressoImport;
 window.pararBarraProgressoImport = pararBarraProgressoImport;
+
+// ============================================================
+// VALIDAÇÃO DE IMPORTAÇÃO (helpers compartilhados entre módulos)
+// Usados na etapa "Carregar arquivo" para classificar linhas antes
+// de gravar no BD (obrigatoriedade, formato, duplicidade, esquema).
+// ============================================================
+window.sisImportValidacao = (function() {
+    // Data opcional: aceita vazio, dd/mm/aaaa, d/m/aaaa ou aaaa-mm-dd.
+    function dataValida(s) {
+        const v = String(s == null ? '' : s).trim();
+        if (!v) return true;
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return true;
+        if (/^\d{4}-\d{1,2}-\d{1,2}/.test(v)) return true;
+        return false;
+    }
+    // Número opcional: aceita vazio; aceita formatos BR (1.234,56) ou simples.
+    // Retorna { ok, valor }.
+    function numero(s) {
+        const original = String(s == null ? '' : s).trim();
+        if (!original) return { ok: true, valor: 0, vazio: true };
+        let limpo = original.replace(/\s+/g, '').replace(/[Rr]\$/g, '').replace(/[^\d,.-]/g, '');
+        if (limpo.indexOf(',') !== -1) limpo = limpo.replace(/\./g, '').replace(',', '.');
+        const n = Number(limpo);
+        if (limpo === '' || isNaN(n)) return { ok: false, valor: 0 };
+        return { ok: true, valor: n };
+    }
+    // Cria a estrutura padrão de relatório de análise.
+    function criarRelatorio() {
+        return {
+            schemaOk: true,
+            schemaMsg: '',
+            total: 0,
+            validas: [],
+            problemas: { obrigatorio: [], formato: [], duplicado: [], coluna: [] }
+        };
+    }
+    // Conta problemas totais (linhas com pelo menos um problema + globais de coluna).
+    function totalProblemas(rel) {
+        return rel.problemas.obrigatorio.length +
+            rel.problemas.formato.length +
+            rel.problemas.duplicado.length +
+            rel.problemas.coluna.length;
+    }
+    // Monta texto de status curto para a barra/área de status.
+    function statusCurto(rel, nomeChave) {
+        if (!rel.schemaOk) return rel.schemaMsg || 'Arquivo com colunas incompatíveis.';
+        const validas = rel.validas.length;
+        const probs = totalProblemas(rel);
+        return 'Análise: ' + rel.total + ' linha(s), ' + validas + ' válida(s), ' + probs + ' com problema(s).' +
+            (validas > 0 ? ' Clique em "Importar dados válidos".' : ' Nenhum ' + (nomeChave || 'registro') + ' válido para importar.');
+    }
+    // Monta relatório detalhado (texto multilinha) para alert/console.
+    function detalhe(rel, limitePorCategoria) {
+        const lim = limitePorCategoria || 15;
+        const linhas = [];
+        if (!rel.schemaOk) linhas.push('Esquema: ' + rel.schemaMsg);
+        function bloco(titulo, arr) {
+            if (!arr.length) return;
+            linhas.push('');
+            linhas.push(titulo + ' (' + arr.length + '):');
+            arr.slice(0, lim).forEach(function(p) {
+                linhas.push('  - ' + (p.linha != null ? 'Linha ' + p.linha + ': ' : '') + p.motivo);
+            });
+            if (arr.length > lim) linhas.push('  ... e mais ' + (arr.length - lim) + '.');
+        }
+        bloco('Obrigatórios faltando', rel.problemas.obrigatorio);
+        bloco('Formato inválido', rel.problemas.formato);
+        bloco('Duplicados no arquivo', rel.problemas.duplicado);
+        bloco('Colunas incompatíveis', rel.problemas.coluna);
+        return linhas.join('\n');
+    }
+    return {
+        dataValida: dataValida,
+        numero: numero,
+        criarRelatorio: criarRelatorio,
+        totalProblemas: totalProblemas,
+        statusCurto: statusCurto,
+        detalhe: detalhe
+    };
+})();
 
 function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 
