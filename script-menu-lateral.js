@@ -112,6 +112,44 @@
                 </li>
             </ul>
         </li>
+        <li class="nav-item has-treeview" data-tree="relatorios">
+            <a href="#" class="nav-link" data-toggle="tree" title="Relatórios" aria-expanded="false">
+                <i class="nav-icon fas fa-chart-bar"></i>
+                <p>Relatórios <i class="right fas fa-angle-left"></i></p>
+            </a>
+            <ul class="nav nav-treeview" id="sub-relatorios">
+                <li class="nav-item">
+                    <a href="#" class="nav-link emdesevolvimento" title="Relatório de Empenhos — em desenvolvimento" aria-disabled="true">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Empenhos</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link emdesevolvimento" title="Relatório de Título de Crédito — em desenvolvimento" aria-disabled="true">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Título de Crédito</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link emdesevolvimento" title="Relatório de Liquidação e Pagamento — em desenvolvimento" aria-disabled="true">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Liquidação e Pagamento</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link emdesevolvimento" title="Relatório de LF e PF — em desenvolvimento" aria-disabled="true">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>LF e PF</p>
+                    </a>
+                </li>
+                <li class="nav-item" data-permission="relatorios_ler">
+                    <a href="sistema.html?secao=relatoriosDeducoesImpostos" class="nav-link menu-secao-sistema" data-secao="relatoriosDeducoesImpostos" title="Relatório de Deduções e Impostos">
+                        <i class="far fa-circle nav-icon"></i>
+                        <p>Deduções e Impostos</p>
+                    </a>
+                </li>
+            </ul>
+        </li>
         <li class="nav-item has-treeview" data-tree="links">
             <a href="#" class="nav-link" data-toggle="tree" title="Links rápidos" aria-expanded="false">
                 <i class="nav-icon fas fa-external-link-alt"></i>
@@ -366,7 +404,7 @@
         const elAtivo = ul.querySelector('[data-menu-ativo="' + ativo + '"]');
         if (elAtivo) {
             elAtivo.classList.add('active');
-        } else if (ativo === 'sistema' || ['empenhos','lf','op','deducoesEncargos','contratos','fornecedores','titulos','centrocustos','ug','backup'].indexOf(ativo) >= 0) {
+        } else if (ativo === 'sistema' || ['empenhos','lf','op','deducoesEncargos','contratos','fornecedores','titulos','centrocustos','ug','backup','relatoriosDeducoesImpostos'].indexOf(ativo) >= 0) {
             const secao = ativo === 'sistema' ? (new URLSearchParams(window.location.search).get('secao') || 'empenhos') : ativo;
             const linkSecao = ul.querySelector('a[href*="secao=' + secao + '"]');
             if (linkSecao) linkSecao.classList.add('active');
@@ -384,6 +422,8 @@
         ul.querySelectorAll('.nav-item.has-treeview[data-tree]').forEach(function(item) {
             const id = item.getAttribute('data-tree');
             if (id === 'tabelas' && (ativo === 'sistema' || ['empenhos','lf','op','deducoesEncargos','contratos','fornecedores','centrocustos','ug','backup'].indexOf(ativo) >= 0)) {
+                item.classList.add('menu-open');
+            } else if (id === 'relatorios' && ['relatoriosDeducoesImpostos'].indexOf(ativo) >= 0) {
                 item.classList.add('menu-open');
             } else if (id === 'admin' && ativo.indexOf('admin-') === 0) {
                 item.classList.add('menu-open');
@@ -439,7 +479,7 @@
                 if (!secao) return;
                 e.preventDefault();
                 const idSecao = 'secao-' + secao;
-                const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', deducoesEncargos: 'dedenc_ler', contratos: 'contratos_ler', fornecedores: 'fornecedores_ler', centrocustos: 'centrocustos_ler', ug: 'ug_ler', backup: 'backup_ler' };
+                const mapPerm = { empenhos: 'empenhos_ler', lf: 'lf_ler', op: 'op_ler', deducoesEncargos: 'dedenc_ler', contratos: 'contratos_ler', fornecedores: 'fornecedores_ler', centrocustos: 'centrocustos_ler', ug: 'ug_ler', backup: 'backup_ler', relatoriosDeducoesImpostos: 'relatorios_ler' };
                 const permsCarregadas = (typeof permissoesEmCache !== 'undefined' && Array.isArray(permissoesEmCache) && permissoesEmCache.length > 0);
                 if (permsCarregadas && typeof temPermissaoUI === 'function' && !temPermissaoUI(mapPerm[secao])) return;
                 if (typeof mostrarSecao === 'function') mostrarSecao(idSecao, link);

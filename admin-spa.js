@@ -23,7 +23,8 @@
         { modulo: 'oi', label: 'Admin - OI', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
         { modulo: 'centrocustos', label: 'Centro de Custos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
         { modulo: 'ug', label: 'Unidade Gestora (UG)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'backup', label: 'Backup Global', acoes: ['ler'] }
+        { modulo: 'backup', label: 'Backup Global', acoes: ['ler'] },
+        { modulo: 'relatorios', label: 'Relatórios', acoes: ['ler'] }
     ];
     const ORDEM_PAINEIS = ['usuarios', 'pendentes', 'perfis', 'oi', 'cadastrar'];
     const PERMISSOES_PAINEL = {

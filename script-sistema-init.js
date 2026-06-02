@@ -13,7 +13,8 @@
         fornecedores: 'secao-fornecedores',
         centrocustos: 'secao-centrocustos',
         ug: 'secao-ug',
-        backup: 'secao-backup'
+        backup: 'secao-backup',
+        relatoriosDeducoesImpostos: 'secao-relatorios-deducoes-impostos'
     };
     const mapSecaoPermissao = {
         'secao-empenhos': 'empenhos_ler',
@@ -24,7 +25,8 @@
         'secao-fornecedores': 'fornecedores_ler',
         'secao-centrocustos': 'centrocustos_ler',
         'secao-ug': 'ug_ler',
-        'secao-backup': 'backup_ler'
+        'secao-backup': 'backup_ler',
+        'secao-relatorios-deducoes-impostos': 'relatorios_ler'
     };
     const params = new URLSearchParams(window.location.search);
     let secaoParam = params.get('secao');
