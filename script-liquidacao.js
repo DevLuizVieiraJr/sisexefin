@@ -903,19 +903,14 @@ function esconderLoading() {
                         criadoEm:  firebase.firestore.FieldValue.serverTimestamp(),
                         criadoPor: email,
                     }));
-                });
-
-                if (lpEditorState.tcsIds.length) {
-                    var batch = db.batch();
                     lpEditorState.tcsIds.forEach(function (tid) {
-                        batch.update(db.collection('titulos').doc(tid), {
+                        tx.update(db.collection('titulos').doc(tid), {
                             liquidacaoId:     novoId,
                             liquidacaoCodigo: novoCodigo,
                             editado_em:       firebase.firestore.FieldValue.serverTimestamp(),
                         });
                     });
-                    await batch.commit();
-                }
+                });
 
                 lpEditorState.id     = novoId;
                 lpEditorState.codigo = novoCodigo;

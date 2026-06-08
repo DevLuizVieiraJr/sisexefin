@@ -153,61 +153,126 @@
         var dataLiq = String(opts.dataLiq || '').trim();
         var correcao = !!opts.correcao;
         var motivoCorrecao = opts.motivoCorrecao || '';
-        var npAntiga = String(opts.npAntiga || '').trim();
         var email = getUsuarioEmail();
-        var hist = (opts.historicoAtual || []).slice();
+        var histFinal = [];
 
-        if (correcao && npAntiga) {
-            for (var i = 0; i < tcsIds.length; i++) {
-                await desvincularTituloDaNP(tcsIds[i], npAntiga);
+        if (!lpId) throw new Error('Liquidação não informada.');
+        if (!tcsIds.length) throw new Error('Sem TCs no lote.');
+
+        var lpRef = db.collection('liquidacoes').doc(lpId);
+        var tituloRefs = tcsIds.map(function (tid) { return db.collection('titulos').doc(tid); });
+        var novaNpRefs = candidatosNpDocId(np).filter(Boolean).map(function (id) { return db.collection('np').doc(id); });
+        if (!novaNpRefs.length) throw new Error('NP inválida.');
+
+        await db.runTransaction(async function (tx) {
+            var lpSnap = await tx.get(lpRef);
+            if (!lpSnap.exists) throw new Error('Liquidação não encontrada.');
+            var lpAtual = lpSnap.data() || {};
+            var npAntiga = String(lpAtual.np || opts.npAntiga || '').trim();
+            var antigaNpRefs = (correcao && npAntiga)
+                ? candidatosNpDocId(npAntiga).filter(Boolean).map(function (id) { return db.collection('np').doc(id); })
+                : [];
+
+            var tituloSnaps = [];
+            for (var i = 0; i < tituloRefs.length; i++) {
+                tituloSnaps.push(await tx.get(tituloRefs[i]));
             }
-        }
+            var antigaNpSnaps = [];
+            for (var a = 0; a < antigaNpRefs.length; a++) {
+                antigaNpSnaps.push(await tx.get(antigaNpRefs[a]));
+            }
+            var novaNpSnaps = [];
+            for (var n = 0; n < novaNpRefs.length; n++) {
+                novaNpSnaps.push(await tx.get(novaNpRefs[n]));
+            }
 
-        var evTipo = correcao ? 'corrigir_np' : 'fechar_np';
-        var evDetalhe = 'NP: ' + np + ' | Data: ' + dataLiq;
-        hist.push({
-            data: new Date().toISOString(),
-            tipo: evTipo,
-            usuario: email,
-            detalhe: evDetalhe,
-            motivo: correcao ? motivoCorrecao : ''
-        });
+            var antigaNpAlvo = null;
+            for (var oa = 0; oa < antigaNpRefs.length; oa++) {
+                if (antigaNpSnaps[oa].exists) {
+                    antigaNpAlvo = antigaNpRefs[oa];
+                    break;
+                }
+            }
 
-        await db.collection('liquidacoes').doc(lpId).update({
-            estado: 'fechado',
-            np: np,
-            dataLiquidacao: dataLiq,
-            historico: hist,
-            editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-            editadoPor: email
-        });
+            var novaNpAlvo = novaNpRefs[0];
+            var novaNpExiste = false;
+            for (var on = 0; on < novaNpRefs.length; on++) {
+                if (novaNpSnaps[on].exists) {
+                    novaNpAlvo = novaNpRefs[on];
+                    novaNpExiste = true;
+                    break;
+                }
+            }
 
-        for (var j = 0; j < tcsIds.length; j++) {
-            var tid = tcsIds[j];
-            var tRef = db.collection('titulos').doc(tid);
-            var tSnap = await tRef.get();
-            var td = tSnap.data() || {};
-            var h = entradaHistoricoTC(
-                'Liquidado',
-                correcao ? 'Correção NP (LP)' : 'NP via liquidação',
-                (correcao ? motivoCorrecao + ' | ' : '') + 'NP ' + np + (opts.codigoLp ? ' | LP: ' + opts.codigoLp : '')
-            );
-            var hists = Array.isArray(td.historicoStatus) ? td.historicoStatus.slice() : [];
-            var histo = Array.isArray(td.historico) ? td.historico.slice() : [];
-            hists.push(h);
-            histo.push(h);
-            await tRef.update({
+            var hist = Array.isArray(lpAtual.historico) ? lpAtual.historico.slice() : (opts.historicoAtual || []).slice();
+            var evTipo = correcao ? 'corrigir_np' : 'fechar_np';
+            var evDetalhe = 'NP: ' + np + ' | Data: ' + dataLiq;
+            hist.push({
+                data: new Date().toISOString(),
+                tipo: evTipo,
+                usuario: email,
+                detalhe: evDetalhe,
+                motivo: correcao ? motivoCorrecao : ''
+            });
+            histFinal = hist;
+
+            tx.update(lpRef, {
+                estado: 'fechado',
                 np: np,
                 dataLiquidacao: dataLiq,
-                status: 'Liquidado',
-                historicoStatus: hists,
-                historico: histo,
-                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                historico: hist,
+                editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                editadoPor: email
             });
-            await vincularTituloNaNP(tid, np, dataLiq);
-        }
 
-        return hist;
+            for (var j = 0; j < tituloRefs.length; j++) {
+                if (!tituloSnaps[j].exists) throw new Error('TC não encontrado: ' + tcsIds[j]);
+                var td = tituloSnaps[j].data() || {};
+                var h = entradaHistoricoTC(
+                    'Liquidado',
+                    correcao ? 'Correção NP (LP)' : 'NP via liquidação',
+                    (correcao ? motivoCorrecao + ' | ' : '') + 'NP ' + np + (opts.codigoLp ? ' | LP: ' + opts.codigoLp : '')
+                );
+                var hists = Array.isArray(td.historicoStatus) ? td.historicoStatus.slice() : [];
+                var histo = Array.isArray(td.historico) ? td.historico.slice() : [];
+                hists.push(h);
+                histo.push(h);
+                tx.update(tituloRefs[j], {
+                    np: np,
+                    dataLiquidacao: dataLiq,
+                    status: 'Liquidado',
+                    historicoStatus: hists,
+                    historico: histo,
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            var idsStr = tcsIds.map(function (tid) { return String(tid || '').trim(); }).filter(Boolean);
+            if (antigaNpAlvo && antigaNpAlvo.id !== novaNpAlvo.id) {
+                tx.set(antigaNpAlvo, {
+                    titulosVinculados: firebase.firestore.FieldValue.arrayRemove.apply(null, idsStr),
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            }
+
+            var payloadNp = {
+                np: novaNpAlvo.id,
+                titulosVinculados: firebase.firestore.FieldValue.arrayUnion.apply(null, idsStr),
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (dataLiq) payloadNp.dataLiquidacao = dataLiq;
+            if (email) payloadNp.editado_por = email;
+            if (!novaNpExiste) {
+                payloadNp.documentosHabeis = [];
+                payloadNp.ativo = true;
+            }
+            if (global.sisAnoDocumento && typeof global.sisAnoDocumento.payloadAnosNp === 'function') {
+                Object.assign(payloadNp, global.sisAnoDocumento.payloadAnosNp(novaNpAlvo.id));
+            }
+            tx.set(novaNpAlvo, payloadNp, { merge: true });
+        });
+
+        return histFinal;
     }
 
     global.LiquidacaoNp = {
