@@ -31,9 +31,40 @@ service cloud.firestore {
     function _temPermissaoPermRef(permissao, permRef) {
       return permRef != null
         && (permRef.hasAny([permissao])
-          || (permissao in ['empenhos_inserir','contratos_inserir','fornecedores_inserir','dedenc_inserir','titulos_inserir','lf_inserir','centrocustos_inserir','ug_inserir'] && permRef.hasAny(['inserir_dados']))
-          || (permissao in ['empenhos_editar','contratos_editar','fornecedores_editar','dedenc_editar','titulos_editar','lf_editar','centrocustos_editar','ug_editar'] && permRef.hasAny(['editar_dados']))
+          || (permissao in ['empenhos_inserir','contratos_inserir','fornecedores_inserir','dedenc_inserir','titulos_inserir','lf_inserir','centrocustos_inserir','ug_inserir','op_inserir'] && permRef.hasAny(['inserir_dados']))
+          || (permissao in ['empenhos_editar','contratos_editar','fornecedores_editar','dedenc_editar','titulos_editar','lf_editar','centrocustos_editar','ug_editar','op_editar'] && permRef.hasAny(['editar_dados']))
           || (permissao in ['empenhos_excluir','contratos_excluir','fornecedores_excluir','dedenc_excluir','titulos_excluir','lf_excluir','centrocustos_excluir','ug_excluir'] && permRef.hasAny(['excluir_dados'])));
+    }
+
+    // Aliases legados (matriz RBAC — ver RN Admin RN-ADM-038)
+    function temPermissaoOuAlias(permissao) {
+      return temPermissao(permissao)
+        || (permissao == 'titulos_status' && temPermissao('titulos_inativar'))
+        || (permissao == 'empenhos_cancelar' && temPermissao('empenhos_excluir'))
+        || (permissao == 'empenhos_status' && temPermissao('empenhos_excluir'))
+        || (permissao == 'lf_cancelar' && temPermissao('lf_excluir'))
+        || (permissao == 'lf_status' && temPermissao('lf_excluir'))
+        || (permissao == 'fornecedores_cancelar' && temPermissao('fornecedores_excluir'))
+        || (permissao == 'fornecedores_status' && temPermissao('fornecedores_excluir'))
+        || (permissao == 'centrocustos_cancelar' && temPermissao('centrocustos_excluir'))
+        || (permissao == 'centrocustos_status' && temPermissao('centrocustos_excluir'))
+        || (permissao == 'ug_cancelar' && temPermissao('ug_excluir'))
+        || (permissao == 'ug_status' && temPermissao('ug_excluir'))
+        || (permissao == 'contratos_cancelar' && temPermissao('contratos_excluir'))
+        || (permissao == 'contratos_status' && temPermissao('contratos_excluir'))
+        || (permissao == 'dedenc_cancelar' && temPermissao('dedenc_excluir'))
+        || (permissao == 'op_inserir' && temPermissao('titulos_inserir'))
+        || (permissao == 'op_editar' && temPermissao('titulos_editar'))
+        || (permissao == 'op_cancelar' && (temPermissao('titulos_inserir') || temPermissao('titulos_editar')))
+        || (permissao == 'op_status' && (temPermissao('titulos_inserir') || temPermissao('titulos_editar')))
+        || (permissao == 'usuarios_status' && (temPermissao('usuarios_editar') || temPermissao('acesso_admin')))
+        || (permissao == 'oi_status' && temPermissao('oi_editar'))
+        || (permissao == 'oi_cancelar' && temPermissao('oi_editar'));
+    }
+
+    function podeExcluirPermanenteMod(modPrefix, permExcluir, permCancelar, permStatus) {
+      return temPermissao('acesso_admin')
+        || (temPermissao(permExcluir) && (temPermissao(permCancelar) || temPermissao(permStatus)));
     }
 
     function podeGerirUsuarios() {
@@ -86,6 +117,7 @@ service cloud.firestore {
         (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['perfil_ativo']))
         || temPermissao('acesso_admin')
         || temPermissao('usuarios_editar')
+        || temPermissaoOuAlias('usuarios_status')
         || temPermissao('admin_cadastrar_usuario')
       );
       allow delete: if logado() && (temPermissao('acesso_admin') || temPermissao('usuarios_excluir'));
@@ -115,38 +147,57 @@ service cloud.firestore {
     match /empenhos/{docId} {
       allow read: if logado() && temPermissao('empenhos_ler');
       allow create: if logado() && temPermissao('empenhos_inserir');
-      allow update: if logado() && temPermissao('empenhos_editar');
-      allow delete: if logado() && temPermissao('empenhos_excluir');
+      allow update: if logado() && (
+        temPermissao('empenhos_editar')
+        || temPermissaoOuAlias('empenhos_cancelar')
+        || temPermissaoOuAlias('empenhos_status')
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('empenhos', 'empenhos_excluir', 'empenhos_cancelar', 'empenhos_status');
     }
 
     match /contratos/{docId} {
       allow read: if logado() && temPermissao('contratos_ler');
       allow create: if logado() && temPermissao('contratos_inserir');
-      allow update: if logado() && temPermissao('contratos_editar');
-      allow delete: if logado() && temPermissao('contratos_excluir');
+      allow update: if logado() && (
+        temPermissao('contratos_editar')
+        || temPermissaoOuAlias('contratos_cancelar')
+        || temPermissaoOuAlias('contratos_status')
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('contratos', 'contratos_excluir', 'contratos_cancelar', 'contratos_status');
     }
 
-    // Fornecedores: leitura só de ativos para não-admin; delete permanente só ADMIN
+    // Fornecedores: leitura só de ativos para não-admin; delete permanente granular
     match /fornecedores/{docId} {
-      allow read: if logado() && temPermissao('fornecedores_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
+      allow read: if logado() && temPermissao('fornecedores_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin') || temPermissaoOuAlias('fornecedores_status'));
       allow create: if logado() && temPermissao('fornecedores_inserir');
-      allow update: if logado() && (temPermissao('fornecedores_editar') || temPermissao('acesso_admin'));
-      allow delete: if logado() && temPermissao('acesso_admin');
+      allow update: if logado() && (
+        temPermissao('fornecedores_editar')
+        || temPermissaoOuAlias('fornecedores_status')
+        || temPermissaoOuAlias('fornecedores_cancelar')
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('fornecedores', 'fornecedores_excluir', 'fornecedores_cancelar', 'fornecedores_status');
     }
 
     match /deducoesEncargos/{docId} {
-      allow read: if logado() && temPermissao('dedenc_ler');
+      allow read: if logado() && (temPermissao('dedenc_ler') || temPermissao('relatorios_ler'));
       allow create: if logado() && temPermissao('dedenc_inserir');
-      allow update: if logado() && (temPermissao('dedenc_editar') || temPermissao('dedenc_status') || temPermissao('acesso_admin'));
-      allow delete: if logado() && (temPermissao('dedenc_excluir') || temPermissao('acesso_admin'));
+      allow update: if logado() && (
+        temPermissao('dedenc_editar')
+        || temPermissaoOuAlias('dedenc_status')
+        || temPermissaoOuAlias('dedenc_cancelar')
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && (podeExcluirPermanenteMod('dedenc', 'dedenc_excluir', 'dedenc_cancelar', 'dedenc_status') || temPermissao('acesso_admin'));
     }
 
     match /titulos/{docId} {
-      allow read: if logado() && temPermissao('titulos_ler');
+      allow read: if logado() && (temPermissao('titulos_ler') || temPermissao('relatorios_ler'));
       allow create: if logado() && temPermissao('titulos_inserir');
       allow update: if logado() && (
         temPermissao('titulos_editar') || temPermissao('tramitarTC')
-        || temPermissao('preliquidacao_editar') || temPermissao('preliquidacao_fechar_np') || temPermissao('preliquidacao_cancelar')
+        || temPermissaoOuAlias('titulos_status')
+        || temPermissao('titulos_cancelar')
         || temPermissao('liquidacao_editar') || temPermissao('liquidacao_fechar_np') || temPermissao('liquidacao_cancelar')
         || temPermissao('acesso_admin'));
       allow delete: if logado() && temPermissao('titulos_excluir');
@@ -155,15 +206,24 @@ service cloud.firestore {
     match /oi/{docId} {
       allow read: if logado() && (temPermissao('oi_ler') || temPermissao('acesso_admin'));
       allow create: if logado() && (temPermissao('oi_inserir') || temPermissao('acesso_admin'));
-      allow update: if logado() && (temPermissao('oi_editar') || temPermissao('acesso_admin'));
-      allow delete: if logado() && (temPermissao('oi_excluir') || temPermissao('acesso_admin'));
+      allow update: if logado() && (
+        temPermissao('oi_editar')
+        || temPermissaoOuAlias('oi_status')
+        || temPermissaoOuAlias('oi_cancelar')
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && (podeExcluirPermanenteMod('oi', 'oi_excluir', 'oi_cancelar', 'oi_status') || temPermissao('acesso_admin'));
     }
 
     match /lfpf/{docId} {
       allow read: if logado() && (temPermissao('lf_ler') || temPermissao('liquidacao_ler') || temPermissao('acesso_admin'));
       allow create: if logado() && temPermissao('lf_inserir');
-      allow update: if logado() && temPermissao('lf_editar');
-      allow delete: if logado() && temPermissao('acesso_admin');
+      allow update: if logado() && (
+        temPermissao('lf_editar')
+        || temPermissaoOuAlias('lf_cancelar')
+        || temPermissaoOuAlias('lf_status')
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('lf', 'lf_excluir', 'lf_cancelar', 'lf_status');
     }
 
     // Nota de Pagamento (NP) - coleção para vincular Títulos e documentos (OP/OB)
@@ -173,15 +233,18 @@ service cloud.firestore {
         || temPermissao('preliquidacao_ler') || temPermissao('liquidacao_ler')
         || temPermissao('acesso_admin'));
       allow create: if logado() && (
-        temPermissao('titulos_inserir') || temPermissao('titulos_editar')
-        || temPermissao('preliquidacao_fechar_np') || temPermissao('liquidacao_fechar_np')
+        temPermissaoOuAlias('op_inserir')
+        || temPermissao('titulos_inserir') || temPermissao('titulos_editar')
+        || temPermissao('liquidacao_fechar_np')
         || temPermissao('acesso_admin'));
       allow update: if logado() && (
-        temPermissao('titulos_inserir') || temPermissao('titulos_editar')
-        || temPermissao('preliquidacao_fechar_np') || temPermissao('preliquidacao_cancelar')
+        temPermissaoOuAlias('op_editar')
+        || temPermissaoOuAlias('op_cancelar')
+        || temPermissaoOuAlias('op_status')
+        || temPermissao('titulos_inserir') || temPermissao('titulos_editar')
         || temPermissao('liquidacao_fechar_np') || temPermissao('liquidacao_cancelar')
         || temPermissao('acesso_admin'));
-      allow delete: if logado() && temPermissao('acesso_admin');
+      allow delete: if logado() && (podeExcluirPermanenteMod('op', 'op_excluir', 'op_cancelar', 'op_status') || temPermissao('acesso_admin'));
     }
 
     // Contadores atómicos (transação na app), incluindo PL, LP e PROC de TC.
@@ -221,6 +284,7 @@ service cloud.firestore {
     match /liquidacoes/{docId} {
       allow read: if logado() && (
         temPermissao('acesso_admin')
+        || temPermissao('relatorios_ler')
         || (temPermissao('liquidacao_ler')
           && (resource.data.get('ativo', true) == true || temPermissao('liquidacao_status')))
       );
@@ -242,22 +306,31 @@ service cloud.firestore {
 
     // Centro de Custos: leitura só de ativos para não-admin; delete permanente só ADMIN
     match /centroCustos/{docId} {
-      allow read: if logado() && temPermissao('centrocustos_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
+      allow read: if logado() && temPermissao('centrocustos_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin') || temPermissaoOuAlias('centrocustos_status'));
       allow create: if logado() && temPermissao('centrocustos_inserir');
-      allow update: if logado() && (temPermissao('centrocustos_editar') || temPermissao('acesso_admin'));
-      allow delete: if logado() && temPermissao('acesso_admin');
+      allow update: if logado() && (
+        temPermissao('centrocustos_editar')
+        || temPermissaoOuAlias('centrocustos_status')
+        || temPermissaoOuAlias('centrocustos_cancelar')
+        || temPermissao('acesso_admin')
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('centrocustos', 'centrocustos_excluir', 'centrocustos_cancelar', 'centrocustos_status');
     }
 
-    // Unidade Gestora (UG): leitura só de ativos para não-admin; delete permanente só ADMIN
+    // Unidade Gestora (UG): leitura só de ativos para não-admin; delete permanente granular
     match /unidadesGestoras/{docId} {
-      allow read: if logado() && temPermissao('ug_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin'));
+      allow read: if logado() && temPermissao('ug_ler') && (resource.data.get('ativo', true) == true || temPermissao('acesso_admin') || temPermissaoOuAlias('ug_status'));
       allow create: if logado() && temPermissao('ug_inserir') && ugCamposTextoObrigatorios(request.resource.data);
-      allow update: if logado() && (temPermissao('ug_editar') || temPermissao('acesso_admin'))
-        && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ativo'])
-          || ugCamposTextoObrigatorios(request.resource.data)
-        );
-      allow delete: if logado() && temPermissao('acesso_admin');
+      allow update: if logado() && (
+        temPermissao('ug_editar')
+        || temPermissaoOuAlias('ug_status')
+        || temPermissaoOuAlias('ug_cancelar')
+        || temPermissao('acesso_admin')
+      ) && (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ativo'])
+        || ugCamposTextoObrigatorios(request.resource.data)
+      );
+      allow delete: if logado() && podeExcluirPermanenteMod('ug', 'ug_excluir', 'ug_cancelar', 'ug_status');
     }
   }
 }

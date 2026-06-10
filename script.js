@@ -542,17 +542,71 @@ window.trocarPerfil = trocarPerfil;
 
 
 /**
+ * Aliases legados: permissão canônica da matriz → códigos antigos ainda presentes em perfis.
+ * Remover quando todos os perfis forem migrados (ver RN Admin RN-ADM-038).
+ */
+const ALIASES_PERMISSAO = {
+    titulos_status: ['titulos_inativar'],
+    titulos_ver_inativos: ['titulos_inativar', 'titulos_status'],
+    empenhos_cancelar: ['empenhos_excluir'],
+    empenhos_status: ['empenhos_excluir'],
+    lf_cancelar: ['lf_excluir'],
+    lf_status: ['lf_excluir'],
+    fornecedores_cancelar: ['fornecedores_excluir'],
+    fornecedores_status: ['fornecedores_excluir'],
+    centrocustos_cancelar: ['centrocustos_excluir'],
+    centrocustos_status: ['centrocustos_excluir'],
+    ug_cancelar: ['ug_excluir'],
+    ug_status: ['ug_excluir'],
+    contratos_cancelar: ['contratos_excluir'],
+    contratos_status: ['contratos_excluir'],
+    dedenc_cancelar: ['dedenc_excluir'],
+    op_inserir: ['titulos_inserir'],
+    op_editar: ['titulos_editar'],
+    op_cancelar: ['titulos_inserir', 'titulos_editar'],
+    op_status: ['titulos_inserir', 'titulos_editar'],
+    usuarios_status: ['usuarios_editar']
+};
+
+function permissoesIncluemDireto(perm) {
+    return permissoesEmCache.includes(perm);
+}
+
+function permissoesIncluemComAlias(perm) {
+    if (permissoesIncluemDireto(perm)) return true;
+    const legados = ALIASES_PERMISSAO[perm];
+    if (legados && legados.some(l => permissoesIncluemDireto(l))) return true;
+    return false;
+}
+
+/** Ativar/inativar ou cancelar (soft) — usa matriz _status / _cancelar + aliases legados. */
+function podeStatusOuCancelar(mod) {
+    return temPermissaoUI(mod + '_status') || temPermissaoUI(mod + '_cancelar');
+}
+
+/**
+ * Exclusão permanente: admin, ou _excluir explícito junto com granularidade nova (_cancelar/_status no perfil).
+ * Perfis legados só com _excluir (soft-delete) não ganham botão de exclusão permanente.
+ */
+function podeExcluirPermanente(mod) {
+    if (permissoesIncluemDireto('acesso_admin')) return true;
+    if (!permissoesIncluemDireto(mod + '_excluir')) return false;
+    return permissoesIncluemDireto(mod + '_cancelar') || permissoesIncluemDireto(mod + '_status');
+}
+window.podeStatusOuCancelar = podeStatusOuCancelar;
+window.podeExcluirPermanente = podeExcluirPermanente;
+
+/**
  * Verifica se o usuário tem permissão para UI (com fallback para admins).
  * Regra de salvação: acesso_admin implica dashboard_ler, backup_ler e acesso às Tabelas de Apoio.
  */
 function temPermissaoUI(perm) {
     if (!perm || typeof perm !== 'string') return false;
-    if (permissoesEmCache.includes(perm)) return true;
-    // Fallback: admins ganham implicitamente Dashboard, Backup e todas as seções de Tabelas de Apoio
+    if (permissoesIncluemComAlias(perm)) return true;
     if (permissoesEmCache.includes('acesso_admin')) {
         if (perm === 'dashboard_ler' || perm === 'backup_ler' || perm === 'tramitarTC') return true;
-        if (perm.startsWith('preliquidacao_') || perm.startsWith('liquidacao_')) return true;
-        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug'];
+        if (perm.startsWith('liquidacao_')) return true;
+        const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug', 'usuarios', 'perfis', 'oi'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
     return false;
@@ -624,39 +678,43 @@ function gerarBotoesAcao(id, modulo, itemOpt) {
     const mod = modMap[modulo] || modulo;
     let html = '';
     if (modulo === 'lfpf') {
-        if (permissoesEmCache.includes('lf_editar')) html += `<button type="button" class="btn-icon btn-editar-lfpf" data-id="${safeId}" title="Editar">✏️</button>`;
-        if (permissoesEmCache.includes('lf_excluir')) html += `<button type="button" class="btn-icon btn-inativar-lfpf" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
-        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-lfpf-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        if (temPermissaoUI('lf_editar')) html += `<button type="button" class="btn-icon btn-editar-lfpf" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (podeStatusOuCancelar('lf')) html += `<button type="button" class="btn-icon btn-inativar-lfpf" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (podeExcluirPermanente('lf')) html += `<button type="button" class="btn-icon btn-apagar-lfpf-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
     if (modulo === 'empenho') {
-        if (permissoesEmCache.includes('empenhos_ler')) html += `<button type="button" class="btn-icon btn-visualizar-empenho" data-id="${safeId}" title="Visualizar">👁️</button>`;
-        if (permissoesEmCache.includes('empenhos_editar')) html += `<button type="button" class="btn-icon btn-editar-empenho" data-id="${safeId}" title="Editar">✏️</button>`;
-        if (permissoesEmCache.includes('empenhos_excluir')) html += `<button type="button" class="btn-icon btn-inativar-empenho" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
-        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-empenho-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        if (temPermissaoUI('empenhos_ler')) html += `<button type="button" class="btn-icon btn-visualizar-empenho" data-id="${safeId}" title="Visualizar">👁️</button>`;
+        if (temPermissaoUI('empenhos_editar')) html += `<button type="button" class="btn-icon btn-editar-empenho" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (podeStatusOuCancelar('empenhos')) html += `<button type="button" class="btn-icon btn-inativar-empenho" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (podeExcluirPermanente('empenhos')) html += `<button type="button" class="btn-icon btn-apagar-empenho-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
-    // Centro de Custos e UG: editar; excluir = inativar (usuários); reativar e excluir permanente só ADMIN
     if (modulo === 'centrocustos' || modulo === 'ug' || modulo === 'fornecedor') {
         const ativo = itemOpt && itemOpt.ativo !== false;
-        if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}" title="Editar">✏️</button>`;
-        if (ativo && permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-inativar-${modulo}" data-id="${safeId}" title="Inativar (excluir da lista)">🚫</button>`;
-        if (!ativo && permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-reativar-${modulo}" data-id="${safeId}" title="Reativar">✓</button>`;
-        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        if (temPermissaoUI(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (ativo && podeStatusOuCancelar(mod)) html += `<button type="button" class="btn-icon btn-inativar-${modulo}" data-id="${safeId}" title="Inativar">🚫</button>`;
+        if (!ativo && podeStatusOuCancelar(mod)) html += `<button type="button" class="btn-icon btn-reativar-${modulo}" data-id="${safeId}" title="Reativar">✓</button>`;
+        if (podeExcluirPermanente(mod)) html += `<button type="button" class="btn-icon btn-apagar-${modulo}-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
     if (modulo === 'deducoesEncargos') {
         const ativo = itemOpt && itemOpt.ativo !== false;
-        const podeStatusDedEnc = permissoesEmCache.includes('dedenc_status') || permissoesEmCache.includes('acesso_admin');
-        if (permissoesEmCache.includes('dedenc_ler')) html += `<button type="button" class="btn-icon btn-visualizar-deducoesEncargos" data-id="${safeId}" title="Visualizar">👁️</button>`;
-        if (permissoesEmCache.includes('dedenc_editar')) html += `<button type="button" class="btn-icon btn-editar-deducoesEncargos" data-id="${safeId}" title="Editar">✏️</button>`;
-        if (ativo && podeStatusDedEnc) html += `<button type="button" class="btn-icon btn-inativar-deducoesEncargos" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
-        if (!ativo && podeStatusDedEnc) html += `<button type="button" class="btn-icon btn-reativar-deducoesEncargos" data-id="${safeId}" title="Reativar">✓</button>`;
-        if (permissoesEmCache.includes('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-deducoesEncargos-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
+        const podeSt = podeStatusOuCancelar('dedenc') || permissoesIncluemDireto('acesso_admin');
+        if (temPermissaoUI('dedenc_ler')) html += `<button type="button" class="btn-icon btn-visualizar-deducoesEncargos" data-id="${safeId}" title="Visualizar">👁️</button>`;
+        if (temPermissaoUI('dedenc_editar')) html += `<button type="button" class="btn-icon btn-editar-deducoesEncargos" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (ativo && podeSt) html += `<button type="button" class="btn-icon btn-inativar-deducoesEncargos" data-id="${safeId}" title="Inativar/Cancelar">🚫</button>`;
+        if (!ativo && podeSt) html += `<button type="button" class="btn-icon btn-reativar-deducoesEncargos" data-id="${safeId}" title="Reativar">✓</button>`;
+        if (podeExcluirPermanente('dedenc') || permissoesIncluemDireto('acesso_admin')) html += `<button type="button" class="btn-icon btn-apagar-deducoesEncargos-permanente" data-id="${safeId}" title="Excluir permanentemente">🗑️</button>`;
         return html;
     }
-    if (permissoesEmCache.includes(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
-    if (permissoesEmCache.includes(mod + '_excluir')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
+    if (modulo === 'contrato') {
+        if (temPermissaoUI('contratos_editar')) html += `<button type="button" class="btn-icon btn-editar-contrato" data-id="${safeId}" title="Editar">✏️</button>`;
+        if (temPermissaoUI('contratos_excluir') || podeExcluirPermanente('contratos')) html += `<button type="button" class="btn-icon btn-apagar-contrato" data-id="${safeId}" title="Excluir">🗑️</button>`;
+        return html;
+    }
+    if (temPermissaoUI(mod + '_editar')) html += `<button type="button" class="btn-icon btn-editar-${modulo}" data-id="${safeId}">✏️</button>`;
+    if (podeExcluirPermanente(mod) || temPermissaoUI(mod + '_cancelar')) html += `<button type="button" class="btn-icon btn-apagar-${modulo}" data-id="${safeId}">🗑️</button>`;
     return html;
 }
 

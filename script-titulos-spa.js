@@ -742,7 +742,7 @@
                     if (permissoesEmCache.includes('titulos_ler')) {
                         acoes = `<button type="button" class="btn-icon btn-ver-titulo" data-id="${escapeHTML(t.id)}" title="Ver TC">👁️</button>` + acoes;
                     }
-                    if (permissoesEmCache.includes('titulos_inativar')) {
+                    if (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_status') : permissoesEmCache.includes('titulos_inativar')) {
                         const estaInativo = !!t.inativo;
                         const icon = estaInativo ? '✅' : '🚫';
                         const title = estaInativo ? 'Ativar TC' : 'Inativar TC';

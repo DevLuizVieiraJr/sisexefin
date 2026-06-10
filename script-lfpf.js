@@ -211,6 +211,9 @@
     }
 
     async function inativarLfPf(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('lf') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar/cancelar.');
+        }
         if (!confirm('Deseja inativar/cancelar este registro? O registro permanecerá no sistema com situação Cancelado.')) return;
         mostrarLoading();
         try {
@@ -226,6 +229,9 @@
     }
 
     async function excluirPermanenteLfPf(id) {
+        if (typeof podeExcluirPermanente === 'function' && !podeExcluirPermanente('lf')) {
+            return alert('Sem permissão para excluir permanentemente.');
+        }
         if (!confirm('Excluir PERMANENTEMENTE este registro? Esta ação não pode ser desfeita.')) return;
         mostrarLoading();
         try {

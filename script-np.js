@@ -139,26 +139,38 @@
         return typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin');
     }
 
-    // Matriz de permissões (igual Firestore):
-    // - Create/Update: titulos_inserir ou titulos_editar (ou acesso_admin)
-    // - Delete permanente: apenas acesso_admin
+    function temPermNp(perm) {
+        return typeof temPermissaoUI === 'function' && temPermissaoUI(perm);
+    }
+
     function podeNPAlterar() {
         if (permissoesAdmin()) return true;
-        return (typeof permissoesEmCache !== 'undefined') && (
-            permissoesEmCache.includes('titulos_inserir') || permissoesEmCache.includes('titulos_editar')
-        );
+        return temPermNp('op_editar') || temPermNp('op_inserir');
+    }
+
+    function podeNPCancelar() {
+        if (permissoesAdmin()) return true;
+        return temPermNp('op_cancelar') || temPermNp('op_status');
+    }
+
+    function podeNPExcluirPermanente() {
+        if (permissoesAdmin()) return true;
+        return typeof podeExcluirPermanente === 'function' && podeExcluirPermanente('op');
     }
 
     function gerarBotoesAcoesNp(doc) {
         const podeAlterar = podeNPAlterar();
-        const podeExcluirPerm = permissoesAdmin();
-        if (!podeAlterar && !podeExcluirPerm) return '';
+        const podeCancelar = podeNPCancelar();
+        const podeExcluirPerm = podeNPExcluirPermanente();
+        if (!podeAlterar && !podeCancelar && !podeExcluirPerm) return '';
         const id = doc && (doc.id || doc.np) ? String(doc.id || doc.np) : '';
         if (!id) return '';
         const safeId = escapeHTML(id);
         let html = '';
         if (podeAlterar) {
             html += '<button type="button" class="btn-icon btn-editar-np" data-id="' + safeId + '" title="Editar">✏️</button>';
+        }
+        if (podeCancelar) {
             html += '<button type="button" class="btn-icon btn-inativar-np" data-id="' + safeId + '" title="Inativar/Cancelar">🚫</button>';
         }
         if (podeExcluirPerm) {
@@ -400,7 +412,7 @@
     window.editarNp = editarNp;
 
     async function inativarNp(id) {
-        if (!podeNPAlterar()) return alert('Acesso negado. Sem permissão para inativar NP.');
+        if (!podeNPCancelar()) return alert('Acesso negado. Sem permissão para inativar NP.');
         if (!id) return;
         if (!confirm('Deseja inativar/cancelar este registro? O registro permanecerá no sistema com situação Cancelado.')) return;
         mostrarLoading('Carregando...');

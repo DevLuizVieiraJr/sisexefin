@@ -188,6 +188,9 @@
     }
 
     async function inativarDeducoesEncargos(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('dedenc') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar.');
+        }
         const base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
         const d = base.find(item => item.id === id);
         if (!d || d.ativo === false) return;
@@ -206,6 +209,9 @@
     }
 
     async function reativarDeducoesEncargos(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('dedenc') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para reativar.');
+        }
         const base = typeof baseDeducoesEncargos !== 'undefined' ? baseDeducoesEncargos : [];
         const d = base.find(item => item.id === id);
         if (!d || d.ativo !== false) return;

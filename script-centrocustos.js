@@ -107,6 +107,9 @@
     }
 
     async function inativarCentroCustos(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('centrocustos') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar.');
+        }
         if (!confirm('Inativar este Centro de Custos? Ele deixará de aparecer na lista (apenas Admin poderá ver e reativar).')) return;
         mostrarLoading();
         try {
@@ -117,6 +120,9 @@
     }
 
     async function reativarCentroCustos(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('centrocustos') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para reativar.');
+        }
         if (!confirm('Reativar este Centro de Custos?')) return;
         mostrarLoading();
         try {
@@ -127,6 +133,9 @@
     }
 
     async function excluirPermanenteCentroCustos(id) {
+        if (typeof podeExcluirPermanente === 'function' && !podeExcluirPermanente('centrocustos')) {
+            return alert('Sem permissão para excluir permanentemente.');
+        }
         if (!confirm('Excluir PERMANENTEMENTE este Centro de Custos? Esta ação não pode ser desfeita.')) return;
         mostrarLoading();
         try {

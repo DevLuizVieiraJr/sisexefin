@@ -6,25 +6,26 @@
     if (window.__adminSpaLoaded) return;
     window.__adminSpaLoaded = true;
 
-    const COLUNAS_ACOES = ['ler', 'inserir', 'editar', 'excluir', 'status'];
+    const COLUNAS_ACOES = ['ler', 'inserir', 'editar', 'status', 'cancelar', 'excluir'];
+    const ACOES_CRUD_COMPLETO = ['ler', 'inserir', 'editar', 'status', 'cancelar', 'excluir'];
+    const ACOES_SOMENTE_LER = ['ler'];
     const MATRIZ_MODULOS = [
-        { modulo: 'dashboard', label: 'Dashboard', acoes: ['ler'] },
-        { modulo: 'titulos', label: 'Titulos de Credito', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'preliquidacao', label: 'Pre-Liquidacao', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'liquidacao', label: 'Liquidação e Pag. (Beta)', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'empenhos', label: 'Empenhos (NE)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'lf', label: 'LF x PF', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'op', label: 'Pagamento (OP)', acoes: ['ler'] },
-        { modulo: 'dedenc', label: 'Deducoes e Encargos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'contratos', label: 'Contratos', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'fornecedores', label: 'Fornecedores', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'usuarios', label: 'Admin - Usuarios', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'perfis', label: 'Admin - Perfis', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'oi', label: 'Admin - OI', acoes: ['ler', 'inserir', 'editar', 'excluir', 'status'] },
-        { modulo: 'centrocustos', label: 'Centro de Custos', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'ug', label: 'Unidade Gestora (UG)', acoes: ['ler', 'inserir', 'editar', 'excluir'] },
-        { modulo: 'backup', label: 'Backup Global', acoes: ['ler'] },
-        { modulo: 'relatorios', label: 'Relatórios', acoes: ['ler'] }
+        { modulo: 'dashboard', label: 'Dashboard', acoes: ACOES_SOMENTE_LER },
+        { modulo: 'titulos', label: 'Titulos de Credito', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'liquidacao', label: 'Liquidação e Pag. (Beta)', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'empenhos', label: 'Empenhos (NE)', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'lf', label: 'LF x PF', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'op', label: 'Pagamento (OP)', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'dedenc', label: 'Deducoes e Encargos', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'contratos', label: 'Contratos', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'fornecedores', label: 'Fornecedores', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'usuarios', label: 'Admin - Usuarios', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'perfis', label: 'Admin - Perfis', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'oi', label: 'Admin - OI', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'centrocustos', label: 'Centro de Custos', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'ug', label: 'Unidade Gestora (UG)', acoes: ACOES_CRUD_COMPLETO },
+        { modulo: 'backup', label: 'Backup Global', acoes: ACOES_SOMENTE_LER },
+        { modulo: 'relatorios', label: 'Relatórios', acoes: ACOES_SOMENTE_LER }
     ];
     const ORDEM_PAINEIS = ['usuarios', 'pendentes', 'perfis', 'oi', 'cadastrar'];
     const PERMISSOES_PAINEL = {
@@ -347,6 +348,12 @@
             const statusHtml = st === 'bloqueado' ? '<span class="status-bloqueado">Bloqueado</span>'
                 : st === 'pendente' ? '<span class="status-pendente">Pendente</span>'
                     : '<span class="status-ativo">Ativo</span>';
+            const podeStatusUsuario = (typeof window.temPermissaoUI === 'function' && window.temPermissaoUI('usuarios_status'))
+                || (typeof window.temPermissaoUI === 'function' && window.temPermissaoUI('usuarios_editar'))
+                || (typeof window.temPermissaoUI === 'function' && window.temPermissaoUI('acesso_admin'));
+            const btnBloquear = podeStatusUsuario
+                ? `<button type="button" class="btn-outline btn-small btn-bloquear-usuario" data-uid="${escapeHTML(u.id)}" data-acao="${st === 'bloqueado' ? 'desbloquear' : 'bloquear'}">${st === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}</button>`
+                : '';
             tr.innerHTML = `
                 <td><code class="uid-preview">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
                 <td>${escapeHTML(u.email || '-')}</td>
@@ -355,7 +362,7 @@
                 <td>${statusHtml}</td>
                 <td>
                     <button type="button" class="btn-icon btn-editar-usuario" data-uid="${escapeHTML(u.id)}" title="Editar" aria-label="Editar usuario">✏️</button>
-                    <button type="button" class="btn-outline btn-small btn-bloquear-usuario" data-uid="${escapeHTML(u.id)}" data-acao="${st === 'bloqueado' ? 'desbloquear' : 'bloquear'}">${st === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}</button>
+                    ${btnBloquear}
                 </td>`;
             tbody.appendChild(tr);
         });
@@ -718,6 +725,10 @@
     };
 
     window.adminBloquearUsuario = async function(uid, btn) {
+        if (typeof window.temPermissaoUI === 'function' && !window.temPermissaoUI('usuarios_status') && !window.temPermissaoUI('usuarios_editar') && !window.temPermissaoUI('acesso_admin')) {
+            alert('Sem permissao para bloquear usuarios.');
+            return;
+        }
         if (!confirm('Bloquear este usuario? Ele perdera o acesso ao sistema.')) return;
         adminLoading(true);
         if (btn) btnLoading(btn, true);
@@ -736,6 +747,10 @@
     };
 
     window.adminDesbloquearUsuario = async function(uid, btn) {
+        if (typeof window.temPermissaoUI === 'function' && !window.temPermissaoUI('usuarios_status') && !window.temPermissaoUI('usuarios_editar') && !window.temPermissaoUI('acesso_admin')) {
+            alert('Sem permissao para desbloquear usuarios.');
+            return;
+        }
         adminLoading(true);
         if (btn) btnLoading(btn, true);
         if (typeof mostrarBarraLoading === 'function') mostrarBarraLoading('Salvando...');

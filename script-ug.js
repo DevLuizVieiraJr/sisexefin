@@ -311,6 +311,9 @@
     }
 
     async function inativarUG(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('ug') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar.');
+        }
         if (!confirm('Inativar esta Unidade Gestora? Ela deixará de aparecer na lista (apenas Admin poderá ver e reativar).')) return;
         mostrarLoading();
         try {
@@ -321,6 +324,9 @@
     }
 
     async function reativarUG(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('ug') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para reativar.');
+        }
         if (!confirm('Reativar esta Unidade Gestora?')) return;
         mostrarLoading();
         try {
@@ -331,6 +337,9 @@
     }
 
     async function excluirPermanenteUG(id) {
+        if (typeof podeExcluirPermanente === 'function' && !podeExcluirPermanente('ug')) {
+            return alert('Sem permissão para excluir permanentemente.');
+        }
         if (!confirm('Excluir PERMANENTEMENTE esta Unidade Gestora? Esta ação não pode ser desfeita.')) return;
         mostrarLoading();
         try {

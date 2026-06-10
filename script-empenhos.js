@@ -401,6 +401,9 @@
     }
 
     async function inativarEmpenho(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('empenhos') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar/cancelar empenho.');
+        }
         const e = baseEmpenhos.find(item => item.id === id);
         if (!e) return;
         if (!confirm('Deseja inativar/cancelar este empenho? O registro permanecerá no sistema com situação Cancelado.')) return;
@@ -418,6 +421,9 @@
     }
 
     async function apagarEmpenho(id) {
+        if (typeof podeExcluirPermanente === 'function' && !podeExcluirPermanente('empenhos')) {
+            return alert('Sem permissão para excluir permanentemente.');
+        }
         const e = baseEmpenhos.find(item => item.id === id);
         if (e && (typeof baseTitulos !== 'undefined')) {
             const titulosVinculados = baseTitulos.filter(t => (t.empenhosVinculados || []).some(v => v.numEmpenho === e.numEmpenho));

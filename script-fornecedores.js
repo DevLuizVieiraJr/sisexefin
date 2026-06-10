@@ -223,6 +223,9 @@
     }
 
     async function inativarFornecedor(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('fornecedores') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para inativar fornecedor.');
+        }
         if (!confirm('Inativar este fornecedor?')) return;
         mostrarLoading();
         try {
@@ -233,6 +236,9 @@
     }
 
     async function reativarFornecedor(id) {
+        if (typeof podeStatusOuCancelar === 'function' && !podeStatusOuCancelar('fornecedores') && !(typeof temPermissaoUI === 'function' && temPermissaoUI('acesso_admin'))) {
+            return alert('Sem permissão para reativar fornecedor.');
+        }
         if (!confirm('Reativar este fornecedor?')) return;
         mostrarLoading();
         try {
