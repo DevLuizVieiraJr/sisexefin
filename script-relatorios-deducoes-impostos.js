@@ -15,16 +15,17 @@
     ];
 
     var ESTADOS_DISPONIVEIS = [
-        { valor: 'rascunho',                  label: 'Rascunho' },
-        { valor: 'orcamento',                 label: 'Orçamento' },
-        { valor: 'impostos',                  label: 'Impostos' },
-        { valor: 'pagamento',                 label: 'Pagamento' },
-        { valor: 'aguardandoFinanceiroSemLF', label: 'Aguard. Financeiro (sem LF)' },
-        { valor: 'aguardandoFinanceiroComLF', label: 'Aguard. Financeiro (com LF)' },
-        { valor: 'paraPagamentoParcial',      label: 'Para Pagamento Parcial' },
-        { valor: 'paraPagamento',             label: 'Para Pagamento' },
-        { valor: 'fechado',                   label: 'Fechado' },
-        { valor: 'cancelado',                 label: 'Cancelado' }
+        { valor: 'rascunho',              label: 'Rascunho' },
+        { valor: 'liquidado',             label: 'Liquidado' },
+        { valor: 'aguardandoFinanceiro',  label: 'Aguardando Financeiro' },
+        { valor: 'paraPagamentoParcial',  label: 'Para Pagamento Parcial' },
+        { valor: 'paraPagamento',         label: 'Para Pagamento' },
+        { valor: 'pagoParcialmente',      label: 'Pago Parcialmente' },
+        { valor: 'pago',                  label: 'Pago' },
+        { valor: 'cancelado',             label: 'Cancelado' },
+        { valor: 'fechado',               label: 'Liquidado (legado fechado)' },
+        { valor: 'aguardandoFinanceiroSemLF', label: 'Liquidado (legado s/ LF)' },
+        { valor: 'aguardandoFinanceiroComLF', label: 'Aguard. Financeiro (legado)' }
     ];
 
     var COLUNAS_RELATORIO = [
@@ -127,7 +128,20 @@
 
     function labelStatusLp(estado) {
         if (!estado) return '—';
-        return MAP_ESTADO_LP[estado] || String(estado);
+        var legado = {
+            fechado: 'Liquidado',
+            aguardandoFinanceiroSemLF: 'Liquidado',
+            aguardandoFinanceiroComLF: 'Aguardando Financeiro'
+        };
+        return MAP_ESTADO_LP[estado] || legado[estado] || String(estado);
+    }
+
+    function estadoLpCompatFiltro(estado, selecionados) {
+        if (!selecionados.length) return true;
+        if (selecionados.indexOf(estado) >= 0) return true;
+        if (selecionados.indexOf('liquidado') >= 0 && (estado === 'fechado' || estado === 'aguardandoFinanceiroSemLF')) return true;
+        if (selecionados.indexOf('aguardandoFinanceiro') >= 0 && estado === 'aguardandoFinanceiroComLF') return true;
+        return false;
     }
 
     function toIsoSortData(v) {
@@ -458,7 +472,7 @@
 
             // Filtro por estado
             if (_st.estadosSel.length) {
-                lps = lps.filter(function (lp) { return _st.estadosSel.indexOf(lp.estado) >= 0; });
+                lps = lps.filter(function (lp) { return estadoLpCompatFiltro(lp.estado, _st.estadosSel); });
             }
 
             // Filtro por fornecedor

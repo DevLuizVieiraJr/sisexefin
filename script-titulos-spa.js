@@ -4,16 +4,48 @@
 (function() {
     if (!document.getElementById('tbody-titulos')) return;
 
-    const STATUS_ORDEM = ['Rascunho', 'Em Processamento', 'Em Liquidação', 'Liquidado', 'Aguardando Financeiro', 'Para Pagamento', 'Devolvido'];
+    const STATUS_ORDEM = ['Rascunho', 'Em Processamento', 'Em Liquidação', 'Liquidado', 'Aguardando Financeiro', 'Para Pagamento parcial', 'Para Pagamento', 'Pago Parcialmente', 'Pago', 'Devolvido'];
     const STATUS_CSS = {
         'Rascunho': 'badge-rascunho',
         'Em Processamento': 'badge-processamento',
         'Em Liquidação': 'badge-liquidacao',
         'Liquidado': 'badge-liquidado',
         'Aguardando Financeiro': 'badge-aguardando',
+        'Para Pagamento parcial': 'badge-para-pagamento-parcial',
         'Para Pagamento': 'badge-para-pagamento',
+        'Pago Parcialmente': 'badge-pago-parcial',
+        'Pago': 'badge-pago',
         'Devolvido': 'badge-devolvido'
     };
+
+    const TC_EVENTO = {
+        ENC_PROC: 'titulos_encaminhar_processamento',
+        ENC_LIQ: 'titulos_encaminhar_liquidacao',
+        DEVOLVER: 'titulos_devolver',
+        RET_PROC: 'titulos_retornar_processamento',
+        RET_LIQ: 'titulos_retornar_liquidacao',
+        NOVA_ENTRADA: 'titulos_nova_entrada',
+        PDF: 'titulos_pdf'
+    };
+
+    function eventoEncaminharPorDestino(destino) {
+        if (destino === 'Em Processamento') return TC_EVENTO.ENC_PROC;
+        if (destino === 'Em Liquidação') return TC_EVENTO.ENC_LIQ;
+        return null;
+    }
+
+    function eventoRetornoStatus(origemEsperada, destino) {
+        if (origemEsperada === 'Em Liquidação' && destino === 'Em Processamento') return TC_EVENTO.RET_PROC;
+        if (origemEsperada === 'Liquidado' && destino === 'Em Liquidação') return TC_EVENTO.RET_LIQ;
+        return null;
+    }
+
+    function usuarioPodeEventoTC(eventoId, statusAtual) {
+        if (!eventoId) return false;
+        return typeof podeExecutarEvento === 'function'
+            ? podeExecutarEvento(eventoId, { status: statusAtual || '' })
+            : (typeof temPermissaoEvento === 'function' ? temPermissaoEvento(eventoId) : false);
+    }
 
     let baseTitulos = [];
     let baseContratos = [];
@@ -748,28 +780,28 @@
                         const title = estaInativo ? 'Ativar TC' : 'Inativar TC';
                         acoes += `<button type="button" class="btn-icon btn-toggle-ativo-titulo" data-id="${escapeHTML(t.id)}" title="${title}">${icon}</button>`;
                     }
-                    const podeGerarPdf = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
-                        (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+                    const podeGerarPdf = typeof temPermissaoEvento === 'function'
+                        ? temPermissaoEvento(TC_EVENTO.PDF)
+                        : (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false);
                     if (podeGerarPdf) {
                         acoes += `<button type="button" class="btn-icon btn-pdf-titulo" data-id="${escapeHTML(t.id)}" title="Gerar PDF">📄</button>`;
                     }
-                    const podeTramitar = typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
-                    if (podeTramitar && status === 'Rascunho') {
+                    if (usuarioPodeEventoTC(TC_EVENTO.ENC_PROC, status)) {
                         acoes += `<button type="button" class="btn-icon btn-encaminhar-processamento-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Processamento">➡️</button>`;
                     }
-                    if (podeTramitar && status === 'Em Processamento') {
+                    if (usuarioPodeEventoTC(TC_EVENTO.ENC_LIQ, status)) {
                         acoes += `<button type="button" class="btn-icon btn-encaminhar-liquidacao-titulo" data-id="${escapeHTML(t.id)}" title="Encaminhar para Liquidação">➡️</button>`;
                     }
-                    if (podeTramitar && (status === 'Rascunho' || status === 'Em Processamento' || status === 'Em Liquidação')) {
+                    if (usuarioPodeEventoTC(TC_EVENTO.DEVOLVER, status)) {
                         acoes += `<button type="button" class="btn-icon btn-devolver-titulo" data-id="${escapeHTML(t.id)}" title="Devolver TC">↩</button>`;
                     }
-                    if (podeTramitar && status === 'Em Liquidação') {
+                    if (usuarioPodeEventoTC(TC_EVENTO.RET_PROC, status)) {
                         acoes += `<button type="button" class="btn-icon btn-retornar-processamento-titulo" data-id="${escapeHTML(t.id)}" title="Retornar para Em Processamento">⏪</button>`;
                     }
-                    if (podeTramitar && status === 'Liquidado') {
+                    if (usuarioPodeEventoTC(TC_EVENTO.RET_LIQ, status)) {
                         acoes += `<button type="button" class="btn-icon btn-retornar-liquidacao-titulo" data-id="${escapeHTML(t.id)}" title="Retornar para Em Liquidação">⏪</button>`;
                     }
-                    if (status === 'Devolvido') {
+                    if (usuarioPodeEventoTC(TC_EVENTO.NOVA_ENTRADA, status)) {
                         acoes += `<button type="button" class="btn-icon btn-nova-entrada-titulo" data-id="${escapeHTML(t.id)}" title="Dar nova entrada">↪</button>`;
                     }
                 }
@@ -897,23 +929,35 @@
             const todosEmProcessamento = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Em Processamento');
             const todosEmLiquidacao = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Em Liquidação');
             const todosLiquidados = selecionados.length > 0 && selecionados.every(t => (t.status || 'Rascunho') === 'Liquidado');
-            const podeTramitar = usuarioPodeTramitarTC();
-            if (btnNovaEntradaBloco) btnNovaEntradaBloco.style.display = (todosDevolvidos && selecionados.length > 1) ? 'inline-block' : 'none';
+            const podeNovaEntradaBloco = selecionados.length > 1 && todosDevolvidos
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.NOVA_ENTRADA, t.status || 'Devolvido'));
+            const podeEncaminharBlocoRascunho = todosRascunho
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.ENC_PROC, t.status || 'Rascunho'));
+            const podeEncaminharBlocoProc = todosEmProcessamento
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.ENC_LIQ, t.status || 'Em Processamento'));
+            const podeRetornarBlocoLiq = todosEmLiquidacao
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.RET_PROC, t.status || 'Em Liquidação'));
+            const podeRetornarBlocoLiqd = todosLiquidados
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.RET_LIQ, t.status || 'Liquidado'));
+            const podeDevolverBloco = (todosRascunho || todosEmProcessamento || todosEmLiquidacao)
+                && selecionados.every(t => usuarioPodeEventoTC(TC_EVENTO.DEVOLVER, t.status || 'Rascunho'));
+            if (btnNovaEntradaBloco) btnNovaEntradaBloco.style.display = podeNovaEntradaBloco ? 'inline-block' : 'none';
             if (btnEncaminharBloco) {
-                btnEncaminharBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento)) ? 'inline-block' : 'none';
+                btnEncaminharBloco.style.display = (podeEncaminharBlocoRascunho || podeEncaminharBlocoProc) ? 'inline-block' : 'none';
                 btnEncaminharBloco.textContent = todosRascunho ? '➡️ Encaminhar para Processamento em Bloco' : '➡️ Enviar para Liquidação em Bloco';
             }
             if (btnRetornarBloco) {
-                btnRetornarBloco.style.display = (podeTramitar && (todosEmLiquidacao || todosLiquidados)) ? 'inline-block' : 'none';
+                btnRetornarBloco.style.display = (podeRetornarBlocoLiq || podeRetornarBlocoLiqd) ? 'inline-block' : 'none';
                 btnRetornarBloco.textContent = todosEmLiquidacao
                     ? '↩ Retornar para Em Processamento em Bloco'
                     : (todosLiquidados ? '↩ Retornar para Em Liquidação em Bloco' : '↩ Retornar status em Bloco');
             }
-            if (btnDevolverBloco) btnDevolverBloco.style.display = (podeTramitar && (todosRascunho || todosEmProcessamento || todosEmLiquidacao)) ? 'inline-block' : 'none';
+            if (btnDevolverBloco) btnDevolverBloco.style.display = podeDevolverBloco ? 'inline-block' : 'none';
             const btnImprimirBlocoTC = document.getElementById('btnImprimirBlocoTC');
             if (btnImprimirBlocoTC) {
-                const podeGerarPdf = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
-                    (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+                const podeGerarPdf = typeof temPermissaoEvento === 'function'
+                    ? temPermissaoEvento(TC_EVENTO.PDF)
+                    : (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false);
                 if (n >= 1 && podeGerarPdf) {
                     btnImprimirBlocoTC.style.display = 'inline-block';
                     if (n > 10) {
@@ -1050,10 +1094,6 @@
         if (!fbID || fbID === '-1') return true;
         const t = baseTitulos.find(x => x.id === fbID);
         return (t?.status || 'Rascunho') !== 'Devolvido';
-    }
-
-    function usuarioPodeTramitarTC() {
-        return typeof temPermissaoUI === 'function' ? temPermissaoUI('tramitarTC') : false;
     }
 
     function dadosBasicosCompletos(t) {
@@ -1217,11 +1257,13 @@
             alert(msg);
             return null;
         };
-        if (!usuarioPodeTramitarTC()) return falhar('Acesso negado para tramitação.');
+        const eventoId = eventoEncaminharPorDestino(destino);
+        if (!eventoId) return falhar('Destino de tramitação não reconhecido.');
         const snap = await db.collection('titulos').doc(id).get();
         if (!snap.exists) return falhar('Título não encontrado.');
         const dadosDoc = snap.data() || {};
         const statusAtual = dadosDoc.status || 'Rascunho';
+        if (!usuarioPodeEventoTC(eventoId, statusAtual)) return falhar('Acesso negado para esta ação.');
         if (destino === 'Em Processamento' && statusAtual !== 'Rascunho') {
             return falhar('Status atual não permite encaminhar para Processamento.');
         }
@@ -1388,15 +1430,17 @@
         const btnDevolver = document.getElementById('btnDevolver');
         const btnEnviar = document.getElementById('btnEnviarProcessamento');
         const btnNovaEntrada = document.getElementById('btnDarNovaEntrada');
-        const podeTramitar = usuarioPodeTramitarTC();
-        if (btnRetornarProcessamento) btnRetornarProcessamento.style.display = (tcSalvo && podeTramitar && status === 'Em Liquidação') ? 'inline-block' : 'none';
-        if (btnRetornarLiquidacao) btnRetornarLiquidacao.style.display = (tcSalvo && podeTramitar && status === 'Liquidado') ? 'inline-block' : 'none';
-        if (btnDevolver) btnDevolver.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento' || status === 'Em Liquidação')) ? 'inline-block' : 'none';
+        if (btnRetornarProcessamento) btnRetornarProcessamento.style.display = (tcSalvo && usuarioPodeEventoTC(TC_EVENTO.RET_PROC, status)) ? 'inline-block' : 'none';
+        if (btnRetornarLiquidacao) btnRetornarLiquidacao.style.display = (tcSalvo && usuarioPodeEventoTC(TC_EVENTO.RET_LIQ, status)) ? 'inline-block' : 'none';
+        if (btnDevolver) btnDevolver.style.display = (tcSalvo && usuarioPodeEventoTC(TC_EVENTO.DEVOLVER, status)) ? 'inline-block' : 'none';
         if (btnEnviar) {
-            btnEnviar.style.display = (tcSalvo && podeTramitar && (status === 'Rascunho' || status === 'Em Processamento')) ? 'inline-block' : 'none';
+            const podeEncProc = usuarioPodeEventoTC(TC_EVENTO.ENC_PROC, status);
+            const podeEncLiq = usuarioPodeEventoTC(TC_EVENTO.ENC_LIQ, status);
+            const mostrarEnc = tcSalvo && ((status === 'Rascunho' && podeEncProc) || (status === 'Em Processamento' && podeEncLiq));
+            btnEnviar.style.display = mostrarEnc ? 'inline-block' : 'none';
             btnEnviar.textContent = status === 'Em Processamento' ? '➡️ Encaminhar para Liquidação' : '➡️ Encaminhar para Processamento';
         }
-        if (btnNovaEntrada) btnNovaEntrada.style.display = (status === 'Devolvido') ? 'inline-block' : 'none';
+        if (btnNovaEntrada) btnNovaEntrada.style.display = (tcSalvo && usuarioPodeEventoTC(TC_EVENTO.NOVA_ENTRADA, status)) ? 'inline-block' : 'none';
     }
 
     function nomeAbaPorIndice(tabIndex) {
@@ -3383,6 +3427,10 @@
                     texto: montarResumoPreEncaminhamentoLiquidacao({ empenhosVinculados: empenhosDaNotaAtual })
                 });
                 if (sim) {
+                    if (!usuarioPodeEventoTC(TC_EVENTO.ENC_LIQ, 'Em Processamento')) {
+                        alert('Sem permissão para encaminhar para Liquidação.');
+                        return;
+                    }
                     const vEmp = validarPreRequisitosEncaminharTC({ empenhosVinculados: empenhosDaNotaAtual }, 'Em Liquidação');
                     if (!vEmp.ok) {
                         alert(vEmp.mensagem);
@@ -3399,6 +3447,13 @@
                     texto: 'Deseja enviar este título para "Liquidado"? Ao confirmar, o sistema grava a NP e registra a liquidação concluída.'
                 });
                 if (sim) {
+                    const podeLiquidar = typeof temPermissaoEvento === 'function'
+                        ? temPermissaoEvento('liquidacao_fechar_np')
+                        : temPermissaoUI('liquidacao_fechar_np');
+                    if (!podeLiquidar) {
+                        alert('Sem permissão para registrar liquidação (informar NP / fechar LP).');
+                        return;
+                    }
                     novoStatus = 'Liquidado';
                     dados.status = novoStatus;
                 } else {
@@ -3416,6 +3471,11 @@
                 if (todosLF && todosPF) candidato = 'Para Pagamento';
                 else if (todosLF) candidato = 'Aguardando Financeiro';
                 if (candidato !== statusAtual) {
+                    const podeTransFin = typeof temPermissaoUI === 'function' && temPermissaoUI('liquidacao_editar');
+                    if (!podeTransFin) {
+                        alert('Sem permissão para alterar status financeiro (requer liquidacao_editar).');
+                        return;
+                    }
                     const sim = await modalEncaminharStatusPromessa({
                         texto: `Deseja enviar este título para "${candidato}"? Ao confirmar, o sistema grava as alterações e registra a mudança de status.`
                     });
@@ -3544,7 +3604,7 @@
         document.getElementById('modalPrimeiroSalvo').style.display = 'none';
         window._modalPrimeiroSalvoDocId = null;
         if (!docId) return;
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        if (!usuarioPodeEventoTC(TC_EVENTO.ENC_PROC, 'Rascunho')) return alert('Acesso negado para encaminhar para Processamento.');
         mostrarLoading();
         try {
             await encaminharTC(docId, 'Em Processamento', false);
@@ -3611,8 +3671,10 @@
     });
 
     function abrirModalDevolucao(idsSelecionados) {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         if (!Array.isArray(idsSelecionados) || idsSelecionados.length === 0) return;
+        const titulosSel = idsSelecionados.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const semPerm = titulosSel.some(t => !usuarioPodeEventoTC(TC_EVENTO.DEVOLVER, t.status || 'Rascunho'));
+        if (semPerm) return alert('Acesso negado para devolver TC.');
         document.getElementById('devolverMotivo').value = '';
         document.getElementById('devolverNome').value = '';
         const dataHoraEl = document.getElementById('devolverDataHora');
@@ -3629,7 +3691,10 @@
     });
 
     async function executarRetornoStatus(ids, origemEsperada, destino, emBloco) {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
+        const eventoId = eventoRetornoStatus(origemEsperada, destino);
+        if (!eventoId || !usuarioPodeEventoTC(eventoId, origemEsperada)) {
+            return alert('Acesso negado para esta ação de retorno.');
+        }
         const listaIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
         if (!listaIds.length) return alert('Selecione ao menos um TC.');
         const n = listaIds.length;
@@ -3782,6 +3847,9 @@
 
     function abrirModalNovaEntrada(idsSelecionados) {
         if (!Array.isArray(idsSelecionados) || idsSelecionados.length === 0) return;
+        const titulosSel = idsSelecionados.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const semPerm = titulosSel.some(t => !usuarioPodeEventoTC(TC_EVENTO.NOVA_ENTRADA, t.status || 'Devolvido'));
+        if (semPerm) return alert('Acesso negado para dar nova entrada.');
         document.getElementById('novaEntradaData').value = new Date().toISOString().slice(0, 10);
         limparNovaEntradaOI();
         const entregadorEl = document.getElementById('novaEntradaEntregador');
@@ -3805,6 +3873,9 @@
 
     document.getElementById('modalNovaEntradaConfirmar')?.addEventListener('click', async function() {
         const ids = Array.isArray(window._novaEntradaTcIds) ? window._novaEntradaTcIds : [];
+        if (!usuarioPodeEventoTC(TC_EVENTO.NOVA_ENTRADA, 'Devolvido')) {
+            return alert('Acesso negado para dar nova entrada.');
+        }
         const dataEntrada = (document.getElementById('novaEntradaData').value || '').trim();
         const oiOrigemId = (document.getElementById('novaEntradaOIId').value || '').trim();
         const entregador = (document.getElementById('novaEntradaEntregador')?.value || '').trim();
@@ -4309,8 +4380,9 @@
             alert(`Limite de ${LIMITE} TC por impressão em bloco. Você selecionou ${listaIds.length}.`);
             return;
         }
-        const podeGerar = (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false) ||
-            (typeof permissoesEmCache !== 'undefined' && permissoesEmCache.includes('acesso_admin'));
+        const podeGerar = typeof temPermissaoEvento === 'function'
+            ? temPermissaoEvento(TC_EVENTO.PDF)
+            : (typeof temPermissaoUI === 'function' ? temPermissaoUI('titulos_pdf') : false);
         if (!podeGerar) {
             alert('Você não tem permissão para gerar PDF de TC.');
             return;
@@ -4610,7 +4682,6 @@
     });
 
     document.getElementById('btnEncaminharBloco')?.addEventListener('click', async function() {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
         if (ids.length === 0) return alert("Selecione ao menos um TC.");
         const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
@@ -4618,6 +4689,9 @@
         const todosEmProcessamento = titulosSel.length > 0 && titulosSel.every(t => (t.status || 'Rascunho') === 'Em Processamento');
         if (!todosRascunho && !todosEmProcessamento) return alert('Selecione TCs do mesmo status (Rascunho ou Em Processamento).');
         const destino = todosRascunho ? 'Em Processamento' : 'Em Liquidação';
+        const eventoId = eventoEncaminharPorDestino(destino);
+        const semPerm = titulosSel.some(t => !usuarioPodeEventoTC(eventoId, t.status || 'Rascunho'));
+        if (semPerm) return alert('Acesso negado para encaminhar em bloco.');
         const n = ids.length;
         const texto = destino === 'Em Processamento'
             ? `Deseja enviar ${n} título(s) selecionado(s) para "Em Processamento"? Ao confirmar, o sistema verifica dados básicos e OI de cada um. Os que não cumprirem requisitos serão ignorados e listados ao final.`
@@ -4658,7 +4732,6 @@
     });
 
     document.getElementById('btnRetornarBloco')?.addEventListener('click', async function() {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
         if (!ids.length) return alert("Selecione ao menos um TC.");
         const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
@@ -4667,6 +4740,11 @@
         if (!todosEmLiquidacao && !todosLiquidados) {
             return alert('Para retorno em bloco, selecione apenas TCs em Em Liquidação ou apenas em Liquidado.');
         }
+        const origem = todosEmLiquidacao ? 'Em Liquidação' : 'Liquidado';
+        const destino = todosEmLiquidacao ? 'Em Processamento' : 'Em Liquidação';
+        const eventoId = eventoRetornoStatus(origem, destino);
+        const semPerm = titulosSel.some(t => !usuarioPodeEventoTC(eventoId, t.status || origem));
+        if (semPerm) return alert('Acesso negado para retorno em bloco.');
         if (todosEmLiquidacao) {
             await executarRetornoStatus(ids, 'Em Liquidação', 'Em Processamento', true);
             return;
@@ -4675,10 +4753,11 @@
     });
 
     document.getElementById('btnDevolverBloco')?.addEventListener('click', function() {
-        if (!usuarioPodeTramitarTC()) return alert('Acesso negado para tramitação.');
         const ids = Array.from(titulosSelecionados);
         if (!ids.length) return alert("Selecione ao menos um TC.");
         const titulosSel = ids.map(id => baseTitulos.find(t => t.id === id)).filter(Boolean);
+        const semPerm = titulosSel.some(t => !usuarioPodeEventoTC(TC_EVENTO.DEVOLVER, t.status || 'Rascunho'));
+        if (semPerm) return alert('Acesso negado para devolver em bloco.');
         const todosPermitidosDevolucaoFisica = titulosSel.length > 0 && titulosSel.every(t => {
             const st = t.status || 'Rascunho';
             return st === 'Rascunho' || st === 'Em Processamento' || st === 'Em Liquidação';

@@ -40,7 +40,10 @@
         .badge-liquidacao { background: #9b59b6; color: white; }
         .badge-liquidado { background: #1abc9c; color: white; }
         .badge-aguardando { background: #f39c12; color: white; }
+        .badge-para-pagamento-parcial { background: #e67e22; color: white; }
         .badge-para-pagamento { background: #27ae60; color: white; }
+        .badge-pago-parcial { background: #8e44ad; color: white; }
+        .badge-pago { background: #2c3e50; color: white; }
         .badge-devolvido { background: #e74c3c; color: white; }
         .tabela-ne-inputs input { width: 100%; padding: 6px; font-size: 12px; }
         .check-tc { width: 20px; height: 20px; }
@@ -185,11 +188,11 @@
                 </div>
                 <div id="containerSelecaoMultipla" style="display: none; margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
                     <strong>Selecionados: <span id="countSelecionados">0</span></strong>
-                    <button type="button" id="btnNovaEntradaBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">↪ Dar nova entrada em Bloco</button>
-                    <button type="button" id="btnEncaminharBloco" class="btn-primary btn-small" style="margin-left: 15px; display:none;">➡️ Encaminhar em Bloco</button>
-                    <button type="button" id="btnRetornarBloco" class="btn-default btn-small" style="display:none;">↩ Retornar status em Bloco</button>
-                    <button type="button" id="btnDevolverBloco" class="btn-default btn-small" style="display:none; color:#e74c3c;">↩ Devolver TC em Bloco</button>
-                    <button type="button" id="btnImprimirBlocoTC" class="btn-default btn-small" data-permission="titulos_pdf" style="margin-left: 15px; display:none;">📄 Imprimir PDF em Bloco</button>
+                    <button type="button" id="btnNovaEntradaBloco" class="btn-primary btn-small" data-permission-event="titulos_nova_entrada" style="margin-left: 15px; display:none;">↪ Dar nova entrada em Bloco</button>
+                    <button type="button" id="btnEncaminharBloco" class="btn-primary btn-small" data-permission-any="titulos_encaminhar_processamento,titulos_encaminhar_liquidacao" style="margin-left: 15px; display:none;">➡️ Encaminhar em Bloco</button>
+                    <button type="button" id="btnRetornarBloco" class="btn-default btn-small" data-permission-any="titulos_retornar_processamento,titulos_retornar_liquidacao" style="display:none;">↩ Retornar status em Bloco</button>
+                    <button type="button" id="btnDevolverBloco" class="btn-default btn-small" data-permission-event="titulos_devolver" style="display:none; color:#e74c3c;">↩ Devolver TC em Bloco</button>
+                    <button type="button" id="btnImprimirBlocoTC" class="btn-default btn-small" data-permission-event="titulos_pdf" style="margin-left: 15px; display:none;">📄 Imprimir PDF em Bloco</button>
                 </div>
                 <table id="tabelaTitulos" class="tabela-gov">
                     <thead>
@@ -466,11 +469,11 @@
                     </div>
 
                     <div class="form-acoes" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
-                        <button type="button" id="btnRetornarProcessamento" class="btn-default" style="display:none;" data-permission="tramitarTC">↩ Retornar para Em Processamento</button>
-                        <button type="button" id="btnRetornarLiquidacao" class="btn-default" style="display:none;" data-permission="tramitarTC">↩ Retornar para Em Liquidação</button>
-                        <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;" data-permission="tramitarTC">↩ Devolver TC</button>
-                        <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;">↪ Dar nova entrada</button>
-                        <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;" data-permission="tramitarTC">➡️ Encaminhar</button>
+                        <button type="button" id="btnRetornarProcessamento" class="btn-default" style="display:none;" data-permission-event="titulos_retornar_processamento">↩ Retornar para Em Processamento</button>
+                        <button type="button" id="btnRetornarLiquidacao" class="btn-default" style="display:none;" data-permission-event="titulos_retornar_liquidacao">↩ Retornar para Em Liquidação</button>
+                        <button type="button" id="btnDevolver" class="btn-default" style="display:none; color:#e74c3c;" data-permission-event="titulos_devolver">↩ Devolver TC</button>
+                        <button type="button" id="btnDarNovaEntrada" class="btn-primary" style="display:none;" data-permission-event="titulos_nova_entrada">↪ Dar nova entrada</button>
+                        <button type="button" id="btnEnviarProcessamento" class="btn-primary" style="display:none;">➡️ Encaminhar</button>
                         <button type="submit" id="btnSalvarTitulo" class="btn-primary" data-permission="titulos_inserir">💾 Registrar TC</button>
                         <button type="button" id="btnCancelarTitulo" class="btn-default">Fechar</button>
                     </div>
@@ -486,7 +489,7 @@
             <p style="margin-bottom:20px; color:#555;">Deseja continuar editando como Rascunho ou enviar para Processamento?</p>
             <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
                 <button type="button" id="modalPrimeiroSalvoContinuar" class="btn-default">Continuar editando</button>
-                <button type="button" id="modalPrimeiroSalvoEnviar" class="btn-primary" data-permission="tramitarTC">Enviar para Processamento</button>
+                <button type="button" id="modalPrimeiroSalvoEnviar" class="btn-primary" data-permission-event="titulos_encaminhar_processamento">Enviar para Processamento</button>
             </div>
         </div>
     </div>
@@ -510,7 +513,7 @@
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalDevolverCancelar" class="btn-default">Cancelar</button>
-                <button type="button" id="modalDevolverConfirmar" class="btn-default" style="color:#e74c3c;">Devolver</button>
+                <button type="button" id="modalDevolverConfirmar" class="btn-default" style="color:#e74c3c;" data-permission-event="titulos_devolver">Devolver</button>
             </div>
         </div>
     </div>
@@ -558,7 +561,7 @@
             <div class="form-group"><label>Observação:</label><textarea id="novaEntradaObservacao" rows="3" placeholder="Informação complementar da nova entrada"></textarea></div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button type="button" id="modalNovaEntradaCancelar" class="btn-default">Cancelar</button>
-                <button type="button" id="modalNovaEntradaConfirmar" class="btn-primary">Confirmar</button>
+                <button type="button" id="modalNovaEntradaConfirmar" class="btn-primary" data-permission-event="titulos_nova_entrada">Confirmar</button>
             </div>
         </div>
     </div>
@@ -637,6 +640,7 @@
     <script src="firebase-config.js"></script>
     <script src="admin-utils.js"></script>
     <script src="script-menu-lateral.js"></script>
+    <script src="rbac-eventos.js"></script>
     <script src="script.js"></script>
     <script src="script-ano-documento.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

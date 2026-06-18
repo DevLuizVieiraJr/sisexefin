@@ -312,12 +312,16 @@
 .badge-lp-impostos   { background: #c0392b; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-pagamento  { background: #2980b9; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-fechado    { background: #27ae60; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-liquidado  { background: #27ae60; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-cancelado  { background: #e74c3c; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-/* Status financeiro (LFxPF) */
+/* Status financeiro (LFxPF / pagamento) */
+.badge-lp-ag-financeiro { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-ag-sem-lf  { background: #7f8c8d; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-ag-com-lf  { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-pparcial   { background: #f39c12; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge-lp-para-pag   { background: #16a085; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-pago-parcial { background: #8e44ad; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-lp-pago       { background: #2c3e50; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 
 /* Badge DEMO na topbar */
 .topbar-demo-badge {

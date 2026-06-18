@@ -94,6 +94,52 @@ service cloud.firestore {
         && d.get('nome', '') is string && d.get('nome', '').size() > 0;
     }
 
+    // Eventos de fluxo — Títulos de Crédito (catálogo rbac-eventos.js)
+    function tituloStatusMudou() {
+      return 'status' in request.resource.data
+        && 'status' in resource.data
+        && request.resource.data.status != resource.data.status;
+    }
+
+    function temPermissaoEventoTitulo(eventoId) {
+      return temPermissao(eventoId)
+        || (eventoId in [
+          'titulos_encaminhar_processamento',
+          'titulos_encaminhar_liquidacao',
+          'titulos_devolver',
+          'titulos_retornar_processamento',
+          'titulos_retornar_liquidacao'
+        ] && temPermissao('tramitarTC'));
+    }
+
+    function tituloStatusPosNP(status) {
+      return status in ['Liquidado', 'Aguardando Financeiro', 'Para Pagamento', 'Para Pagamento parcial', 'Pago Parcialmente', 'Pago'];
+    }
+
+    function podeTransicaoTitulo() {
+      let de = resource.data.get('status', 'Rascunho');
+      let para = request.resource.data.get('status', 'Rascunho');
+      return (de == 'Rascunho' && para == 'Em Processamento' && temPermissaoEventoTitulo('titulos_encaminhar_processamento'))
+        || (de == 'Em Processamento' && para == 'Em Liquidação' && temPermissaoEventoTitulo('titulos_encaminhar_liquidacao'))
+        || (de in ['Rascunho', 'Em Processamento', 'Em Liquidação'] && para == 'Devolvido' && temPermissaoEventoTitulo('titulos_devolver'))
+        || (de == 'Em Liquidação' && para == 'Em Processamento' && temPermissaoEventoTitulo('titulos_retornar_processamento'))
+        || (de == 'Liquidado' && para == 'Em Liquidação' && temPermissaoEventoTitulo('titulos_retornar_liquidacao'))
+        || (de == 'Devolvido' && para == 'Rascunho' && temPermissao('titulos_nova_entrada'))
+        || (de == 'Em Liquidação' && para == 'Liquidado' && temPermissao('liquidacao_fechar_np'))
+        || (tituloStatusPosNP(de) && tituloStatusPosNP(para) && temPermissao('liquidacao_editar'))
+        || (tituloStatusPosNP(de) && para == 'Em Liquidação' && temPermissao('liquidacao_cancelar'));
+    }
+
+    function podeEditarTituloSemMudancaStatus() {
+      return temPermissao('titulos_editar')
+        || temPermissaoOuAlias('titulos_status')
+        || temPermissao('titulos_cancelar')
+        || temPermissao('liquidacao_editar')
+        || temPermissao('liquidacao_fechar_np')
+        || temPermissao('liquidacao_cancelar')
+        || temPermissao('liquidacao_informar_op');
+    }
+
     // =================================================================
     // 2. REGRAS DO PAINEL DE ADMINISTRAÇÃO (Segurança Máxima)
     // =================================================================
@@ -195,11 +241,10 @@ service cloud.firestore {
       allow read: if logado() && (temPermissao('titulos_ler') || temPermissao('relatorios_ler'));
       allow create: if logado() && temPermissao('titulos_inserir');
       allow update: if logado() && (
-        temPermissao('titulos_editar') || temPermissao('tramitarTC')
-        || temPermissaoOuAlias('titulos_status')
-        || temPermissao('titulos_cancelar')
-        || temPermissao('liquidacao_editar') || temPermissao('liquidacao_fechar_np') || temPermissao('liquidacao_cancelar')
-        || temPermissao('acesso_admin'));
+        temPermissao('acesso_admin')
+        || (!tituloStatusMudou() && podeEditarTituloSemMudancaStatus())
+        || (tituloStatusMudou() && podeTransicaoTitulo())
+      );
       allow delete: if logado() && temPermissao('titulos_excluir');
     }
 
@@ -293,6 +338,8 @@ service cloud.firestore {
         temPermissao('liquidacao_editar')
         || temPermissao('liquidacao_cancelar')
         || temPermissao('liquidacao_fechar_np')
+        || temPermissao('liquidacao_informar_op')
+        || temPermissao('liquidacao_restaurar')
         || temPermissao('liquidacao_status')
         || temPermissao('acesso_admin')
       );

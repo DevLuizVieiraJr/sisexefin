@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SisExeFin — Migrar estados LP</title>
+    <script src="script-tema.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { padding: 24px; max-width: 720px; margin: 0 auto; }
+        pre { background: #f4f4f4; padding: 12px; overflow: auto; max-height: 320px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Migrar estados LP (legado → novo modelo)</h1>
+    <p>Converte <code>fechado</code>, <code>aguardandoFinanceiroSemLF</code> e <code>aguardandoFinanceiroComLF</code> para os novos códigos via <code>calcularEstadoLP</code>.</p>
+    <p><strong>Requer:</strong> permissão <code>acesso_admin</code>.</p>
+    <button type="button" id="btnMigrar" class="btn-primary">Executar migração</button>
+    <button type="button" id="btnVoltar" class="btn-default" onclick="location.href='liquidacao.html'">Voltar</button>
+    <pre id="logMigracao">Aguardando…</pre>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-utils.js"></script>
+    <script src="script-liquidacao-estado.js"></script>
+    <script>
+    (function () {
+        var logEl = document.getElementById('logMigracao');
+        function log(msg) {
+            logEl.textContent += msg + '\n';
+        }
+
+        auth.onAuthStateChanged(async function (user) {
+            if (!user) {
+                log('Faça login.');
+                location.href = 'index.html';
+                return;
+            }
+            var snap = await db.collection('usuarios').doc(user.uid).get();
+            var perms = (snap.data() && snap.data().permissoes) || [];
+            if (perms.indexOf('acesso_admin') < 0) {
+                log('Acesso negado: admin necessário.');
+                document.getElementById('btnMigrar').disabled = true;
+                return;
+            }
+            log('Pronto. Clique em Executar migração.');
+        });
+
+        document.getElementById('btnMigrar').addEventListener('click', async function () {
+            if (!window.LiquidacaoEstado) {
+                alert('script-liquidacao-estado.js não carregado.');
+                return;
+            }
+            logEl.textContent = '';
+            log('Iniciando…');
+            var btn = document.getElementById('btnMigrar');
+            btn.disabled = true;
+            try {
+                var snap = await db.collection('liquidacoes').get();
+                var alterados = 0;
+                var docs = [];
+                snap.forEach(function (doc) { docs.push(doc); });
+                for (var i = 0; i < docs.length; i += 400) {
+                    var batch = db.batch();
+                    var chunk = docs.slice(i, i + 400);
+                    chunk.forEach(function (doc) {
+                        var d = doc.data();
+                        var antigo = d.estado;
+                        if (antigo === 'cancelado') return;
+                        var novo = window.LiquidacaoEstado.migrarEstadoDocumento(d);
+                        if (novo !== antigo) {
+                            batch.update(doc.ref, { estado: novo });
+                            alterados++;
+                            log(doc.id + ': ' + antigo + ' → ' + novo);
+                        }
+                    });
+                    await batch.commit();
+                }
+                log('Concluído. Documentos alterados: ' + alterados + ' / ' + docs.length);
+            } catch (err) {
+                log('Erro: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

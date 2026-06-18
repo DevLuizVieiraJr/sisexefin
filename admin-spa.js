@@ -513,6 +513,63 @@
             tr.innerHTML = cells;
             tbody.appendChild(tr);
         });
+        desenharMatrizEventosFluxo();
+        desenharPermissoesTransversais();
+    }
+
+    function desenharMatrizEventosFluxo() {
+        const container = document.getElementById('matrizEventosFluxo');
+        if (!container || typeof window.RBACEventos === 'undefined') return;
+        const catalogo = window.RBACEventos;
+        const eventos = catalogo.EVENTOS_FLUXO || [];
+        if (!eventos.length) {
+            container.innerHTML = '';
+            return;
+        }
+        const porModulo = {};
+        eventos.forEach(function(ev) {
+            if (!porModulo[ev.modulo]) porModulo[ev.modulo] = {};
+            const g = ev.grupo || 'Outros';
+            if (!porModulo[ev.modulo][g]) porModulo[ev.modulo][g] = [];
+            porModulo[ev.modulo][g].push(ev);
+        });
+        let html = '<div class="matriz-eventos-intro"><strong>Ações de fluxo</strong> <span class="matriz-eventos-hint">(transições de status e ações especiais — geradas do catálogo central)</span></div>';
+        Object.keys(porModulo).sort().forEach(function(mod) {
+            const modLabel = (catalogo.MODULO_LABELS && catalogo.MODULO_LABELS[mod]) || mod;
+            html += '<fieldset class="gov-fieldset matriz-eventos-modulo"><legend>' + escapeHTML(modLabel) + '</legend>';
+            const grupos = porModulo[mod];
+            Object.keys(grupos).sort().forEach(function(grupo) {
+                html += '<div class="matriz-eventos-grupo"><span class="matriz-eventos-grupo-label">' + escapeHTML(grupo) + '</span><div class="matriz-eventos-lista">';
+                grupos[grupo].forEach(function(ev) {
+                    const tip = catalogo.tooltipEvento(ev);
+                    html += '<label class="matriz-evento-item" title="' + escapeHTML(tip) + '">';
+                    html += '<input type="checkbox" class="cb-perm" value="' + escapeHTML(ev.id) + '"> ';
+                    html += escapeHTML(ev.label);
+                    if (ev.tipo === 'transicao' && ev.statusDestino) {
+                        html += ' <span class="matriz-evento-transicao">(' + escapeHTML(tip) + ')</span>';
+                    }
+                    html += '</label>';
+                });
+                html += '</div></div>';
+            });
+            html += '</fieldset>';
+        });
+        container.innerHTML = html;
+    }
+
+    function desenharPermissoesTransversais() {
+        const container = document.getElementById('adminPermissoesTransversais');
+        if (!container || typeof window.RBACEventos === 'undefined') return;
+        const itens = window.RBACEventos.ADMIN_TRANSVERSAIS || [];
+        if (!itens.length) {
+            container.innerHTML = '';
+            return;
+        }
+        let html = '<div class="matriz-eventos-intro"><strong>Permissões transversais</strong></div>';
+        itens.forEach(function(item) {
+            html += '<label><input type="checkbox" class="cb-perm" value="' + escapeHTML(item.id) + '"> ' + escapeHTML(item.label) + '</label>';
+        });
+        container.innerHTML = html;
     }
 
     async function carregarUsuarios() {
@@ -684,6 +741,12 @@
         const form = document.getElementById('formPerfilAdmin');
         const cbs = form ? form.querySelectorAll('.cb-perm') : document.querySelectorAll('.cb-perm');
         cbs.forEach(cb => { cb.checked = perms.includes(cb.value); });
+        if (perms.includes('tramitarTC') && typeof window.RBACEventos !== 'undefined') {
+            (window.RBACEventos.TRAMITAR_TC_EXPANSION || []).forEach(function(evId) {
+                const el = form ? form.querySelector('.cb-perm[value="' + evId + '"]') : null;
+                if (el) el.checked = true;
+            });
+        }
         document.getElementById('tela-lista-perfis').style.display = 'none';
         document.getElementById('tela-formulario-perfis').style.display = 'block';
     };

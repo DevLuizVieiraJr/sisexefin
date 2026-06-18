@@ -185,15 +185,8 @@
                                     <tbody id="matrizPermissoes"></tbody>
                                 </table>
                             </div>
-                            <div class="admin-permissoes-extras">
-                                <label><input type="checkbox" class="cb-perm" value="acesso_admin"> Acesso Admin</label>
-                                <label><input type="checkbox" class="cb-perm" value="tramitarTC"> Tramitar TC (encaminhar/devolver)</label>
-                                <label><input type="checkbox" class="cb-perm" value="titulos_pdf"> Gerar PDF de TC</label>
-                                <label><input type="checkbox" class="cb-perm" value="liquidacao_gerar_pdf"> Liquidação: gerar DAuLiq (PDF)</label>
-                                <label><input type="checkbox" class="cb-perm" value="liquidacao_fechar_np"> Liquidação: informar NP / fechar LP</label>
-                                <label><input type="checkbox" class="cb-perm" value="admin_pendentes_ler"> Admin: acessar aba Aguardando Aprovação</label>
-                                <label><input type="checkbox" class="cb-perm" value="admin_cadastrar_usuario"> Admin: acessar aba Cadastrar Usuário</label>
-                            </div>
+                            <div id="matrizEventosFluxo" class="matriz-eventos-fluxo" aria-label="Ações de fluxo por módulo"></div>
+                            <div id="adminPermissoesTransversais" class="admin-permissoes-extras admin-permissoes-transversais"></div>
                         </fieldset>
                         <div class="form-acoes form-acoes--rodape">
                             <button type="submit" class="btn-primary">💾 Salvar Perfil</button>
@@ -321,6 +314,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="firebase-config.js"></script>
     <script src="script-menu-lateral.js"></script>
+    <script src="rbac-eventos.js"></script>
     <script src="script.js"></script>
     <script src="admin-utils.js"></script>
     <script src="script-menu-toggle.js"></script>

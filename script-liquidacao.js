@@ -34,6 +34,7 @@ function esconderLoading() {
     var estadoOrdenacaoLP  = { coluna: 'codigo', direcao: 'desc' };
     var modalMotivoResolver = null;
     var modoCorrecaoNP     = false;
+    var modoCorrecaoOP     = false;
     var lpSomenteLeitura   = false;
     var lpSelecionados     = new Set();
     var filtroAnoExercicioLP = '';
@@ -41,6 +42,11 @@ function esconderLoading() {
     var modalDauliqVarianteResolver = null;
 
     function tem(perm) {
+        if (typeof temPermissaoEvento === 'function'
+            && typeof window.RBACEventos !== 'undefined'
+            && window.RBACEventos.eventoPorId(perm)) {
+            return temPermissaoEvento(perm);
+        }
         return typeof temPermissaoUI === 'function' && temPermissaoUI(perm);
     }
 
@@ -50,6 +56,7 @@ function esconderLoading() {
 
     function podeOperarLPLista() {
         return tem('liquidacao_editar') || tem('liquidacao_inserir') || tem('liquidacao_fechar_np')
+            || tem('liquidacao_informar_op') || tem('liquidacao_restaurar')
             || tem('liquidacao_cancelar') || tem('liquidacao_status') || tem('liquidacao_excluir') || ehAdmin();
     }
 
@@ -161,15 +168,33 @@ function esconderLoading() {
     }
 
     function lpEstadoFechado(estado) {
-        return String(estado || '').toLowerCase() === 'fechado';
+        if (window.LiquidacaoEstado) {
+            return window.LiquidacaoEstado.lpEstadoComNP(estado)
+                || window.LiquidacaoEstado.lpEstadoLiquidado(estado);
+        }
+        var e = String(estado || '').toLowerCase();
+        return e === 'fechado' || e === 'liquidado';
     }
 
     function lpEstadoCancelado(estado) {
+        if (window.LiquidacaoEstado) return window.LiquidacaoEstado.lpEstadoCancelado(estado);
         return String(estado || '').toLowerCase() === 'cancelado';
     }
 
     function lpPodeEditarLote(estado) {
+        if (window.LiquidacaoEstado) return window.LiquidacaoEstado.lpPodeEditarLote(estado);
         return !lpEstadoFechado(estado) && !lpEstadoCancelado(estado);
+    }
+
+    function recalcularEstadoEditorLP() {
+        if (!lpEditorState || !window.LiquidacaoEstado) return;
+        if (lpEstadoCancelado(lpEditorState.estado)) return;
+        lpEditorState.estado = window.LiquidacaoEstado.calcularEstadoLP(lpEditorState);
+    }
+
+    function aplicarBadgeEstadoEditor() {
+        var badgeEl = qs('lpBadgeEstado');
+        if (badgeEl && lpEditorState) badgeEl.innerHTML = badgeEstado(lpEditorState.estado);
     }
 
     // ===== HELPERS FIREBASE: normalização e acesso a dados =====
@@ -263,6 +288,10 @@ function esconderLoading() {
         if (!u) return String(id);
         var cod = String(u.codigo || '').trim();
         return cod ? ('7' + cod) : '—';
+    }
+
+    function formatarMoeda(v) {
+        return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
     // Formata número de empenho como 'AAAANE######' (12 caracteres lógicos).
@@ -428,12 +457,14 @@ function esconderLoading() {
     }
 
     function calcularStatusFinanceiro(orcamento) {
-        var lfsCount = (orcamento || []).filter(function (o) { return !!(o.lf || '').trim(); }).length;
-        var pfsCount = (orcamento || []).filter(function (o) { return !!(o.pf || '').trim(); }).length;
-        if (lfsCount === 0)                      return 'aguardandoFinanceiroSemLF';
-        if (lfsCount > 0 && pfsCount === 0)      return 'aguardandoFinanceiroComLF';
-        if (pfsCount > 0 && pfsCount < lfsCount) return 'paraPagamentoParcial';
-        return 'paraPagamento';
+        if (window.LiquidacaoEstado) {
+            return window.LiquidacaoEstado.calcularEstadoLP({
+                np: (lpEditorState && lpEditorState.np) || '1',
+                orcamento: orcamento,
+                estado: 'rascunho'
+            });
+        }
+        return 'liquidado';
     }
 
     function gerarOrcamentoParaIds(ids, anterior) {
@@ -467,6 +498,9 @@ function esconderLoading() {
                         vinc:  ant.vinc || '',
                         lf:    ant.lf   || v.lf  || '',
                         pf:    ant.pf   || v.pf  || '',
+                        op:    ant.op   || '',
+                        valorPago: ant.valorPago != null ? ant.valorPago : '',
+                        dataPagamento: ant.dataPagamento || '',
                     });
                 });
             }
@@ -475,19 +509,23 @@ function esconderLoading() {
     }
 
     function badgeEstado(estado) {
+        var e = window.LiquidacaoEstado
+            ? window.LiquidacaoEstado.normalizarEstadoLegado(estado)
+            : estado;
         var mapa = {
             rascunho:                   '<span class="badge-lp-rascunho">Rascunho</span>',
-            orcamento:                  '<span class="badge-lp-orcamento">Em Orçamento</span>',
-            impostos:                   '<span class="badge-lp-impostos">Em Impostos</span>',
-            pagamento:                  '<span class="badge-lp-pagamento">Em Pagamento</span>',
-            fechado:                    '<span class="badge-lp-fechado">Fechado</span>',
+            liquidado:                  '<span class="badge-lp-liquidado">Liquidado</span>',
+            fechado:                    '<span class="badge-lp-liquidado">Liquidado</span>',
             cancelado:                  '<span class="badge-lp-cancelado">Cancelado</span>',
-            aguardandoFinanceiroSemLF:  '<span class="badge-lp-ag-sem-lf">Ag. Financeiro s/ LF</span>',
-            aguardandoFinanceiroComLF:  '<span class="badge-lp-ag-com-lf">Ag. Financeiro c/ LF</span>',
-            paraPagamentoParcial:       '<span class="badge-lp-pparcial">Para Pag. Parcial</span>',
+            aguardandoFinanceiro:       '<span class="badge-lp-ag-financeiro">Aguardando Financeiro</span>',
+            aguardandoFinanceiroSemLF:  '<span class="badge-lp-ag-financeiro">Aguardando Financeiro</span>',
+            aguardandoFinanceiroComLF:  '<span class="badge-lp-ag-financeiro">Aguardando Financeiro</span>',
+            paraPagamentoParcial:       '<span class="badge-lp-pparcial">Para Pagamento Parcial</span>',
             paraPagamento:              '<span class="badge-lp-para-pag">Para Pagamento</span>',
+            pagoParcialmente:           '<span class="badge-lp-pago-parcial">Pago Parcialmente</span>',
+            pago:                       '<span class="badge-lp-pago">Pago</span>',
         };
-        return mapa[estado] || '<span class="badge-lp-rascunho">' + estado + '</span>';
+        return mapa[e] || mapa[estado] || '<span class="badge-lp-rascunho">' + (estado || '—') + '</span>';
     }
 
     function proximoCodigo() {
@@ -624,8 +662,12 @@ function esconderLoading() {
     function atualizarBotoesEditor() {
         if (!lpEditorState) return;
         aplicarPermissoesBotoesLP();
-        var fechado = lpEstadoFechado(lpEditorState.estado);
         var cancelado = lpEstadoCancelado(lpEditorState.estado);
+        var temNp = !!(String(lpEditorState.np || '').trim());
+        var LE = window.LiquidacaoEstado;
+        var est = String(lpEditorState.estado || '').toLowerCase();
+        var posPag = LE ? LE.lpEstadoPosPagamento(lpEditorState.estado) : (est === 'parapagamento' || est === 'parapagamentoparcial');
+        var posOp = LE ? LE.lpEstadoPosOP(lpEditorState.estado) : (est === 'pago' || est === 'pagoparcialmente');
         var idsPdf = idsTitulosParaPdfLP(lpEditorState);
         var hint = qs('lpHintAcoes');
         var setVis = function (id, vis) {
@@ -637,7 +679,10 @@ function esconderLoading() {
             setVis('btnLPSalvar', false);
             setVis('btnLPInformarNP', false);
             setVis('btnLPCorrigirNP', false);
+            setVis('btnLPInformarOP', false);
+            setVis('btnLPCorrigirOP', false);
             setVis('btnLPCancelar', false);
+            setVis('btnLPRestaurar', false);
             setVis('btnLPInativar', false);
             setVis('btnLPExcluir', false);
             setVis('btnLPGerarPdf', idsPdf.length && tem('liquidacao_gerar_pdf'));
@@ -650,12 +695,18 @@ function esconderLoading() {
         var btnSalvar = qs('btnLPSalvar');
         var btnNp = qs('btnLPInformarNP');
         var btnCorr = qs('btnLPCorrigirNP');
+        var btnOp = qs('btnLPInformarOP');
+        var btnCorrOp = qs('btnLPCorrigirOP');
         var btnCanc = qs('btnLPCancelar');
+        var btnRest = qs('btnLPRestaurar');
         var btnPdf = qs('btnLPGerarPdf');
         if (btnSalvar) { btnSalvar.style.display = ''; btnSalvar.disabled = !podeEditar; }
-        if (btnNp) btnNp.style.display = (!fechado && !cancelado && tem('liquidacao_fechar_np')) ? '' : 'none';
-        if (btnCorr) btnCorr.style.display = (fechado && !cancelado && tem('liquidacao_fechar_np')) ? '' : 'none';
-        if (btnCanc) btnCanc.style.display = (!cancelado && lpEditorState.id && tem('liquidacao_cancelar')) ? '' : 'none';
+        if (btnNp) btnNp.style.display = (!temNp && !cancelado && tem('liquidacao_fechar_np')) ? '' : 'none';
+        if (btnCorr) btnCorr.style.display = (temNp && !cancelado && !posOp && tem('liquidacao_fechar_np')) ? '' : 'none';
+        if (btnOp) btnOp.style.display = (posPag && !cancelado && tem('liquidacao_informar_op')) ? '' : 'none';
+        if (btnCorrOp) btnCorrOp.style.display = (posOp && !cancelado && tem('liquidacao_informar_op')) ? '' : 'none';
+        if (btnCanc) btnCanc.style.display = (!cancelado && !posOp && lpEditorState.id && tem('liquidacao_cancelar')) ? '' : 'none';
+        if (btnRest) btnRest.style.display = (cancelado && lpEditorState.id && tem('liquidacao_restaurar')) ? '' : 'none';
         if (btnPdf) {
             btnPdf.style.display = '';
             btnPdf.disabled = !idsPdf.length || !tem('liquidacao_gerar_pdf');
@@ -665,7 +716,8 @@ function esconderLoading() {
         if (hint) {
             if (!lpEditorState.id) hint.textContent = 'Salve o lote com ao menos um TC.';
             else if (!idsPdf.length) hint.textContent = 'Inclua TCs no lote para gerar DAuLiq ou informar NP.';
-            else if (!fechado && !lpEditorState.np) hint.textContent = 'Informe NP após registro no SIAFI.';
+            else if (!temNp) hint.textContent = 'Informe NP após registro no SIAFI.';
+            else if (posPag) hint.textContent = 'Informe OP após pagamento no SIAFI.';
             else hint.textContent = '';
         }
         aplicarEstadoCamposEditorLeitura();
@@ -803,6 +855,9 @@ function esconderLoading() {
         if (!lp) return;
         lpEditorState = JSON.parse(JSON.stringify(lp));
         lpEditorState.orcamento = gerarOrcamentoParaIds(lpEditorState.tcsIds, lp.orcamento || []);
+        if (window.LiquidacaoEstado && !lpEstadoCancelado(lpEditorState.estado)) {
+            lpEditorState.estado = window.LiquidacaoEstado.migrarEstadoDocumento(lpEditorState);
+        }
         mostrarEditor();
     }
 
@@ -842,6 +897,7 @@ function esconderLoading() {
             return;
         }
         sincronizarCamposEditorAbaB();
+        if (String(lpEditorState.np || '').trim()) recalcularEstadoEditorLP();
         mostrarLoading();
         try {
             var email = (auth.currentUser && auth.currentUser.email) || 'usuário';
@@ -926,6 +982,7 @@ function esconderLoading() {
             await propagarLFParaTitulos(lpEditorState);
             atualizarKPIs();
             atualizarBadgesAbas();
+            aplicarBadgeEstadoEditor();
             if (lpAbaAtiva === 'E') renderizarAbaE();
             else if (lpAbaAtiva === 'F') renderizarAbaF();
         } catch (err) {
@@ -939,7 +996,8 @@ function esconderLoading() {
     // recalculando o status do TC com base na completude de LF/PF (só para TCs já Liquidados+).
     async function propagarLFParaTitulos(lpState) {
         if (!lpState || !lpState.tcsIds || !lpState.tcsIds.length) return;
-        var STATUS_POS_NP = ['Liquidado', 'Aguardando Financeiro', 'Para Pagamento', 'Para Pagamento parcial'];
+        var LE = window.LiquidacaoEstado;
+        var STATUS_POS_NP = ['Liquidado', 'Aguardando Financeiro', 'Para Pagamento', 'Para Pagamento parcial', 'Pago Parcialmente', 'Pago'];
         var batch = db.batch();
         var operacoes = 0;
 
@@ -948,32 +1006,36 @@ function esconderLoading() {
             var orcTC = (lpState.orcamento || []).filter(function (o) { return o.tcId === tcId; });
             var neMap = {};
             orcTC.forEach(function (o) {
-                neMap[o.ne] = { lf: o.lf || '', pf: o.pf || '' };
+                neMap[o.ne] = {
+                    lf: o.lf || '',
+                    pf: o.pf || '',
+                    op: o.op || '',
+                    valorPago: o.valorPago != null ? o.valorPago : '',
+                    dataPagamento: o.dataPagamento || ''
+                };
             });
 
             var snap = await db.collection('titulos').doc(tcId).get();
             if (!snap.exists) continue;
             var tc = snap.data();
-            if (!STATUS_POS_NP.includes(tc.status)) continue;
+            if (!STATUS_POS_NP.includes(tc.status) && tc.status !== 'Em Liquidação') continue;
 
             var novosEmps = (tc.empenhosVinculados || []).map(function (e) {
                 var m = neMap[neExibicao(e.numEmpenho || e.numNE)];
-                return m ? Object.assign({}, e, { lf: m.lf, pf: m.pf }) : e;
+                return m ? Object.assign({}, e, m) : e;
             });
 
-            var allLF = novosEmps.every(function (e) { return (e.lf || '').trim(); });
-            var allPF = novosEmps.every(function (e) { return (e.pf || '').trim(); });
-            var anyPF = novosEmps.some(function (e)  { return (e.pf || '').trim(); });
-            var novoStatus = tc.status;
-            if (allLF && allPF)      novoStatus = 'Para Pagamento';
-            else if (allLF && anyPF) novoStatus = 'Para Pagamento parcial';
-            else if (allLF)          novoStatus = 'Aguardando Financeiro';
-            else                     novoStatus = 'Liquidado';
+            var novoStatus = LE && orcTC.length
+                ? LE.calcularStatusTCOrcamento(orcTC)
+                : (String(lpState.np || '').trim() ? 'Liquidado' : tc.status);
+            var opsTC = orcTC.map(function (o) { return String(o.op || '').trim(); }).filter(Boolean);
+            var opAgregada = opsTC.length === 1 ? opsTC[0] : (opsTC.length > 1 ? opsTC.join(', ') : (tc.op || ''));
 
             var payload = {
                 empenhosVinculados: novosEmps,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             };
+            if (opAgregada) payload.op = opAgregada;
             if (novoStatus !== tc.status) {
                 var emailSync = (auth.currentUser && auth.currentUser.email) || 'sistema';
                 var hist = (tc.historicoStatus || []).slice();
@@ -1694,7 +1756,7 @@ function esconderLoading() {
 
         mostrarLoading();
         try {
-            var hist = await window.LiquidacaoNp.executarFecharNP({
+            var result = await window.LiquidacaoNp.executarFecharNP({
                 lpId: lpEditorState.id,
                 tcsIds: ids,
                 np: np,
@@ -1704,16 +1766,18 @@ function esconderLoading() {
                 npAntiga: lpEditorState.np || '',
                 historicoAtual: lpEditorState.historico || [],
                 codigoLp: lpEditorState.codigo,
+                orcamento: lpEditorState.orcamento || [],
             });
             lpEditorState.np = np;
             lpEditorState.dataLiquidacao = dt;
-            lpEditorState.estado = 'fechado';
-            lpEditorState.historico = hist;
+            lpEditorState.estado = result.estado || 'liquidado';
+            lpEditorState.historico = result.historico || lpEditorState.historico;
             fecharModalNP();
-            qs('lpBadgeEstado').innerHTML = badgeEstado('fechado');
+            aplicarBadgeEstadoEditor();
             atualizarMetaEditor();
             atualizarBotoesEditor();
-            alert(modoCorrecaoNP ? 'NP corrigida.' : 'Lote fechado com NP.');
+            await propagarLFParaTitulos(lpEditorState);
+            alert(modoCorrecaoNP ? 'NP corrigida.' : 'NP informada. Lote: ' + (window.LiquidacaoEstado ? window.LiquidacaoEstado.labelEstado(lpEditorState.estado) : lpEditorState.estado) + '.');
         } catch (err) {
             alert('Erro ao fechar NP: ' + (err.message || err));
         } finally {
@@ -1728,7 +1792,7 @@ function esconderLoading() {
             return;
         }
         if (lpEstadoCancelado(lpEditorState.estado)) return;
-        if (!confirm('Cancelar esta liquidação? Os TCs voltam para "Em Liquidação" e vínculos/NP deste lote serão removidos quando aplicável.')) return;
+        if (!confirm('Tem certeza que deseja cancelar esta liquidação?\n\nOs TCs voltarão para "Em Liquidação" e vínculos/NP deste lote serão removidos. Apenas um perfil autorizado poderá restaurar o status anterior.')) return;
         var motivo = await pedirMotivoLP('Motivo do cancelamento');
         if (!motivo) return;
 
@@ -1771,8 +1835,18 @@ function esconderLoading() {
                 motivo: motivo,
             });
 
+            var snapshotCancelamento = {
+                estadoAnterior: lpEditorState.estado,
+                np: npVal,
+                dataLiquidacao: lpEditorState.dataLiquidacao || '',
+                tcsIds: ids.slice(),
+                orcamento: JSON.parse(JSON.stringify(lpEditorState.orcamento || [])),
+            };
+
             await db.collection('liquidacoes').doc(lpId).update({
                 estado: 'cancelado',
+                estadoAnterior: lpEditorState.estado,
+                snapshotCancelamento: snapshotCancelamento,
                 tcsIds: [],
                 tcsParticiparamIds: ids,
                 historico: hist,
@@ -1781,14 +1855,270 @@ function esconderLoading() {
             });
 
             lpEditorState.estado = 'cancelado';
+            lpEditorState.estadoAnterior = snapshotCancelamento.estadoAnterior;
+            lpEditorState.snapshotCancelamento = snapshotCancelamento;
             lpEditorState.tcsIds = [];
             lpEditorState.historico = hist;
-            qs('lpBadgeEstado').innerHTML = badgeEstado('cancelado');
+            aplicarBadgeEstadoEditor();
             atualizarBotoesEditor();
             renderizarAbaAtiva();
             alert('Liquidação cancelada.');
         } catch (err) {
             alert('Erro ao cancelar: ' + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
+    }
+
+    async function restaurarLPCancelada() {
+        if (!lpEditorState || !lpEditorState.id || !window.LiquidacaoNp) return;
+        if (!tem('liquidacao_restaurar')) {
+            alert('Sem permissão para restaurar liquidação cancelada.');
+            return;
+        }
+        if (!lpEstadoCancelado(lpEditorState.estado)) return;
+        var snap = lpEditorState.snapshotCancelamento;
+        if (!snap || !(snap.tcsIds || []).length) {
+            alert('Snapshot de cancelamento indisponível para restauração.');
+            return;
+        }
+        if (!confirm('Restaurar esta liquidação ao status anterior?\n\nOs TCs serão revinculados e a NP restaurada quando aplicável.')) return;
+        var motivo = await pedirMotivoLP('Motivo da restauração');
+        if (!motivo) return;
+
+        mostrarLoading();
+        try {
+            var lpId = lpEditorState.id;
+            var ids = snap.tcsIds.slice();
+            var npVal = String(snap.np || '').trim();
+            var email = (auth.currentUser && auth.currentUser.email) || 'usuário';
+            var LE = window.LiquidacaoEstado;
+
+            for (var i = 0; i < ids.length; i++) {
+                var tid = ids[i];
+                var tSnap = await db.collection('titulos').doc(tid).get();
+                if (!tSnap.exists) continue;
+                var td = tSnap.data() || {};
+                if (td.liquidacaoId && String(td.liquidacaoId) !== lpId) {
+                    throw new Error('TC ' + tid + ' já vinculado a outra liquidação.');
+                }
+            }
+
+            var orcRest = snap.orcamento || lpEditorState.orcamento || [];
+            var novoEstado = LE
+                ? LE.calcularEstadoLP({ np: npVal, orcamento: orcRest, estado: 'rascunho', tcsIds: ids })
+                : (snap.estadoAnterior || 'liquidado');
+
+            var hist = (lpEditorState.historico || []).slice();
+            hist.push({
+                data: new Date().toISOString(),
+                tipo: 'restaurar_cancelamento',
+                usuario: email,
+                detalhe: 'Estado restaurado: ' + novoEstado,
+                motivo: motivo,
+            });
+
+            await db.collection('liquidacoes').doc(lpId).update({
+                estado: novoEstado,
+                np: npVal,
+                dataLiquidacao: snap.dataLiquidacao || '',
+                tcsIds: ids,
+                orcamento: orcRest,
+                estadoAnterior: firebase.firestore.FieldValue.delete(),
+                snapshotCancelamento: firebase.firestore.FieldValue.delete(),
+                historico: hist,
+                editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                editadoPor: email,
+            });
+
+            for (var j = 0; j < ids.length; j++) {
+                var tcId = ids[j];
+                var orcTC = orcRest.filter(function (o) { return o.tcId === tcId; });
+                var novoStatus = LE && orcTC.length
+                    ? LE.calcularStatusTCOrcamento(orcTC)
+                    : (npVal ? 'Liquidado' : 'Em Liquidação');
+                await db.collection('titulos').doc(tcId).update({
+                    liquidacaoId: lpId,
+                    liquidacaoCodigo: lpEditorState.codigo,
+                    np: npVal,
+                    dataLiquidacao: snap.dataLiquidacao || '',
+                    status: novoStatus,
+                    editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                if (npVal) await window.LiquidacaoNp.vincularTituloNaNP(tcId, npVal, snap.dataLiquidacao || '');
+            }
+
+            lpEditorState.estado = novoEstado;
+            lpEditorState.np = npVal;
+            lpEditorState.dataLiquidacao = snap.dataLiquidacao || '';
+            lpEditorState.tcsIds = ids;
+            lpEditorState.orcamento = orcRest;
+            lpEditorState.historico = hist;
+            delete lpEditorState.snapshotCancelamento;
+            delete lpEditorState.estadoAnterior;
+
+            await propagarLFParaTitulos(lpEditorState);
+            aplicarBadgeEstadoEditor();
+            atualizarBotoesEditor();
+            renderizarAbaAtiva();
+            alert('Liquidação restaurada.');
+        } catch (err) {
+            alert('Erro ao restaurar: ' + (err.message || err));
+        } finally {
+            esconderLoading();
+        }
+    }
+
+    // ===== MODAL OP =====
+    function linhasOrcamentoComPF() {
+        return (lpEditorState.orcamento || []).filter(function (o) {
+            return String(o.pf || '').trim() && String(o.ne || '').trim() && o.ne !== '—';
+        });
+    }
+
+    function renderizarTabelaModalOP() {
+        var tbody = qs('tbodyModalOP');
+        if (!tbody || !lpEditorState) return;
+        var linhas = linhasOrcamentoComPF();
+        tbody.innerHTML = linhas.map(function (o, idx) {
+            var val = Number(o.valor || 0);
+            var vp = o.valorPago != null && o.valorPago !== '' ? o.valorPago : val;
+            return '<tr data-orc-idx="' + idx + '" data-ne="' + escapeAttr(o.ne) + '" data-tcid="' + escapeAttr(o.tcId) + '">' +
+                '<td>' + escapeHTML(o.ne) + '</td>' +
+                '<td style="text-align:right;">' + formatarMoeda(val) + '</td>' +
+                '<td><input type="text" class="inp-op-ne" data-field="op" value="' + escapeAttr(o.op || '') + '" placeholder="Nº OP"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="inp-op-ne" data-field="valorPago" value="' + escapeAttr(String(vp)) + '"></td>' +
+                '<td><input type="date" class="inp-op-ne" data-field="dataPagamento" value="' + escapeAttr(o.dataPagamento || '') + '"></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function escapeAttr(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function escapeHTML(s) {
+        if (typeof window.escapeHTML === 'function') return window.escapeHTML(s);
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function abrirModalOP(correcao) {
+        if (!lpEditorState) return;
+        if (!tem('liquidacao_informar_op')) {
+            alert('Sem permissão para informar OP.');
+            return;
+        }
+        var linhas = linhasOrcamentoComPF();
+        if (!linhas.length) {
+            alert('Nenhuma NE com PF preenchida para informar OP.');
+            return;
+        }
+        modoCorrecaoOP = !!correcao;
+        var tit = qs('modalOPTitulo');
+        var grpMot = qs('grpModalLPmotivoOP');
+        var motEl = qs('modalLPmotivoOP');
+        if (tit) tit.textContent = correcao ? 'Corrigir OP / pagamento' : 'Informar OP (SIAFI)';
+        if (grpMot) grpMot.style.display = correcao ? 'block' : 'none';
+        if (motEl) motEl.value = '';
+        renderizarTabelaModalOP();
+        var modal = qs('modalLPOP');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function fecharModalOP() {
+        var modal = qs('modalLPOP');
+        if (modal) modal.style.display = 'none';
+        modoCorrecaoOP = false;
+    }
+
+    function sincronizarOPDoModal() {
+        var tbody = qs('tbodyModalOP');
+        if (!tbody || !lpEditorState) return false;
+        var linhasPF = linhasOrcamentoComPF();
+        var trs = tbody.querySelectorAll('tr');
+        for (var i = 0; i < trs.length; i++) {
+            var tr = trs[i];
+            var ne = tr.dataset.ne;
+            var tcId = tr.dataset.tcid;
+            var entry = lpEditorState.orcamento.find(function (o) {
+                return o.ne === ne && o.tcId === tcId;
+            });
+            if (!entry) continue;
+            tr.querySelectorAll('.inp-op-ne').forEach(function (inp) {
+                entry[inp.dataset.field] = inp.value;
+            });
+        }
+        return true;
+    }
+
+    async function confirmarOP() {
+        if (!lpEditorState || !window.LiquidacaoOp) {
+            alert('Módulo de OP indisponível.');
+            return;
+        }
+        if (!tem('liquidacao_informar_op')) {
+            alert('Sem permissão para informar OP.');
+            return;
+        }
+        if (!sincronizarOPDoModal()) return;
+
+        var motEl = qs('modalLPmotivoOP');
+        var motivo = motEl ? motEl.value.trim() : '';
+        if (modoCorrecaoOP && !motivo) { alert('Informe o motivo da correção.'); return; }
+
+        var linhasPF = linhasOrcamentoComPF();
+        var algumaOP = false;
+        for (var i = 0; i < linhasPF.length; i++) {
+            var o = linhasPF[i];
+            var temOp = String(o.op || '').trim();
+            var temData = String(o.dataPagamento || '').trim();
+            if (temOp || temData || (o.valorPago != null && o.valorPago !== '')) {
+                if (!temOp || !temData) {
+                    alert('Para a NE ' + o.ne + ', informe OP e data de pagamento.');
+                    return;
+                }
+                var vp = parseFloat(o.valorPago);
+                if (isNaN(vp) || vp <= 0) {
+                    alert('Valor pago inválido para NE ' + o.ne + '.');
+                    return;
+                }
+                if (vp > Number(o.valor || 0) + 0.01) {
+                    alert('Valor pago não pode exceder o valor da NE ' + o.ne + '.');
+                    return;
+                }
+                algumaOP = true;
+            }
+        }
+        if (!algumaOP) { alert('Informe ao menos uma OP com valor e data.'); return; }
+
+        if (!lpEditorState.id) {
+            alert('Salve a liquidação antes de informar OP.');
+            return;
+        }
+
+        mostrarLoading();
+        try {
+            var result = await window.LiquidacaoOp.executarInformarOP({
+                lpId: lpEditorState.id,
+                tcsIds: (lpEditorState.tcsIds || []).slice(),
+                orcamento: lpEditorState.orcamento,
+                np: lpEditorState.np,
+                dataLiquidacao: lpEditorState.dataLiquidacao,
+                historicoAtual: lpEditorState.historico || [],
+                codigoLp: lpEditorState.codigo,
+                correcao: modoCorrecaoOP,
+                motivoCorrecao: motivo,
+            });
+            lpEditorState.orcamento = result.orcamento || lpEditorState.orcamento;
+            lpEditorState.estado = result.estado;
+            lpEditorState.historico = result.historico;
+            fecharModalOP();
+            aplicarBadgeEstadoEditor();
+            atualizarBotoesEditor();
+            renderizarAbaB();
+            alert(modoCorrecaoOP ? 'OP corrigida.' : 'OP informada.');
+        } catch (err) {
+            alert('Erro ao informar OP: ' + (err.message || err));
         } finally {
             esconderLoading();
         }
@@ -2354,8 +2684,11 @@ function esconderLoading() {
             if (reg.vinculacao) { o.vinc  = reg.vinculacao; }
         });
 
-        var novoStatus = calcularStatusFinanceiro(lpEditorState.orcamento);
-        lpEditorState.estado = novoStatus;
+        var novoStatus = lpEditorState.estado;
+        if (String(lpEditorState.np || '').trim()) {
+            recalcularEstadoEditorLP();
+            novoStatus = lpEditorState.estado;
+        }
         var badgeEl = document.getElementById('lpBadgeEstado');
         if (badgeEl) badgeEl.innerHTML = badgeEstado(novoStatus);
 
@@ -2389,7 +2722,14 @@ function esconderLoading() {
         qs('btnLPGerarPdf')     && qs('btnLPGerarPdf').addEventListener('click', abrirModalPdfVariante);
         qs('btnLPInformarNP')   && qs('btnLPInformarNP').addEventListener('click', function () { abrirModalNP(false); });
         qs('btnLPCorrigirNP')   && qs('btnLPCorrigirNP').addEventListener('click', function () { abrirModalNP(true); });
+        qs('btnLPInformarOP')   && qs('btnLPInformarOP').addEventListener('click', function () { abrirModalOP(false); });
+        qs('btnLPCorrigirOP')   && qs('btnLPCorrigirOP').addEventListener('click', function () { abrirModalOP(true); });
         qs('btnLPCancelar')     && qs('btnLPCancelar').addEventListener('click', cancelarLPCompleto);
+        qs('btnLPRestaurar')    && qs('btnLPRestaurar').addEventListener('click', restaurarLPCancelada);
+
+        qs('modalOPCancelar')  && qs('modalOPCancelar').addEventListener('click', fecharModalOP);
+        qs('modalOPConfirmar') && qs('modalOPConfirmar').addEventListener('click', confirmarOP);
+        qs('modalLPOP')        && qs('modalLPOP').addEventListener('click', function (e) { if (e.target.id === 'modalLPOP') fecharModalOP(); });
 
         qs('modalLPMotivoCancelar') && qs('modalLPMotivoCancelar').addEventListener('click', function () { fecharModalMotivoLP(false); });
         qs('modalLPMotivoConfirmar') && qs('modalLPMotivoConfirmar').addEventListener('click', function () { fecharModalMotivoLP(true); });

@@ -173,8 +173,14 @@
             motivo: correcao ? motivoCorrecao : ''
         });
 
+        var orcamento = opts.orcamento || [];
+        var LE = global.LiquidacaoEstado;
+        var novoEstado = LE
+            ? LE.calcularEstadoLP({ np: np, orcamento: orcamento, estado: 'rascunho', tcsIds: tcsIds })
+            : 'liquidado';
+
         await db.collection('liquidacoes').doc(lpId).update({
-            estado: 'fechado',
+            estado: novoEstado,
             np: np,
             dataLiquidacao: dataLiq,
             historico: hist,
@@ -187,8 +193,12 @@
             var tRef = db.collection('titulos').doc(tid);
             var tSnap = await tRef.get();
             var td = tSnap.data() || {};
+            var orcTC = orcamento.filter(function (o) { return o.tcId === tid; });
+            var novoStatus = LE && orcTC.length
+                ? LE.calcularStatusTCOrcamento(orcTC)
+                : 'Liquidado';
             var h = entradaHistoricoTC(
-                'Liquidado',
+                novoStatus,
                 correcao ? 'Correção NP (LP)' : 'NP via liquidação',
                 (correcao ? motivoCorrecao + ' | ' : '') + 'NP ' + np + (opts.codigoLp ? ' | LP: ' + opts.codigoLp : '')
             );
@@ -199,7 +209,7 @@
             await tRef.update({
                 np: np,
                 dataLiquidacao: dataLiq,
-                status: 'Liquidado',
+                status: novoStatus,
                 historicoStatus: hists,
                 historico: histo,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
@@ -207,7 +217,7 @@
             await vincularTituloNaNP(tid, np, dataLiq);
         }
 
-        return hist;
+        return { historico: hist, estado: novoEstado };
     }
 
     global.LiquidacaoNp = {

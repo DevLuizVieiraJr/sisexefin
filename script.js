@@ -565,7 +565,19 @@ const ALIASES_PERMISSAO = {
     op_editar: ['titulos_editar'],
     op_cancelar: ['titulos_inserir', 'titulos_editar'],
     op_status: ['titulos_inserir', 'titulos_editar'],
-    usuarios_status: ['usuarios_editar']
+    usuarios_status: ['usuarios_editar'],
+    titulos_encaminhar_processamento: ['tramitarTC'],
+    titulos_encaminhar_liquidacao: ['tramitarTC'],
+    titulos_devolver: ['tramitarTC'],
+    titulos_retornar_processamento: ['tramitarTC'],
+    titulos_retornar_liquidacao: ['tramitarTC'],
+    tramitarTC: [
+        'titulos_encaminhar_processamento',
+        'titulos_encaminhar_liquidacao',
+        'titulos_devolver',
+        'titulos_retornar_processamento',
+        'titulos_retornar_liquidacao'
+    ]
 };
 
 function permissoesIncluemDireto(perm) {
@@ -604,14 +616,32 @@ function temPermissaoUI(perm) {
     if (!perm || typeof perm !== 'string') return false;
     if (permissoesIncluemComAlias(perm)) return true;
     if (permissoesEmCache.includes('acesso_admin')) {
-        if (perm === 'dashboard_ler' || perm === 'backup_ler' || perm === 'tramitarTC') return true;
-        if (perm.startsWith('liquidacao_')) return true;
+        if (perm === 'dashboard_ler' || perm === 'backup_ler') return true;
         const modulosSistema = ['empenhos', 'lf', 'pf', 'op', 'dedenc', 'contratos', 'fornecedores', 'titulos', 'centrocustos', 'ug', 'usuarios', 'perfis', 'oi'];
         if (modulosSistema.some(m => perm === m + '_ler')) return true;
     }
     return false;
 }
 window.temPermissaoUI = temPermissaoUI;
+
+/** Evento/ação de fluxo (catálogo rbac-eventos.js). acesso_admin concede todos os eventos. */
+function temPermissaoEvento(eventoId) {
+    if (!eventoId || typeof eventoId !== 'string') return false;
+    if (typeof window.RBACEventos !== 'undefined' && typeof window.RBACEventos.temPermissaoEvento === 'function') {
+        return window.RBACEventos.temPermissaoEvento(eventoId, permissoesEmCache, temPermissaoUI);
+    }
+    return temPermissaoUI(eventoId);
+}
+window.temPermissaoEvento = temPermissaoEvento;
+
+/** Permissão de evento + status de origem válido (quando aplicável). */
+function podeExecutarEvento(eventoId, ctx) {
+    if (typeof window.RBACEventos !== 'undefined' && typeof window.RBACEventos.podeExecutarEvento === 'function') {
+        return window.RBACEventos.podeExecutarEvento(eventoId, ctx || {}, permissoesEmCache, temPermissaoUI);
+    }
+    return temPermissaoEvento(eventoId);
+}
+window.podeExecutarEvento = podeExecutarEvento;
 
 function temAlgumaPermissaoUI(perms) {
     if (!Array.isArray(perms)) return false;
@@ -630,6 +660,10 @@ function aplicarPermissoesUI() {
     document.querySelectorAll('[data-permission]').forEach(el => {
         const req = el.getAttribute('data-permission');
         if (!temPermissaoUI(req)) el.remove();
+    });
+    document.querySelectorAll('[data-permission-event]').forEach(el => {
+        const req = el.getAttribute('data-permission-event');
+        if (!temPermissaoEvento(req)) el.remove();
     });
     document.querySelectorAll('[data-permission-any]').forEach(el => {
         const req = (el.getAttribute('data-permission-any') || '')

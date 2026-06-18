@@ -44,12 +44,6 @@
                 <p>Liquidação e Pagamento</p>
             </a>
         </li>
-        <li class="nav-item" data-permission="preliquidacao_ler">
-            <a href="preliquidacao.html" class="nav-link" data-menu-ativo="preliquidacao" title="Pré-Liquidação (legado — em validação)">
-                <i class="nav-icon fas fa-file-alt"></i>
-                <p>Pré-Liquidação <small style="opacity:.6">[legado]</small></p>
-            </a>
-        </li>
         <li class="nav-item has-treeview" data-tree="tabelas">
             <a href="#" class="nav-link" data-toggle="tree" title="Tabelas de Apoio" aria-expanded="false">
                 <i class="nav-icon fas fa-table"></i>
@@ -157,7 +151,7 @@
             </a>
             <ul class="nav nav-treeview">
                 <li class="nav-item">
-                    <a href="https://siplad.mb" target="_blank" rel="noopener" class="nav-link" title="SIPLAD">
+                    <a href="https://siplad.dgom.mb/siplad/" target="_blank" rel="noopener" class="nav-link" title="SIPLAD">
                         <i class="far fa-circle nav-icon"></i>
                         <p>SIPLAD</p>
                     </a>
@@ -363,7 +357,6 @@
             return 'admin-usuarios';
         }
         if (path.includes('titulos.html')) return 'titulos';
-        if (path.includes('preliquidacao.html')) return 'preliquidacao';
         if (path.includes('liquidacao.html')) return 'liquidacao';
         if (path.includes('sistema.html')) {
             const secao = new URLSearchParams(search).get('secao');

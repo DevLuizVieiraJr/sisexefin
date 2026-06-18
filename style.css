@@ -532,6 +532,55 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     gap: 16px;
 }
 
+#corpo-admin .matriz-eventos-fluxo {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed #ddd;
+}
+#corpo-admin .matriz-eventos-intro {
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+#corpo-admin .matriz-eventos-hint {
+    font-weight: normal;
+    color: #666;
+    font-size: 12px;
+}
+#corpo-admin .matriz-eventos-modulo {
+    margin-bottom: 12px;
+}
+#corpo-admin .matriz-eventos-grupo {
+    margin: 8px 0 10px 0;
+}
+#corpo-admin .matriz-eventos-grupo-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+}
+#corpo-admin .matriz-eventos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+#corpo-admin .matriz-evento-item {
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    cursor: pointer;
+}
+#corpo-admin .matriz-evento-transicao {
+    font-size: 11px;
+    color: #666;
+}
+#corpo-admin .admin-permissoes-transversais {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed #ddd;
+}
+
 #corpo-admin .header-lista h2.titulo-sem-margem { margin: 0; }
 #corpo-admin .form-acoes { margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 #corpo-admin .form-acoes.form-acoes--rodape {
