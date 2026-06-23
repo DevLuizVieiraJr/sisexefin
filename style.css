@@ -508,12 +508,46 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     color: #8b1f17;
 }
 
+/* --- Identidade do perfil (dois campos lado a lado) --- */
+#corpo-admin .admin-perfil-identidade {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+#corpo-admin .admin-perfil-identidade .flex-1 { flex: 1 1 220px; }
+#corpo-admin .input-readonly {
+    background: #f5f5f5;
+    color: #666;
+    border-color: #ccc;
+    cursor: default;
+    font-family: monospace;
+    font-size: 13px;
+}
+#corpo-admin .perfil-id-code {
+    display: inline-block;
+    font-size: 11px;
+    color: #888;
+    background: #f0f0f0;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-top: 2px;
+    font-family: monospace;
+}
+
+/* --- Matriz CRUD --- */
 #corpo-admin .matriz-permissoes-wrap { overflow-x: auto; margin: 10px 0; }
-#corpo-admin .tabela-matriz-permissoes { table-layout: fixed; min-width: 720px; }
-#corpo-admin .tabela-matriz-permissoes .matriz-th-modulo { min-width: 160px; text-align: left; }
-#corpo-admin .tabela-matriz-permissoes .matriz-th-acao { width: 78px; text-align: center; font-size: 12px; }
-#corpo-admin .tabela-matriz-permissoes .matriz-modulo { min-width: 160px; vertical-align: middle; }
-#corpo-admin .tabela-matriz-permissoes .matriz-cb { width: 78px; text-align: center; vertical-align: middle; padding: 6px; }
+#corpo-admin .tabela-matriz-permissoes { table-layout: fixed; min-width: 840px; width: 100%; }
+#corpo-admin .tabela-matriz-permissoes .matriz-th-modulo { min-width: 170px; text-align: left; }
+#corpo-admin .tabela-matriz-permissoes .matriz-th-acao {
+    width: 88px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.3;
+    word-break: break-word;
+    padding: 6px 4px;
+}
+#corpo-admin .tabela-matriz-permissoes .matriz-modulo { min-width: 170px; vertical-align: middle; }
+#corpo-admin .tabela-matriz-permissoes .matriz-cb { width: 88px; text-align: center; vertical-align: middle; padding: 6px; }
 #corpo-admin .tabela-matriz-permissoes .matriz-cb-label {
     display: flex;
     justify-content: center;
@@ -523,7 +557,7 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     min-height: 20px;
 }
 #corpo-admin .tabela-matriz-permissoes .matriz-cb-label input { margin: 0; width: 18px; height: 18px; cursor: pointer; }
-#corpo-admin .tabela-matriz-permissoes .matriz-vazio { width: 78px; text-align: center; opacity: 0.4; font-size: 11px; vertical-align: middle; }
+#corpo-admin .tabela-matriz-permissoes .matriz-vazio { width: 88px; text-align: center; opacity: 0.4; font-size: 11px; vertical-align: middle; }
 
 #corpo-admin .admin-permissoes-extras {
     margin-top: 10px;
@@ -532,6 +566,7 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     gap: 16px;
 }
 
+/* --- Seção de ações de fluxo --- */
 #corpo-admin .matriz-eventos-fluxo {
     margin-top: 16px;
     padding-top: 12px;
@@ -547,7 +582,7 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     font-size: 12px;
 }
 #corpo-admin .matriz-eventos-modulo {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 #corpo-admin .matriz-eventos-grupo {
     margin: 8px 0 10px 0;
@@ -559,26 +594,56 @@ input:focus, select:focus, textarea:focus { border-color: #3c8dbc; outline: none
     color: #444;
     margin-bottom: 6px;
 }
+/* Grid alinhado: coluna do checkbox fixo + coluna de texto */
 #corpo-admin .matriz-eventos-lista {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    column-gap: 8px;
+    row-gap: 8px;
+    align-items: start;
 }
 #corpo-admin .matriz-evento-item {
-    font-size: 13px;
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
+    display: contents; /* participa do grid pai como dois filhos */
     cursor: pointer;
+}
+#corpo-admin .matriz-evento-item input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    align-self: start;
+    margin-top: 2px;
+}
+#corpo-admin .matriz-evento-texto {
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    line-height: 1.4;
 }
 #corpo-admin .matriz-evento-transicao {
     font-size: 11px;
-    color: #666;
+    color: #888;
+    margin-top: 1px;
 }
+
+/* --- Permissões transversais --- */
 #corpo-admin .admin-permissoes-transversais {
     margin-top: 14px;
     padding-top: 10px;
     border-top: 1px dashed #ddd;
+}
+#corpo-admin .admin-permissoes-transversais .matriz-eventos-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    column-gap: 16px;
+    row-gap: 8px;
+    align-items: start;
+}
+#corpo-admin .admin-permissoes-transversais .matriz-evento-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    cursor: pointer;
 }
 
 #corpo-admin .header-lista h2.titulo-sem-margem { margin: 0; }

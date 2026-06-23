@@ -13,9 +13,10 @@
 </head>
 <body>
     <h1>Migrar estados LP (legado → novo modelo)</h1>
-    <p>Converte <code>fechado</code>, <code>aguardandoFinanceiroSemLF</code> e <code>aguardandoFinanceiroComLF</code> para os novos códigos via <code>calcularEstadoLP</code>.</p>
+    <p>Converte estados legados e orçamento plano (tcId × NE) para o modelo consolidado (NE + <code>lfs[]</code>, <code>ops[]</code> no nível LP).</p>
     <p><strong>Requer:</strong> permissão <code>acesso_admin</code>.</p>
-    <button type="button" id="btnMigrar" class="btn-primary">Executar migração</button>
+    <button type="button" id="btnMigrarEstados" class="btn-primary">Migrar estados</button>
+    <button type="button" id="btnMigrarOrcamento" class="btn-default">Migrar orçamento / ops</button>
     <button type="button" id="btnVoltar" class="btn-default" onclick="location.href='liquidacao.html'">Voltar</button>
     <pre id="logMigracao">Aguardando…</pre>
 
@@ -42,20 +43,21 @@
             var perms = (snap.data() && snap.data().permissoes) || [];
             if (perms.indexOf('acesso_admin') < 0) {
                 log('Acesso negado: admin necessário.');
-                document.getElementById('btnMigrar').disabled = true;
+                document.getElementById('btnMigrarEstados').disabled = true;
+                document.getElementById('btnMigrarOrcamento').disabled = true;
                 return;
             }
-            log('Pronto. Clique em Executar migração.');
+            log('Pronto. Escolha o tipo de migração.');
         });
 
-        document.getElementById('btnMigrar').addEventListener('click', async function () {
+        document.getElementById('btnMigrarEstados').addEventListener('click', async function () {
             if (!window.LiquidacaoEstado) {
                 alert('script-liquidacao-estado.js não carregado.');
                 return;
             }
             logEl.textContent = '';
-            log('Iniciando…');
-            var btn = document.getElementById('btnMigrar');
+            log('Iniciando migração de estados…');
+            var btn = document.getElementById('btnMigrarEstados');
             btn.disabled = true;
             try {
                 var snap = await db.collection('liquidacoes').get();
@@ -75,6 +77,55 @@
                             alterados++;
                             log(doc.id + ': ' + antigo + ' → ' + novo);
                         }
+                    });
+                    await batch.commit();
+                }
+                log('Concluído. Documentos alterados: ' + alterados + ' / ' + docs.length);
+            } catch (err) {
+                log('Erro: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('btnMigrarOrcamento').addEventListener('click', async function () {
+            if (!window.LiquidacaoEstado) {
+                alert('script-liquidacao-estado.js não carregado.');
+                return;
+            }
+            logEl.textContent = '';
+            log('Iniciando migração de orçamento / ops…');
+            var btn = document.getElementById('btnMigrarOrcamento');
+            btn.disabled = true;
+            try {
+                var snap = await db.collection('liquidacoes').get();
+                var alterados = 0;
+                var docs = [];
+                snap.forEach(function (doc) { docs.push(doc); });
+                for (var i = 0; i < docs.length; i += 400) {
+                    var batch = db.batch();
+                    var chunk = docs.slice(i, i + 400);
+                    chunk.forEach(function (doc) {
+                        var d = doc.data();
+                        if (!window.LiquidacaoEstado.orcamentoEhLegado(d.orcamento)) return;
+                        var mig = window.LiquidacaoEstado.migrarOrcamentoLegado(d.orcamento, d.ops || []);
+                        var totais = window.LiquidacaoEstado.calcularTotaisFinanceiros(
+                            Number(d.valorLiquido) || 0,
+                            mig.ops
+                        );
+                        var novoEstado = window.LiquidacaoEstado.calcularEstadoLP(Object.assign({}, d, {
+                            orcamento: mig.orcamento,
+                            ops: mig.ops
+                        }));
+                        batch.update(doc.ref, {
+                            orcamento: mig.orcamento,
+                            ops: mig.ops,
+                            valorLiquidoPago: totais.valorLiquidoPago,
+                            valorLiquidoAPagar: totais.valorLiquidoAPagar,
+                            estado: novoEstado
+                        });
+                        alterados++;
+                        log(doc.id + ': orçamento migrado → ' + mig.orcamento.length + ' NE(s), ' + mig.ops.length + ' OP(s)');
                     });
                     await batch.commit();
                 }

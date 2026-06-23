@@ -1,5 +1,5 @@
 // ==========================================
-// Informar OP — Liquidação e Pagamento
+// Informar OP — Liquidação e Pagamento (nível LP)
 // Depende de: firebase-config, script-liquidacao-estado.js, script-liquidacao-np.js
 // ==========================================
 (function (global) {
@@ -19,13 +19,50 @@
         return { status: status, evento: evento, motivoInfo: info };
     }
 
-    function neExibicao(ne) {
-        return String(ne || '').trim();
+    function normalizarOpObItem(op, ob, valor, dataPagamento, prefix11) {
+        var opFull = op;
+        var obFull = ob;
+        if (global.sisAnoDocumento) {
+            if (typeof global.sisAnoDocumento.completarOpDocId === 'function') {
+                opFull = global.sisAnoDocumento.completarOpDocId(op, prefix11);
+            }
+            if (typeof global.sisAnoDocumento.completarObDocId === 'function') {
+                obFull = global.sisAnoDocumento.completarObDocId(ob, prefix11);
+            }
+        }
+        return {
+            op: String(opFull || op || '').trim(),
+            ob: String(obFull || ob || '').trim(),
+            valorOb: Number(valor) || 0,
+            valorNp: Number(valor) || 0,
+            dataPagamento: String(dataPagamento || '').trim()
+        };
+    }
+
+    async function sincronizarDocumentosHabeisNP(npValor, ops, prefix11) {
+        var npInput = String(npValor || '').trim();
+        if (!npInput || !global.LiquidacaoNp) return;
+        var candidatos = global.LiquidacaoNp.candidatosNpDocId(npInput);
+        var npDocId = candidatos[0];
+        if (!npDocId) return;
+
+        var documentosHabeisRaw = (ops || []).map(function (o) {
+            return normalizarOpObItem(o.op, o.ob, o.valor, o.dataPagamento, prefix11);
+        }).filter(function (d) { return d.op && d.ob; });
+
+        var documentosHabeis = (global.sisAnoDocumento && typeof global.sisAnoDocumento.enriquecerItensOpOb === 'function')
+            ? global.sisAnoDocumento.enriquecerItensOpOb(documentosHabeisRaw)
+            : documentosHabeisRaw;
+
+        await db.collection('np').doc(npDocId).set({
+            documentosHabeis: documentosHabeis,
+            editado_em: firebase.firestore.FieldValue.serverTimestamp(),
+            editado_por: getUsuarioEmail()
+        }, { merge: true });
     }
 
     /**
-     * Persiste OP por NE no lote, propaga para TCs e recalcula estado.
-     * @param {object} opts - { lpId, tcsIds, orcamento, np, historicoAtual, codigoLp, correcao, motivoCorrecao }
+     * Persiste ops[] no lote, totais financeiros, propaga TCs e sync NP.
      */
     async function executarInformarOP(opts) {
         opts = opts || {};
@@ -34,15 +71,30 @@
 
         var lpId = opts.lpId;
         var tcsIds = opts.tcsIds || [];
-        var orcamento = (opts.orcamento || []).slice();
+        var ops = (opts.ops || []).slice();
+        var orcamento = opts.orcamento || [];
         var email = getUsuarioEmail();
         var hist = (opts.historicoAtual || []).slice();
         var correcao = !!opts.correcao;
         var motivo = String(opts.motivoCorrecao || '').trim();
+        var valorLiquido = Number(opts.valorLiquido) || 0;
+        var totais = LE.calcularTotaisFinanceiros(valorLiquido, ops);
 
-        var novoEstado = LE.calcularEstadoLP({
+        var lpPayload = {
+            ops: ops,
+            orcamento: orcamento,
+            valorLiquido: totais.valorLiquido,
+            valorLiquidoPago: totais.valorLiquidoPago,
+            valorLiquidoAPagar: totais.valorLiquidoAPagar,
+            historico: hist,
+            editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+            editadoPor: email
+        };
+        lpPayload.estado = LE.calcularEstadoLP({
             np: opts.np,
             orcamento: orcamento,
+            ops: ops,
+            valorLiquido: totais.valorLiquido,
             estado: 'rascunho',
             tcsIds: tcsIds
         });
@@ -52,49 +104,37 @@
             data: new Date().toISOString(),
             tipo: evTipo,
             usuario: email,
-            detalhe: 'Estado: ' + novoEstado,
+            detalhe: 'Estado: ' + lpPayload.estado + ' | Pago: ' + totais.valorLiquidoPago,
             motivo: correcao ? motivo : ''
         });
+        lpPayload.historico = hist;
 
-        await db.collection('liquidacoes').doc(lpId).update({
-            orcamento: orcamento,
-            estado: novoEstado,
-            historico: hist,
-            editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-            editadoPor: email
-        });
+        await db.collection('liquidacoes').doc(lpId).update(lpPayload);
+
+        var opsAgregadas = ops.map(function (o) { return String(o.op || '').trim(); }).filter(Boolean).join(', ');
+        var lpContext = {
+            ops: ops,
+            valorLiquido: totais.valorLiquido,
+            estado: lpPayload.estado
+        };
 
         for (var i = 0; i < tcsIds.length; i++) {
             var tid = tcsIds[i];
-            var orcTC = orcamento.filter(function (o) { return o.tcId === tid; });
-            var neMap = {};
-            orcTC.forEach(function (o) {
-                neMap[neExibicao(o.ne)] = {
-                    op: o.op || '',
-                    valorPago: o.valorPago != null ? o.valorPago : '',
-                    dataPagamento: o.dataPagamento || ''
-                };
-            });
-
+            var orcTC = LE.orcamentoParaTC(orcamento, tid);
             var tRef = db.collection('titulos').doc(tid);
             var tSnap = await tRef.get();
             if (!tSnap.exists) continue;
             var td = tSnap.data() || {};
+
             var novosEmps = (td.empenhosVinculados || []).map(function (e) {
-                var ne = neExibicao(e.numEmpenho || e.numNE);
-                var m = neMap[ne];
-                if (!m) return e;
-                return Object.assign({}, e, {
-                    op: m.op,
-                    valorPago: m.valorPago,
-                    dataPagamento: m.dataPagamento
-                });
+                var ne = String(e.numEmpenho || e.numNE || '').trim();
+                var neItem = orcTC.find(function (n) { return String(n.ne).trim() === ne; });
+                if (!neItem) return e;
+                var agg = LE.agregarLfs(neItem.lfs);
+                return Object.assign({}, e, agg);
             });
 
-            var novoStatus = LE.calcularStatusTCOrcamento(orcTC);
-            var opsTC = orcTC.map(function (o) { return String(o.op || '').trim(); }).filter(Boolean);
-            var opAgregada = opsTC.length === 1 ? opsTC[0] : (opsTC.length > 1 ? opsTC.join(', ') : (td.op || ''));
-
+            var novoStatus = LE.calcularStatusTCOrcamento(orcTC, lpContext);
             var h = entradaHistoricoTC(
                 novoStatus,
                 correcao ? 'Correção OP (LP)' : 'OP via liquidação',
@@ -107,19 +147,28 @@
 
             await tRef.update({
                 empenhosVinculados: novosEmps,
-                op: opAgregada,
+                op: opsAgregadas || td.op || '',
                 status: novoStatus,
                 historicoStatus: hists,
                 historico: histo,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             });
-
-            if (opts.np && global.LiquidacaoNp && global.LiquidacaoNp.vincularTituloNaNP) {
-                await global.LiquidacaoNp.vincularTituloNaNP(tid, opts.np, opts.dataLiquidacao || '');
-            }
         }
 
-        return { historico: hist, estado: novoEstado, orcamento: orcamento };
+        if (opts.np) {
+            var npDocId = (global.LiquidacaoNp.candidatosNpDocId(opts.np) || [])[0] || opts.np;
+            var prefix11 = (String(npDocId).length >= 23) ? String(npDocId).slice(0, 11) : '74100000001';
+            await sincronizarDocumentosHabeisNP(opts.np, ops, prefix11);
+        }
+
+        return {
+            historico: hist,
+            estado: lpPayload.estado,
+            ops: ops,
+            valorLiquido: totais.valorLiquido,
+            valorLiquidoPago: totais.valorLiquidoPago,
+            valorLiquidoAPagar: totais.valorLiquidoAPagar
+        };
     }
 
     global.LiquidacaoOp = {

@@ -38,7 +38,52 @@
         return out;
     }
 
-    async function vincularTituloNaNP(tituloId, npValor, dataLiquidacao) {
+    async function obterDocNp(npValor) {
+        var candidatos = candidatosNpDocId(npValor);
+        for (var i = 0; i < candidatos.length; i++) {
+            var snap = await db.collection('np').doc(candidatos[i]).get();
+            if (snap.exists) return { id: snap.id, data: snap.data() };
+        }
+        return null;
+    }
+
+    /**
+     * Valida regra 1 NP = 1 LP (exclui LP cancelada e a própria LP).
+     */
+    async function validarNpUnicaPorLp(npValor, lpId) {
+        var np = String(npValor || '').trim();
+        if (!np) return { ok: true };
+
+        var snap = await db.collection('liquidacoes')
+            .where('np', '==', np)
+            .limit(10)
+            .get();
+
+        for (var i = 0; i < snap.docs.length; i++) {
+            var doc = snap.docs[i];
+            if (doc.id === lpId) continue;
+            var d = doc.data() || {};
+            if (String(d.estado || '') === 'cancelado') continue;
+            if (d.ativo === false) continue;
+            return {
+                ok: false,
+                mensagem: 'A NP ' + np + ' já está vinculada à LP ' + (d.codigo || doc.id) + '.'
+            };
+        }
+
+        var npDoc = await obterDocNp(np);
+        if (npDoc && npDoc.data.liquidacaoId && String(npDoc.data.liquidacaoId) !== String(lpId)) {
+            return {
+                ok: false,
+                mensagem: 'A NP já está vinculada à LP ' + (npDoc.data.liquidacaoCodigo || npDoc.data.liquidacaoId) + ' na coleção np.'
+            };
+        }
+
+        return { ok: true };
+    }
+
+    async function vincularTituloNaNP(tituloId, npValor, dataLiquidacao, lpMeta) {
+        lpMeta = lpMeta || {};
         var npInput = String(npValor || '').trim();
         if (!npInput) return;
         var tituloIdStr = String(tituloId || '').trim();
@@ -55,6 +100,8 @@
                 titulosVinculados: firebase.firestore.FieldValue.arrayUnion(tituloIdStr),
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             };
+            if (lpMeta.lpId) payload.liquidacaoId = lpMeta.lpId;
+            if (lpMeta.codigoLp) payload.liquidacaoCodigo = lpMeta.codigoLp;
             if (dl) payload.dataLiquidacao = dl;
             if (email) payload.editado_por = email;
             if (global.sisAnoDocumento && typeof global.sisAnoDocumento.payloadAnosNp === 'function') {
@@ -75,6 +122,8 @@
                 ativo: true,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             };
+            if (lpMeta.lpId) payloadNew.liquidacaoId = lpMeta.lpId;
+            if (lpMeta.codigoLp) payloadNew.liquidacaoCodigo = lpMeta.codigoLp;
             if (dl) payloadNew.dataLiquidacao = dl;
             if (email) payloadNew.editado_por = email;
             if (global.sisAnoDocumento && typeof global.sisAnoDocumento.payloadAnosNp === 'function') {
@@ -84,7 +133,7 @@
         }
     }
 
-    async function desvincularTituloDaNP(tituloId, npValor) {
+    async function desvincularTituloDaNP(tituloId, npValor, lpId) {
         var npInput = String(npValor || '').trim();
         if (!npInput) return;
         var tituloIdStr = String(tituloId || '').trim();
@@ -94,13 +143,24 @@
             if (!npDocId) continue;
             var ref = db.collection('np').doc(npDocId);
             var snap = await ref.get();
-            if (snap.exists) {
-                await ref.set({
-                    titulosVinculados: firebase.firestore.FieldValue.arrayRemove(tituloIdStr),
-                    editado_em: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-                return;
+            if (!snap.exists) continue;
+
+            var d = snap.data() || {};
+            var vinc = Array.isArray(d.titulosVinculados) ? d.titulosVinculados.slice() : [];
+            vinc = vinc.filter(function (id) { return String(id) !== tituloIdStr; });
+
+            var payload = {
+                titulosVinculados: firebase.firestore.FieldValue.arrayRemove(tituloIdStr),
+                editado_em: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (vinc.length === 0 && String(d.liquidacaoId || '') === String(lpId || '')) {
+                payload.liquidacaoId = firebase.firestore.FieldValue.delete();
+                payload.liquidacaoCodigo = firebase.firestore.FieldValue.delete();
             }
+
+            await ref.set(payload, { merge: true });
+            return;
         }
     }
 
@@ -131,7 +191,10 @@
         });
     }
 
-    async function algumTituloComOP(ids) {
+    async function algumTituloComOP(ids, opsLp) {
+        if (Array.isArray(opsLp) && opsLp.some(function (o) { return String(o.op || '').trim(); })) {
+            return true;
+        }
         for (var i = 0; i < (ids || []).length; i++) {
             var snap = await db.collection('titulos').doc(ids[i]).get();
             var d = snap.data() || {};
@@ -141,9 +204,7 @@
     }
 
     /**
-     * Fecha LP com NP: atualiza liquidacoes, cada titulo (Liquidado) e coleção np.
-     * @param {object} opts - { lpId, tcsIds, np, dataLiq, correcao, motivoCorrecao, npAntiga, historicoAtual, codigoLp }
-     * @returns {object} historico atualizado
+     * Fecha LP com NP: atualiza liquidacoes, cada titulo e coleção np.
      */
     async function executarFecharNP(opts) {
         opts = opts || {};
@@ -157,9 +218,12 @@
         var email = getUsuarioEmail();
         var hist = (opts.historicoAtual || []).slice();
 
+        var valNp = await validarNpUnicaPorLp(np, lpId);
+        if (!valNp.ok) throw new Error(valNp.mensagem);
+
         if (correcao && npAntiga) {
             for (var i = 0; i < tcsIds.length; i++) {
-                await desvincularTituloDaNP(tcsIds[i], npAntiga);
+                await desvincularTituloDaNP(tcsIds[i], npAntiga, lpId);
             }
         }
 
@@ -174,28 +238,45 @@
         });
 
         var orcamento = opts.orcamento || [];
+        var ops = opts.ops || [];
+        var valorLiquido = Number(opts.valorLiquido) || 0;
         var LE = global.LiquidacaoEstado;
         var novoEstado = LE
-            ? LE.calcularEstadoLP({ np: np, orcamento: orcamento, estado: 'rascunho', tcsIds: tcsIds })
+            ? LE.calcularEstadoLP({
+                np: np,
+                orcamento: orcamento,
+                ops: ops,
+                valorLiquido: valorLiquido,
+                estado: 'rascunho',
+                tcsIds: tcsIds
+            })
             : 'liquidado';
+
+        var totais = LE ? LE.calcularTotaisFinanceiros(valorLiquido, ops) : {};
 
         await db.collection('liquidacoes').doc(lpId).update({
             estado: novoEstado,
             np: np,
             dataLiquidacao: dataLiq,
             historico: hist,
+            valorLiquido: totais.valorLiquido != null ? totais.valorLiquido : valorLiquido,
+            valorLiquidoPago: totais.valorLiquidoPago || 0,
+            valorLiquidoAPagar: totais.valorLiquidoAPagar != null ? totais.valorLiquidoAPagar : valorLiquido,
             editadoEm: firebase.firestore.FieldValue.serverTimestamp(),
             editadoPor: email
         });
+
+        var lpMeta = { lpId: lpId, codigoLp: opts.codigoLp || '' };
+        var lpContext = { ops: ops, valorLiquido: valorLiquido, estado: novoEstado };
 
         for (var j = 0; j < tcsIds.length; j++) {
             var tid = tcsIds[j];
             var tRef = db.collection('titulos').doc(tid);
             var tSnap = await tRef.get();
             var td = tSnap.data() || {};
-            var orcTC = orcamento.filter(function (o) { return o.tcId === tid; });
+            var orcTC = LE ? LE.orcamentoParaTC(orcamento, tid) : [];
             var novoStatus = LE && orcTC.length
-                ? LE.calcularStatusTCOrcamento(orcTC)
+                ? LE.calcularStatusTCOrcamento(orcTC, lpContext)
                 : 'Liquidado';
             var h = entradaHistoricoTC(
                 novoStatus,
@@ -214,7 +295,7 @@
                 historico: histo,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             });
-            await vincularTituloNaNP(tid, np, dataLiq);
+            await vincularTituloNaNP(tid, np, dataLiq, lpMeta);
         }
 
         return { historico: hist, estado: novoEstado };
@@ -224,6 +305,7 @@
         STATUS_TC_EM_LIQUIDACAO: STATUS_TC_EM_LIQUIDACAO,
         getUsuarioEmail: getUsuarioEmail,
         candidatosNpDocId: candidatosNpDocId,
+        validarNpUnicaPorLp: validarNpUnicaPorLp,
         vincularTituloNaNP: vincularTituloNaNP,
         desvincularTituloDaNP: desvincularTituloDaNP,
         entradaHistoricoTC: entradaHistoricoTC,

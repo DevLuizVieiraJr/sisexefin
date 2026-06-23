@@ -163,7 +163,8 @@
         marcados.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p;
-            opt.textContent = p;
+            const perfilObj = listaPerfis.find(x => x.id === p);
+            opt.textContent = typeof window.labelPerfil === 'function' ? window.labelPerfil(perfilObj || p) : p;
             select.appendChild(opt);
         });
 
@@ -311,7 +312,8 @@
         return listaPerfis.filter(p => {
             if (!termo) return true;
             const perms = Array.isArray(p.permissoes) ? p.permissoes.join(' ') : '';
-            return p.id.toLowerCase().includes(termo) || perms.toLowerCase().includes(termo);
+            const nomeExib = (p.nomeExibicao || '').toLowerCase();
+            return p.id.toLowerCase().includes(termo) || nomeExib.includes(termo) || perms.toLowerCase().includes(termo);
         });
     }
 
@@ -354,11 +356,19 @@
             const btnBloquear = podeStatusUsuario
                 ? `<button type="button" class="btn-outline btn-small btn-bloquear-usuario" data-uid="${escapeHTML(u.id)}" data-acao="${st === 'bloqueado' ? 'desbloquear' : 'bloquear'}">${st === 'bloqueado' ? 'Desbloquear' : 'Bloquear'}</button>`
                 : '';
+            const perfisLabels = perfis.map(pid => {
+                const po = listaPerfis.find(x => x.id === pid);
+                return typeof window.labelPerfil === 'function' ? window.labelPerfil(po || pid) : pid;
+            });
+            const perfilAtualLabel = (() => {
+                const po = listaPerfis.find(x => x.id === perfilAtual);
+                return typeof window.labelPerfil === 'function' ? window.labelPerfil(po || perfilAtual) : perfilAtual;
+            })();
             tr.innerHTML = `
                 <td><code class="uid-preview">${escapeHTML((u.id || '').substring(0, 12))}...</code></td>
                 <td>${escapeHTML(u.email || '-')}</td>
-                <td style="font-size:12px;">${escapeHTML(perfis.join(', ') || '-')}</td>
-                <td><strong>${escapeHTML(perfilAtual)}</strong></td>
+                <td style="font-size:12px;">${escapeHTML(perfisLabels.join(', ') || '-')}</td>
+                <td><strong>${escapeHTML(perfilAtualLabel)}</strong></td>
                 <td>${statusHtml}</td>
                 <td>
                     <button type="button" class="btn-icon btn-editar-usuario" data-uid="${escapeHTML(u.id)}" title="Editar" aria-label="Editar usuario">✏️</button>
@@ -419,8 +429,9 @@
         pag.itens.forEach(p => {
             const tr = document.createElement('tr');
             const perms = Array.isArray(p.permissoes) ? p.permissoes.join(', ') : '-';
+            const nomeLbl = typeof window.labelPerfil === 'function' ? window.labelPerfil(p) : (p.nomeExibicao || p.id);
             tr.innerHTML = `
-                <td><strong>${escapeHTML(p.id)}</strong></td>
+                <td><strong>${escapeHTML(nomeLbl)}</strong><br><code class="perfil-id-code">${escapeHTML(p.id)}</code></td>
                 <td style="font-size:12px;">${escapeHTML(perms)}</td>
                 <td><button type="button" class="btn-icon btn-editar-perfil" data-perfil="${escapeHTML(p.id)}" title="Editar" aria-label="Editar perfil de acesso">✏️</button></td>`;
             tbody.appendChild(tr);
@@ -485,8 +496,9 @@
             cb.type = 'checkbox';
             cb.className = 'cb-perfil-usuario';
             cb.value = p.id;
+            const nomeLbl = typeof window.labelPerfil === 'function' ? window.labelPerfil(p) : (p.nomeExibicao || p.id);
             lbl.appendChild(cb);
-            lbl.appendChild(document.createTextNode(' ' + p.id));
+            lbl.appendChild(document.createTextNode(' ' + nomeLbl));
             container.appendChild(lbl);
         });
         container.querySelectorAll('.cb-perfil-usuario').forEach(cb => {
@@ -522,10 +534,8 @@
         if (!container || typeof window.RBACEventos === 'undefined') return;
         const catalogo = window.RBACEventos;
         const eventos = catalogo.EVENTOS_FLUXO || [];
-        if (!eventos.length) {
-            container.innerHTML = '';
-            return;
-        }
+        if (!eventos.length) { container.innerHTML = ''; return; }
+
         const porModulo = {};
         eventos.forEach(function(ev) {
             if (!porModulo[ev.modulo]) porModulo[ev.modulo] = {};
@@ -533,21 +543,25 @@
             if (!porModulo[ev.modulo][g]) porModulo[ev.modulo][g] = [];
             porModulo[ev.modulo][g].push(ev);
         });
-        let html = '<div class="matriz-eventos-intro"><strong>Ações de fluxo</strong> <span class="matriz-eventos-hint">(transições de status e ações especiais — geradas do catálogo central)</span></div>';
+
+        let html = '<div class="matriz-eventos-intro"><strong>Ações de fluxo</strong> <span class="matriz-eventos-hint">(catálogo central de transições e ações especiais)</span></div>';
         Object.keys(porModulo).sort().forEach(function(mod) {
             const modLabel = (catalogo.MODULO_LABELS && catalogo.MODULO_LABELS[mod]) || mod;
             html += '<fieldset class="gov-fieldset matriz-eventos-modulo"><legend>' + escapeHTML(modLabel) + '</legend>';
             const grupos = porModulo[mod];
             Object.keys(grupos).sort().forEach(function(grupo) {
-                html += '<div class="matriz-eventos-grupo"><span class="matriz-eventos-grupo-label">' + escapeHTML(grupo) + '</span><div class="matriz-eventos-lista">';
+                html += '<div class="matriz-eventos-grupo"><span class="matriz-eventos-grupo-label">' + escapeHTML(grupo) + '</span>';
+                html += '<div class="matriz-eventos-lista">';
                 grupos[grupo].forEach(function(ev) {
                     const tip = catalogo.tooltipEvento(ev);
-                    html += '<label class="matriz-evento-item" title="' + escapeHTML(tip) + '">';
-                    html += '<input type="checkbox" class="cb-perm" value="' + escapeHTML(ev.id) + '"> ';
+                    const transicaoHtml = (ev.tipo === 'transicao' && ev.statusDestino)
+                        ? '<span class="matriz-evento-transicao">' + escapeHTML(tip) + '</span>'
+                        : '';
+                    // Dois filhos diretos do grid: [checkbox] [bloco-texto]
+                    html += '<input type="checkbox" class="cb-perm" value="' + escapeHTML(ev.id) + '" id="cb_ev_' + escapeHTML(ev.id) + '">';
+                    html += '<label class="matriz-evento-texto" for="cb_ev_' + escapeHTML(ev.id) + '" title="' + escapeHTML(tip) + '">';
                     html += escapeHTML(ev.label);
-                    if (ev.tipo === 'transicao' && ev.statusDestino) {
-                        html += ' <span class="matriz-evento-transicao">(' + escapeHTML(tip) + ')</span>';
-                    }
+                    html += transicaoHtml;
                     html += '</label>';
                 });
                 html += '</div></div>';
@@ -561,14 +575,15 @@
         const container = document.getElementById('adminPermissoesTransversais');
         if (!container || typeof window.RBACEventos === 'undefined') return;
         const itens = window.RBACEventos.ADMIN_TRANSVERSAIS || [];
-        if (!itens.length) {
-            container.innerHTML = '';
-            return;
-        }
+        if (!itens.length) { container.innerHTML = ''; return; }
+
         let html = '<div class="matriz-eventos-intro"><strong>Permissões transversais</strong></div>';
+        html += '<div class="matriz-eventos-lista">';
         itens.forEach(function(item) {
-            html += '<label><input type="checkbox" class="cb-perm" value="' + escapeHTML(item.id) + '"> ' + escapeHTML(item.label) + '</label>';
+            html += '<input type="checkbox" class="cb-perm" value="' + escapeHTML(item.id) + '" id="cb_tr_' + escapeHTML(item.id) + '">';
+            html += '<label class="matriz-evento-texto" for="cb_tr_' + escapeHTML(item.id) + '">' + escapeHTML(item.label) + '</label>';
         });
+        html += '</div>';
         container.innerHTML = html;
     }
 
@@ -595,7 +610,7 @@
         if (tbody) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
         try {
             const snap = await db.collection('perfis').get();
-            listaPerfis = snap.docs.map(doc => ({ id: doc.id, permissoes: doc.data().permissoes || [] }));
+            listaPerfis = snap.docs.map(doc => ({ id: doc.id, nomeExibicao: doc.data().nomeExibicao || '', permissoes: doc.data().permissoes || [] }));
             desenharTabelaPerfis();
             popularCheckboxesPerfis();
             desenharMatrizPermissoes();
@@ -718,7 +733,12 @@
     window.abrirFormularioPerfil = function() {
         const form = document.getElementById('formPerfilAdmin');
         if (form) form.reset();
-        document.getElementById('adminNomePerfil').value = '';
+        const inputNome = document.getElementById('adminNomeExibicaoPerfil');
+        const inputCodigo = document.getElementById('adminCodigoPerfil');
+        const inputLegado = document.getElementById('adminNomePerfil');
+        if (inputNome) inputNome.value = '';
+        if (inputCodigo) { inputCodigo.value = ''; delete inputCodigo.dataset.editando; }
+        if (inputLegado) inputLegado.value = '';
         desenharMatrizPermissoes();
         const cbs = form ? form.querySelectorAll('.cb-perm') : document.querySelectorAll('.cb-perm');
         cbs.forEach(cb => { cb.checked = false; });
@@ -735,7 +755,13 @@
     window.adminEditarPerfil = function(perfilId) {
         const p = listaPerfis.find(x => x.id === perfilId);
         if (!p) return;
-        document.getElementById('adminNomePerfil').value = p.id;
+        // Preenche nome exibição e código técnico (readonly em edição)
+        const inputNome = document.getElementById('adminNomeExibicaoPerfil');
+        const inputCodigo = document.getElementById('adminCodigoPerfil');
+        const inputLegado = document.getElementById('adminNomePerfil');
+        if (inputNome) inputNome.value = p.nomeExibicao || (typeof window.humanizarIdPerfil === 'function' ? window.humanizarIdPerfil(p.id) : p.id);
+        if (inputCodigo) { inputCodigo.value = p.id; inputCodigo.dataset.editando = '1'; }
+        if (inputLegado) inputLegado.value = p.id;
         desenharMatrizPermissoes();
         const perms = Array.isArray(p.permissoes) ? p.permissoes : [];
         const form = document.getElementById('formPerfilAdmin');
@@ -870,7 +896,8 @@
         }
         if (tipo === 'perfis') {
             return getPerfisFiltrados().map(p => ({
-                Perfil: p.id || '',
+                Nome: typeof window.labelPerfil === 'function' ? window.labelPerfil(p) : (p.nomeExibicao || p.id),
+                Codigo: p.id || '',
                 Permissoes: Array.isArray(p.permissoes) ? p.permissoes.join(', ') : ''
             }));
         }

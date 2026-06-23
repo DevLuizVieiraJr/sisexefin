@@ -492,6 +492,34 @@ function formatarCNPJ(val) {
 let permissoesEmCache = [];
 let perfilAtualEmCache = null;   // Perfil ativo na sessão
 let perfisDoUsuario = [];        // Perfis atribuídos ao usuário (permite troca)
+let cacheNomesPerfis = {};       // id → nomeExibicao (carregado após login)
+
+/** Busca o nomeExibicao dos perfis do usuário e armazena em cacheNomesPerfis. */
+async function carregarCacheNomesPerfis(ids) {
+    if (!Array.isArray(ids) || !ids.length) return;
+    const novos = ids.filter(id => id && !(id in cacheNomesPerfis));
+    for (const id of novos) {
+        try {
+            const snap = await db.collection('perfis').doc(id).get();
+            if (snap.exists) {
+                const data = snap.data() || {};
+                cacheNomesPerfis[id] = (data.nomeExibicao && data.nomeExibicao.trim()) || '';
+            } else {
+                cacheNomesPerfis[id] = '';
+            }
+        } catch (e) {
+            cacheNomesPerfis[id] = '';
+        }
+    }
+}
+
+/** Retorna o nome de exibição de um perfil pelo ID (usa cache ou fallback). */
+function nomeExibicaoPerfil(id) {
+    if (!id) return '';
+    if (id in cacheNomesPerfis && cacheNomesPerfis[id]) return cacheNomesPerfis[id];
+    return typeof window.humanizarIdPerfil === 'function' ? window.humanizarIdPerfil(id) : id;
+}
+window.nomeExibicaoPerfil = nomeExibicaoPerfil;
 
 async function carregarPermissoes() {
     const user = auth.currentUser;
@@ -525,6 +553,7 @@ async function carregarPermissoes() {
             }
         }
         permissoesEmCache = perfilDoc.exists ? (perfilDoc.data().permissoes || []) : [];
+        carregarCacheNomesPerfis(perfis).catch(() => {});
         return permissoesEmCache;
     } catch (error) { return []; }
 }
@@ -532,7 +561,9 @@ async function carregarPermissoes() {
 async function trocarPerfil(perfilId) {
     const user = auth.currentUser;
     if (!user || !perfisDoUsuario.includes(perfilId)) return;
-    if (!confirm("Deseja alternar a sua sessão para o perfil " + perfilId + "?")) return;
+    const nomeAmigavel = nomeExibicaoPerfil(perfilId);
+    const label = nomeAmigavel !== perfilId ? nomeAmigavel + ' (' + perfilId + ')' : perfilId;
+    if (!confirm("Deseja alternar a sua sessão para o perfil " + label + "?")) return;
     try {
         await db.collection('usuarios').doc(user.uid).update({ perfil_ativo: perfilId });
         window.location.reload();
@@ -699,7 +730,7 @@ function atualizarSeletorPerfil() {
     perfisDoUsuario.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p;
-        opt.textContent = p;
+        opt.textContent = nomeExibicaoPerfil(p);
         if (p === perfilAtualEmCache) opt.selected = true;
         select.appendChild(opt);
     });
@@ -946,9 +977,27 @@ window.iniciarWatcherInatividade = iniciarWatcherInatividade;
 // ==========================================
 const formPerfilAdmin = document.getElementById('formPerfilAdmin');
 if (formPerfilAdmin) {
+    // Atualiza preview do código técnico ao digitar o nome de exibição
+    const inputNomeExibicao = document.getElementById('adminNomeExibicaoPerfil');
+    const inputCodigo = document.getElementById('adminCodigoPerfil');
+    const inputNomeLegado = document.getElementById('adminNomePerfil');
+    if (inputNomeExibicao && inputCodigo) {
+        inputNomeExibicao.addEventListener('input', function() {
+            // Só atualiza o código durante criação (campo não estava em modo edição)
+            if (!inputCodigo.dataset.editando) {
+                const slug = typeof window.slugPerfilId === 'function' ? window.slugPerfilId(this.value) : this.value.trim().toLowerCase();
+                inputCodigo.value = slug;
+                if (inputNomeLegado) inputNomeLegado.value = slug;
+            }
+        });
+    }
+
     formPerfilAdmin.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const nomePerfil = document.getElementById('adminNomePerfil').value.trim().toLowerCase();
+        const nomeExibicao = (document.getElementById('adminNomeExibicaoPerfil') || {}).value || '';
+        const codigoEl = document.getElementById('adminCodigoPerfil');
+        const codigoTecnico = codigoEl ? codigoEl.value.trim() : '';
+        if (!codigoTecnico) { alert('Informe um nome de exibição válido para gerar o código técnico.'); return; }
         const form = document.getElementById('formPerfilAdmin');
         const checkboxes = form ? form.querySelectorAll('.cb-perm:checked') : document.querySelectorAll('.cb-perm:checked');
         const permissoesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
@@ -957,9 +1006,16 @@ if (formPerfilAdmin) {
         if (typeof window.btnLoading === 'function' && btn) window.btnLoading(btn, true);
         mostrarBarraLoading('Salvando...');
         try {
-            await db.collection('perfis').doc(nomePerfil).set({ permissoes: permissoesSelecionadas }, { merge: true });
-            alert(`Perfil '${nomePerfil}' salvo com sucesso!`);
+            await db.collection('perfis').doc(codigoTecnico).set({
+                nomeExibicao: nomeExibicao.trim(),
+                permissoes: permissoesSelecionadas
+            }, { merge: true });
+            // Atualiza cache local para refletir imediatamente
+            cacheNomesPerfis[codigoTecnico] = nomeExibicao.trim();
+            alert(`Perfil '${nomeExibicao.trim() || codigoTecnico}' (${codigoTecnico}) salvo com sucesso!`);
             formPerfilAdmin.reset();
+            if (inputCodigo) { inputCodigo.value = ''; delete inputCodigo.dataset.editando; }
+            if (inputNomeLegado) inputNomeLegado.value = '';
             if (typeof window.adminRecarregarDados === 'function') window.adminRecarregarDados();
             if (typeof window.voltarListaPerfis === 'function') window.voltarListaPerfis();
         } catch (err) { alert("Acesso Negado: Apenas o Admin pode gravar."); }

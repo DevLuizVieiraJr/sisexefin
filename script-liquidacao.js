@@ -35,6 +35,8 @@ function esconderLoading() {
     var modalMotivoResolver = null;
     var modoCorrecaoNP     = false;
     var modoCorrecaoOP     = false;
+    var modalLfNe          = null;
+    var modalOpsDraft      = [];
     var lpSomenteLeitura   = false;
     var lpSelecionados     = new Set();
     var filtroAnoExercicioLP = '';
@@ -449,6 +451,9 @@ function esconderLoading() {
     }
 
     function buscarPFporLF(lfNorm) {
+        if (window.LfPfLookup) {
+            return window.LfPfLookup.buscarPorLf(baseLfPfLP, lfNorm);
+        }
         if (!lfNorm) return null;
         var upper = String(lfNorm).toUpperCase();
         return baseLfPfLP.find(function (r) {
@@ -456,56 +461,123 @@ function esconderLoading() {
         }) || null;
     }
 
-    function calcularStatusFinanceiro(orcamento) {
-        if (window.LiquidacaoEstado) {
-            return window.LiquidacaoEstado.calcularEstadoLP({
-                np: (lpEditorState && lpEditorState.np) || '1',
-                orcamento: orcamento,
-                estado: 'rascunho'
-            });
+    function gerarIdInternoLP(prefixo) {
+        if (window.LiquidacaoEstado && window.LiquidacaoEstado.gerarIdInterno) {
+            return window.LiquidacaoEstado.gerarIdInterno(prefixo);
         }
-        return 'liquidado';
+        return prefixo + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function gerarOrcamentoConsolidado(ids, anterior, opsExistentes) {
+        var LE = window.LiquidacaoEstado;
+        opsExistentes = opsExistentes || [];
+        var migAnt = LE
+            ? LE.migrarOrcamentoLegado(anterior || [], opsExistentes)
+            : { orcamento: anterior || [], ops: opsExistentes };
+        var antMap = Object.create(null);
+        (migAnt.orcamento || []).forEach(function (ne) {
+            if (ne && ne.ne) antMap[ne.ne] = ne;
+        });
+
+        var mapaNE = Object.create(null);
+        (ids || []).forEach(function (id) {
+            var t = baseTitulosLP.find(function (tc) { return tc.id === id; }) || {};
+            var proc = t.idProc || t.proc || id;
+            var emps = t.empenhosVinculados || [];
+            if (!emps.length) return;
+            emps.forEach(function (v) {
+                var neVal = neExibicao(v.numEmpenho || v.numNE);
+                if (!neVal || neVal === '—' || neVal === '-') return;
+                if (!mapaNE[neVal]) {
+                    var prev = antMap[neVal] || {};
+                    mapaNE[neVal] = {
+                        ne: neVal,
+                        nd: v.nd || prev.nd || '—',
+                        sub: v.subelemento || prev.sub || '—',
+                        fr: v.fr || prev.fr || '—',
+                        cc: formatarCCSemPontos(v.centroCustosId) || prev.cc || '—',
+                        ug: formatarUGCodigo7(v.ugId) || prev.ug || '—',
+                        valor: 0,
+                        detalheTCs: [],
+                        lfs: Array.isArray(prev.lfs) ? JSON.parse(JSON.stringify(prev.lfs)) : []
+                    };
+                }
+                var item = mapaNE[neVal];
+                var val = Number(v.valorVinculado || 0);
+                var existente = item.detalheTCs.find(function (d) { return d.tcId === id; });
+                if (!existente) {
+                    item.detalheTCs.push({ tcId: id, proc: proc, valor: val });
+                    item.valor += val;
+                } else {
+                    existente.valor = val;
+                }
+            });
+        });
+
+        return {
+            orcamento: Object.keys(mapaNE).map(function (k) { return mapaNE[k]; }),
+            ops: migAnt.ops || opsExistentes
+        };
     }
 
     function gerarOrcamentoParaIds(ids, anterior) {
-        var resultado = [];
-        (ids || []).forEach(function (id) {
-            var t    = baseTitulosLP.find(function (tc) { return tc.id === id; }) || {};
-            var emps = (t.empenhosVinculados || []);
-            if (!emps.length) {
-                var ant = (anterior || []).find(function (o) { return o.tcId === id; }) || {};
-                resultado.push({
-                    tcId: id, ne: '—', nd: '—', sub: '—', fr: '—',
-                    valor: Number(t.valorNotaFiscal || t.valor || 0),
-                    cc: '—', ug: '—',
-                    vinc: ant.vinc || '', lf: ant.lf || '', pf: ant.pf || '',
-                });
-            } else {
-                emps.forEach(function (v) {
-                    var neVal = neExibicao(v.numEmpenho || v.numNE);
-                    var ant = (anterior || []).find(function (o) {
-                        return o.tcId === id && o.ne === neVal;
-                    }) || {};
-                    resultado.push({
-                        tcId:  id,
-                        ne:    neVal,
-                        nd:    v.nd          || '—',
-                        sub:   v.subelemento || '—',
-                        fr:    v.fr          || '—',
-                        valor: Number(v.valorVinculado || 0),
-                        cc:    formatarCCSemPontos(v.centroCustosId),
-                        ug:    formatarUGCodigo7(v.ugId),
-                        vinc:  ant.vinc || '',
-                        lf:    ant.lf   || v.lf  || '',
-                        pf:    ant.pf   || v.pf  || '',
-                        op:    ant.op   || '',
-                        valorPago: ant.valorPago != null ? ant.valorPago : '',
-                        dataPagamento: ant.dataPagamento || '',
-                    });
-                });
+        return gerarOrcamentoConsolidado(ids, anterior, []).orcamento;
+    }
+
+    function atualizarFinanceiroLP() {
+        if (!lpEditorState) return;
+        var LE = window.LiquidacaoEstado;
+        var ids = lpEditorState.tcsIds || [];
+        var bruto = valorTotalBruto(ids);
+        var impost = totalImpostos(ids);
+        var liq = bruto - impost;
+        lpEditorState.valorLiquido = liq;
+        if (LE) {
+            var tot = LE.calcularTotaisFinanceiros(liq, lpEditorState.ops || []);
+            lpEditorState.valorLiquidoPago = tot.valorLiquidoPago;
+            lpEditorState.valorLiquidoAPagar = tot.valorLiquidoAPagar;
+        } else {
+            lpEditorState.valorLiquidoPago = 0;
+            lpEditorState.valorLiquidoAPagar = liq;
+        }
+    }
+
+    function normalizarLpEditorState() {
+        if (!lpEditorState) return;
+        var gen = gerarOrcamentoConsolidado(
+            lpEditorState.tcsIds || [],
+            lpEditorState.orcamento || [],
+            lpEditorState.ops || []
+        );
+        lpEditorState.orcamento = gen.orcamento;
+        if (!Array.isArray(lpEditorState.ops)) lpEditorState.ops = [];
+        if (!lpEditorState.ops.length && gen.ops && gen.ops.length) {
+            lpEditorState.ops = gen.ops;
+        }
+        atualizarFinanceiroLP();
+        if (window.LiquidacaoEstado && !lpEstadoCancelado(lpEditorState.estado)) {
+            if (String(lpEditorState.np || '').trim()) {
+                lpEditorState.estado = window.LiquidacaoEstado.calcularEstadoLP(lpEditorState);
             }
+        }
+    }
+
+    function resumoLfsNe(lfs) {
+        lfs = lfs || [];
+        if (!lfs.length) return '—';
+        var nums = lfs.map(function (x) { return String(x.lf || '').trim(); }).filter(Boolean);
+        if (!nums.length) return '—';
+        if (nums.length === 1) return nums[0];
+        if (nums.length <= 2) return nums.join(', ');
+        return nums.length + ' LF';
+    }
+
+    function loteTemLfComPF() {
+        var LE = window.LiquidacaoEstado;
+        if (!LE || !lpEditorState) return false;
+        return LE.todasLFsDoOrcamento(lpEditorState.orcamento).some(function (lf) {
+            return String(lf.pf || '').trim();
         });
-        return resultado;
     }
 
     function badgeEstado(estado) {
@@ -843,7 +915,9 @@ function esconderLoading() {
         var email = (auth.currentUser && auth.currentUser.email) || 'usuário';
         lpEditorState = {
             id: null, codigo: proximoCodigo(), estado: 'rascunho',
-            fornecedor: null, tcsIds: [], orcamento: [], np: '', dataLiquidacao: '',
+            fornecedor: null, tcsIds: [], orcamento: [], ops: [],
+            valorLiquido: 0, valorLiquidoPago: 0, valorLiquidoAPagar: 0,
+            np: '', dataLiquidacao: '',
             historico: [{ data: new Date().toISOString(), tipo: 'criação', usuario: email, detalhe: 'Nova LP iniciada.' }],
         };
         mostrarEditor();
@@ -854,9 +928,12 @@ function esconderLoading() {
         var lp = lpLista.find(function (l) { return l.id === lpId; });
         if (!lp) return;
         lpEditorState = JSON.parse(JSON.stringify(lp));
-        lpEditorState.orcamento = gerarOrcamentoParaIds(lpEditorState.tcsIds, lp.orcamento || []);
+        normalizarLpEditorState();
         if (window.LiquidacaoEstado && !lpEstadoCancelado(lpEditorState.estado)) {
             lpEditorState.estado = window.LiquidacaoEstado.migrarEstadoDocumento(lpEditorState);
+            if (String(lpEditorState.np || '').trim()) {
+                lpEditorState.estado = window.LiquidacaoEstado.calcularEstadoLP(lpEditorState);
+            }
         }
         mostrarEditor();
     }
@@ -897,6 +974,7 @@ function esconderLoading() {
             return;
         }
         sincronizarCamposEditorAbaB();
+        normalizarLpEditorState();
         if (String(lpEditorState.np || '').trim()) recalcularEstadoEditorLP();
         mostrarLoading();
         try {
@@ -907,15 +985,19 @@ function esconderLoading() {
                 detalhe: 'LP salva. TCs: ' + lpEditorState.tcsIds.length + '. Estado: ' + lpEditorState.estado + '.' });
 
             var payload = {
-                estado:         lpEditorState.estado,
-                fornecedor:     lpEditorState.fornecedor || null,
-                tcsIds:         lpEditorState.tcsIds,
-                orcamento:      lpEditorState.orcamento,
-                np:             lpEditorState.np || '',
-                dataLiquidacao: lpEditorState.dataLiquidacao || '',
-                historico:      hist,
-                editadoEm:      firebase.firestore.FieldValue.serverTimestamp(),
-                editadoPor:     email,
+                estado:              lpEditorState.estado,
+                fornecedor:          lpEditorState.fornecedor || null,
+                tcsIds:              lpEditorState.tcsIds,
+                orcamento:           lpEditorState.orcamento,
+                ops:                 lpEditorState.ops || [],
+                valorLiquido:        lpEditorState.valorLiquido || 0,
+                valorLiquidoPago:    lpEditorState.valorLiquidoPago || 0,
+                valorLiquidoAPagar:  lpEditorState.valorLiquidoAPagar || 0,
+                np:                  lpEditorState.np || '',
+                dataLiquidacao:      lpEditorState.dataLiquidacao || '',
+                historico:           hist,
+                editadoEm:           firebase.firestore.FieldValue.serverTimestamp(),
+                editadoPor:          email,
             };
 
             if (lpEditorState.id) {
@@ -1000,19 +1082,22 @@ function esconderLoading() {
         var STATUS_POS_NP = ['Liquidado', 'Aguardando Financeiro', 'Para Pagamento', 'Para Pagamento parcial', 'Pago Parcialmente', 'Pago'];
         var batch = db.batch();
         var operacoes = 0;
+        var lpContext = {
+            ops: lpState.ops || [],
+            valorLiquido: lpState.valorLiquido,
+            estado: lpState.estado
+        };
+        var opsAgregadas = (lpState.ops || []).map(function (o) {
+            return String(o.op || '').trim();
+        }).filter(Boolean).join(', ');
 
         for (var i = 0; i < lpState.tcsIds.length; i++) {
             var tcId = lpState.tcsIds[i];
-            var orcTC = (lpState.orcamento || []).filter(function (o) { return o.tcId === tcId; });
+            var orcTC = LE ? LE.orcamentoParaTC(lpState.orcamento || [], tcId) : [];
             var neMap = {};
-            orcTC.forEach(function (o) {
-                neMap[o.ne] = {
-                    lf: o.lf || '',
-                    pf: o.pf || '',
-                    op: o.op || '',
-                    valorPago: o.valorPago != null ? o.valorPago : '',
-                    dataPagamento: o.dataPagamento || ''
-                };
+            orcTC.forEach(function (neItem) {
+                var agg = LE ? LE.agregarLfs(neItem.lfs) : {};
+                neMap[neItem.ne] = agg;
             });
 
             var snap = await db.collection('titulos').doc(tcId).get();
@@ -1026,16 +1111,14 @@ function esconderLoading() {
             });
 
             var novoStatus = LE && orcTC.length
-                ? LE.calcularStatusTCOrcamento(orcTC)
+                ? LE.calcularStatusTCOrcamento(orcTC, lpContext)
                 : (String(lpState.np || '').trim() ? 'Liquidado' : tc.status);
-            var opsTC = orcTC.map(function (o) { return String(o.op || '').trim(); }).filter(Boolean);
-            var opAgregada = opsTC.length === 1 ? opsTC[0] : (opsTC.length > 1 ? opsTC.join(', ') : (tc.op || ''));
 
             var payload = {
                 empenhosVinculados: novosEmps,
                 editado_em: firebase.firestore.FieldValue.serverTimestamp()
             };
-            if (opAgregada) payload.op = opAgregada;
+            if (opsAgregadas) payload.op = opsAgregadas;
             if (novoStatus !== tc.status) {
                 var emailSync = (auth.currentUser && auth.currentUser.email) || 'sistema';
                 var hist = (tc.historicoStatus || []).slice();
@@ -1051,15 +1134,7 @@ function esconderLoading() {
     }
 
     function sincronizarCamposEditorAbaB() {
-        document.querySelectorAll('#lpOrcamentoContainer tr[data-tcid]').forEach(function (tr) {
-            var entry = lpEditorState.orcamento.find(function (o) {
-                return o.tcId === tr.dataset.tcid && o.ne === tr.dataset.ne;
-            });
-            if (!entry) return;
-            var iV = tr.querySelector('.inp-vinc'); if (iV) entry.vinc = iV.value;
-            var iL = tr.querySelector('.inp-lf');   if (iL) entry.lf   = iL.value;
-            var iP = tr.querySelector('.inp-pf');   if (iP) entry.pf   = iP.value;
-        });
+        /* Orçamento consolidado: LF/PF via modal Informar LF — nada a sincronizar inline. */
     }
 
     // ===== ABAS =====
@@ -1200,8 +1275,8 @@ function esconderLoading() {
     function removerTCsSelecionados() {
         var selecionados = Array.from(document.querySelectorAll('.check-tc-lote:checked')).map(function (cb) { return cb.dataset.id; });
         if (!selecionados.length) return;
-        lpEditorState.tcsIds    = lpEditorState.tcsIds.filter(function (id) { return !selecionados.includes(id); });
-        lpEditorState.orcamento = lpEditorState.orcamento.filter(function (o) { return !selecionados.includes(o.tcId); });
+        lpEditorState.tcsIds = lpEditorState.tcsIds.filter(function (id) { return !selecionados.includes(id); });
+        normalizarLpEditorState();
         renderizarGridTCs();
         atualizarKPIs();
         atualizarBadgesAbas();
@@ -1291,7 +1366,7 @@ function esconderLoading() {
     function confirmarAdicionarTCs() {
         var novosIds = Array.from(tcsSelecionadosModal);
         lpEditorState.tcsIds    = lpEditorState.tcsIds.concat(novosIds);
-        lpEditorState.orcamento = gerarOrcamentoParaIds(lpEditorState.tcsIds, lpEditorState.orcamento);
+        normalizarLpEditorState();
         fecharModalTC();
         renderizarGridTCs();
         atualizarKPIs();
@@ -1328,10 +1403,9 @@ function esconderLoading() {
             '<span><strong>Data venc. (ref. deduções):</strong> ' + fmtData(venc) + '</span>' +
             '<span><strong>Data pagamento (ref.):</strong> ' + fmtData(hoje) + '</span>';
 
-        // Agrupar por ND preservando ordem de aparição
         var grupos = [];
         var ndIndex = {};
-        lpEditorState.orcamento.forEach(function (o) {
+        (lpEditorState.orcamento || []).forEach(function (o) {
             if (ndIndex[o.nd] === undefined) {
                 ndIndex[o.nd] = grupos.length;
                 grupos.push({ nd: o.nd, linhas: [] });
@@ -1345,32 +1419,48 @@ function esconderLoading() {
                 '<th>ND</th>' +
                 '<th>Sub</th>' +
                 '<th>FR</th>' +
-                '<th>VINC <span class="lp-editavel-hint" title="Campo edit\u00e1vel">\u270f</span></th>' +
                 '<th style="text-align:right;">Valor Usado</th>' +
                 '<th>C. de Custos</th>' +
                 '<th>UG Benef.</th>' +
-                '<th>LF <span class="lp-editavel-hint" title="Campo edit\u00e1vel">\u270f</span></th>' +
-                '<th>PF <span class="lp-editavel-hint" title="Campo edit\u00e1vel">\u270f</span></th>' +
+                '<th>Qtd TCs</th>' +
+                '<th>LF(s)</th>' +
+                '<th>Ações</th>' +
                 '</tr></thead>';
         }
 
         var totalGeral = 0;
+        var ro = lpSomenteLeitura || !lpPodeEditarLote(lpEditorState.estado);
         var html = grupos.map(function (g) {
             var subTotal = g.linhas.reduce(function (s, o) { return s + o.valor; }, 0);
             totalGeral += subTotal;
             var linhasHtml = g.linhas.map(function (o) {
-                return '<tr data-tcid="' + o.tcId + '" data-ne="' + o.ne + '">' +
-                    '<td style="font-family:monospace;font-size:11.5px;white-space:nowrap;">' + o.ne + '</td>' +
-                    '<td>' + o.nd + '</td>' +
-                    '<td style="text-align:center;">' + o.sub + '</td>' +
-                    '<td style="font-size:11.5px;">' + o.fr + '</td>' +
-                    '<td class="lp-cell-edit"><input type="text" class="inp-vinc" value="' + o.vinc + '" placeholder="\u2014" title="VINC" aria-label="VINC para ' + o.ne + '"></td>' +
+                var qtdTcs = Array.isArray(o.detalheTCs) ? o.detalheTCs.length : 0;
+                var detId = 'det-' + String(o.ne).replace(/[^a-zA-Z0-9]/g, '_');
+                var detalheHtml = '';
+                if (qtdTcs > 1 && Array.isArray(o.detalheTCs)) {
+                    detalheHtml = '<tr class="lp-detalhe-tcs-row" id="' + detId + '" style="display:none;">' +
+                        '<td colspan="10" style="padding-left:24px;">' +
+                        o.detalheTCs.map(function (d) {
+                            return escapeHTML(d.proc || d.tcId) + ': ' + moeda(d.valor);
+                        }).join(' · ') +
+                        '</td></tr>';
+                }
+                var btnLf = ro ? '' :
+                    '<button type="button" class="btn-default btn-small lp-btn-informar-lf" data-ne="' + escapeAttr(o.ne) + '">Informar LF</button>';
+                return '<tr data-ne="' + escapeAttr(o.ne) + '">' +
+                    '<td style="font-family:monospace;font-size:11.5px;white-space:nowrap;">' + escapeHTML(o.ne) +
+                    (qtdTcs > 1 ? ' <button type="button" class="lp-detalhe-tcs-toggle" data-target="' + detId + '" aria-label="Ver TCs">(' + qtdTcs + ' TCs)</button>' : '') +
+                    '</td>' +
+                    '<td>' + escapeHTML(o.nd) + '</td>' +
+                    '<td style="text-align:center;">' + escapeHTML(o.sub) + '</td>' +
+                    '<td style="font-size:11.5px;">' + escapeHTML(o.fr) + '</td>' +
                     '<td style="text-align:right;">' + moeda(o.valor) + '</td>' +
-                    '<td>' + o.cc + '</td>' +
-                    '<td style="text-align:center;">' + o.ug + '</td>' +
-                    '<td class="lp-cell-edit"><input type="text" class="inp-lf" value="' + o.lf + '" placeholder="Ex.: 2026LF000123 ou 123" title="LF \u2014 formato completo (2026LF123456) ou apenas a sequ\u00eancia (123456)" aria-label="LF para ' + o.ne + '"></td>' +
-                    '<td class="lp-cell-edit"><input type="text" class="inp-pf" value="' + o.pf + '" placeholder="\u2014" title="PF \u2014 preenchido automaticamente pela LF" aria-label="PF para ' + o.ne + '"></td>' +
-                    '</tr>';
+                    '<td>' + escapeHTML(o.cc) + '</td>' +
+                    '<td style="text-align:center;">' + escapeHTML(o.ug) + '</td>' +
+                    '<td style="text-align:center;">' + qtdTcs + '</td>' +
+                    '<td style="font-family:monospace;font-size:11.5px;">' + escapeHTML(resumoLfsNe(o.lfs)) + '</td>' +
+                    '<td>' + btnLf + '</td>' +
+                    '</tr>' + detalheHtml;
             }).join('');
             return '<div class="lp-nd-bloco">' +
                 '<div class="lp-nd-bloco-titulo">ND: ' + g.nd + '</div>' +
@@ -1379,14 +1469,13 @@ function esconderLoading() {
                 cabecalhoTabela() +
                 '<tbody class="lp-orc-tbody">' + linhasHtml + '</tbody>' +
                 '<tfoot><tr class="lp-tfoot-total">' +
-                '<td colspan="5" style="text-align:right;font-weight:600;font-size:12.5px;">Subtotal ND ' + g.nd + ':</td>' +
+                '<td colspan="4" style="text-align:right;font-weight:600;font-size:12.5px;">Subtotal ND ' + g.nd + ':</td>' +
                 '<td style="text-align:right;font-weight:700;">' + moeda(subTotal) + '</td>' +
-                '<td colspan="4"></td>' +
+                '<td colspan="5"></td>' +
                 '</tr></tfoot>' +
                 '</table></div></div>';
         }).join('');
 
-        // Bloco de total geral
         html += '<div class="lp-nd-total-geral">' +
             '<span>Valor total NE (consolidado):</span>' +
             '<span id="totalNEs" style="font-weight:700;">' + moeda(totalGeral) + '</span>' +
@@ -1394,37 +1483,14 @@ function esconderLoading() {
 
         if (container) {
             container.innerHTML = html;
-
-            // Blur genérico para VINC e PF
-            container.querySelectorAll('.inp-vinc, .inp-pf').forEach(function (inp) {
-                inp.addEventListener('blur', sincronizarCamposEditorAbaB);
-            });
-
-            // Blur especializado para LF: normaliza, busca PF e VINC automaticamente na coleção LFxPF
-            container.querySelectorAll('.inp-lf').forEach(function (inp) {
-                inp.addEventListener('blur', function () {
-                    var norm = normalizarLF(inp.value);
-                    if (norm !== inp.value) inp.value = norm;
-                    if (norm) {
-                        var reg = buscarPFporLF(norm);
-                        if (reg) {
-                            var tr        = inp.closest('tr');
-                            var pfInput   = tr ? tr.querySelector('.inp-pf')   : null;
-                            var vincInput = tr ? tr.querySelector('.inp-vinc') : null;
-                            if (pfInput && !pfInput.value && reg.pf) {
-                                pfInput.value = reg.pf;
-                                pfInput.classList.add('lp-pf-autopreenchido');
-                                setTimeout(function () { pfInput.classList.remove('lp-pf-autopreenchido'); }, 2500);
-                            }
-                            if (vincInput && !vincInput.value && reg.vinculacao) {
-                                vincInput.value = reg.vinculacao;
-                                vincInput.classList.add('lp-pf-autopreenchido');
-                                setTimeout(function () { vincInput.classList.remove('lp-pf-autopreenchido'); }, 2500);
-                            }
-                        }
-                    }
-                    sincronizarCamposEditorAbaB();
+            container.querySelectorAll('.lp-detalhe-tcs-toggle').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var row = document.getElementById(btn.dataset.target);
+                    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
                 });
+            });
+            container.querySelectorAll('.lp-btn-informar-lf').forEach(function (btn) {
+                btn.addEventListener('click', function () { abrirModalInformarLF(btn.dataset.ne); });
             });
         }
     }
@@ -1579,6 +1645,33 @@ function esconderLoading() {
         qs('lpRbBruto').textContent   = moeda(totBruto);
         qs('lpRbDeduc').textContent   = moeda(totDeduc);
         qs('lpRbLiquido').textContent = moeda(totLiq);
+        atualizarFinanceiroLP();
+        var pago = lpEditorState.valorLiquidoPago || 0;
+        var aPagar = lpEditorState.valorLiquidoAPagar != null ? lpEditorState.valorLiquidoAPagar : Math.max(0, totLiq - pago);
+        var elPago = qs('lpRbLiquidoPago');
+        var elAPagar = qs('lpRbLiquidoAPagar');
+        if (elPago) elPago.textContent = moeda(pago);
+        if (elAPagar) elAPagar.textContent = moeda(aPagar);
+
+        var ops = lpEditorState.ops || [];
+        var opsBlk = qs('lpOpsResumoBloco');
+        var opsTbody = qs('tbodyOpsResumo');
+        if (opsBlk && opsTbody) {
+            if (ops.length) {
+                opsBlk.style.display = 'block';
+                opsTbody.innerHTML = ops.map(function (o) {
+                    return '<tr>' +
+                        '<td style="font-family:monospace;">' + escapeHTML(o.op || '—') + '</td>' +
+                        '<td style="font-family:monospace;">' + escapeHTML(o.ob || '—') + '</td>' +
+                        '<td>' + fmtData(o.dataPagamento) + '</td>' +
+                        '<td style="text-align:right;">' + moeda(Number(o.valor) || 0) + '</td>' +
+                        '</tr>';
+                }).join('');
+            } else {
+                opsBlk.style.display = 'none';
+                opsTbody.innerHTML = '';
+            }
+        }
     }
 
     // ===== ABA E: DETA CUSTOS =====
@@ -1651,10 +1744,15 @@ function esconderLoading() {
         var liq    = bruto - impost;
         var ateste = atesteMinimo(ids);
         var venc   = ateste ? addDias(ateste, 30) : null;
+        atualizarFinanceiroLP();
         qs('lpKpiTcs').textContent     = ids.length;
         qs('lpKpiValor').textContent   = moeda(bruto);
         qs('lpKpiDarf').textContent    = moeda(impost);
         qs('lpKpiLiquido').textContent = moeda(liq);
+        var elPago = qs('lpKpiLiquidoPago');
+        var elAPagar = qs('lpKpiLiquidoAPagar');
+        if (elPago) elPago.textContent = moeda(lpEditorState.valorLiquidoPago || 0);
+        if (elAPagar) elAPagar.textContent = moeda(lpEditorState.valorLiquidoAPagar != null ? lpEditorState.valorLiquidoAPagar : liq);
         qs('lpKpiAteste').textContent  = fmtData(ateste);
         qs('lpKpiVenc').textContent    = fmtData(venc);
     }
@@ -1667,7 +1765,15 @@ function esconderLoading() {
         var liq    = bruto - impost;
         var bB = qs('lpBadgeAbaB'); if (bB) bB.textContent = ids.length ? moeda(bruto)  : '—';
         var bC = qs('lpBadgeAbaC'); if (bC) bC.textContent = ids.length ? moeda(impost) : '—';
-        var bD = qs('lpBadgeAbaD'); if (bD) bD.textContent = ids.length ? moeda(liq)    : '—';
+        var bD = qs('lpBadgeAbaD');
+        if (bD) {
+            if (!ids.length) bD.textContent = '—';
+            else if ((lpEditorState.valorLiquidoPago || 0) > 0) {
+                bD.textContent = moeda(lpEditorState.valorLiquidoPago);
+            } else {
+                bD.textContent = moeda(liq);
+            }
+        }
     }
 
     function pedirMotivoLP(tituloModal) {
@@ -1744,7 +1850,7 @@ function esconderLoading() {
         var ids = (lpEditorState.tcsIds || []).slice();
         if (!ids.length) { alert('Sem TCs no lote.'); return; }
 
-        if (modoCorrecaoNP && await window.LiquidacaoNp.algumTituloComOP(ids)) {
+        if (modoCorrecaoNP && await window.LiquidacaoNp.algumTituloComOP(ids, lpEditorState.ops)) {
             alert('Não é possível corrigir NP: existe TC com OP informada.');
             return;
         }
@@ -1767,6 +1873,8 @@ function esconderLoading() {
                 historicoAtual: lpEditorState.historico || [],
                 codigoLp: lpEditorState.codigo,
                 orcamento: lpEditorState.orcamento || [],
+                ops: lpEditorState.ops || [],
+                valorLiquido: lpEditorState.valorLiquido || 0,
             });
             lpEditorState.np = np;
             lpEditorState.dataLiquidacao = dt;
@@ -1818,7 +1926,7 @@ function esconderLoading() {
                     status: STATUS_EM_LIQ,
                     editado_em: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-                if (npVal) await window.LiquidacaoNp.desvincularTituloDaNP(tid, npVal);
+                if (npVal) await window.LiquidacaoNp.desvincularTituloDaNP(tid, npVal, lpId);
                 await window.LiquidacaoNp.pushHistoricoTitulo(tid, window.LiquidacaoNp.entradaHistoricoTC(
                     STATUS_EM_LIQ,
                     'Cancelamento da liquidação',
@@ -1841,6 +1949,10 @@ function esconderLoading() {
                 dataLiquidacao: lpEditorState.dataLiquidacao || '',
                 tcsIds: ids.slice(),
                 orcamento: JSON.parse(JSON.stringify(lpEditorState.orcamento || [])),
+                ops: JSON.parse(JSON.stringify(lpEditorState.ops || [])),
+                valorLiquido: lpEditorState.valorLiquido || 0,
+                valorLiquidoPago: lpEditorState.valorLiquidoPago || 0,
+                valorLiquidoAPagar: lpEditorState.valorLiquidoAPagar || 0,
             };
 
             await db.collection('liquidacoes').doc(lpId).update({
@@ -1905,8 +2017,17 @@ function esconderLoading() {
             }
 
             var orcRest = snap.orcamento || lpEditorState.orcamento || [];
+            var opsRest = snap.ops || lpEditorState.ops || [];
+            var valorLiqRest = snap.valorLiquido != null ? snap.valorLiquido : (lpEditorState.valorLiquido || 0);
             var novoEstado = LE
-                ? LE.calcularEstadoLP({ np: npVal, orcamento: orcRest, estado: 'rascunho', tcsIds: ids })
+                ? LE.calcularEstadoLP({
+                    np: npVal,
+                    orcamento: orcRest,
+                    ops: opsRest,
+                    valorLiquido: valorLiqRest,
+                    estado: 'rascunho',
+                    tcsIds: ids
+                })
                 : (snap.estadoAnterior || 'liquidado');
 
             var hist = (lpEditorState.historico || []).slice();
@@ -1924,6 +2045,10 @@ function esconderLoading() {
                 dataLiquidacao: snap.dataLiquidacao || '',
                 tcsIds: ids,
                 orcamento: orcRest,
+                ops: opsRest,
+                valorLiquido: valorLiqRest,
+                valorLiquidoPago: snap.valorLiquidoPago || 0,
+                valorLiquidoAPagar: snap.valorLiquidoAPagar != null ? snap.valorLiquidoAPagar : valorLiqRest,
                 estadoAnterior: firebase.firestore.FieldValue.delete(),
                 snapshotCancelamento: firebase.firestore.FieldValue.delete(),
                 historico: hist,
@@ -1931,11 +2056,14 @@ function esconderLoading() {
                 editadoPor: email,
             });
 
+            var lpMeta = { lpId: lpId, codigoLp: lpEditorState.codigo };
+            var lpContext = { ops: opsRest, valorLiquido: valorLiqRest, estado: novoEstado };
+
             for (var j = 0; j < ids.length; j++) {
                 var tcId = ids[j];
-                var orcTC = orcRest.filter(function (o) { return o.tcId === tcId; });
+                var orcTC = LE ? LE.orcamentoParaTC(orcRest, tcId) : [];
                 var novoStatus = LE && orcTC.length
-                    ? LE.calcularStatusTCOrcamento(orcTC)
+                    ? LE.calcularStatusTCOrcamento(orcTC, lpContext)
                     : (npVal ? 'Liquidado' : 'Em Liquidação');
                 await db.collection('titulos').doc(tcId).update({
                     liquidacaoId: lpId,
@@ -1945,7 +2073,7 @@ function esconderLoading() {
                     status: novoStatus,
                     editado_em: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-                if (npVal) await window.LiquidacaoNp.vincularTituloNaNP(tcId, npVal, snap.dataLiquidacao || '');
+                if (npVal) await window.LiquidacaoNp.vincularTituloNaNP(tcId, npVal, snap.dataLiquidacao || '', lpMeta);
             }
 
             lpEditorState.estado = novoEstado;
@@ -1953,6 +2081,10 @@ function esconderLoading() {
             lpEditorState.dataLiquidacao = snap.dataLiquidacao || '';
             lpEditorState.tcsIds = ids;
             lpEditorState.orcamento = orcRest;
+            lpEditorState.ops = opsRest;
+            lpEditorState.valorLiquido = valorLiqRest;
+            lpEditorState.valorLiquidoPago = snap.valorLiquidoPago || 0;
+            lpEditorState.valorLiquidoAPagar = snap.valorLiquidoAPagar != null ? snap.valorLiquidoAPagar : valorLiqRest;
             lpEditorState.historico = hist;
             delete lpEditorState.snapshotCancelamento;
             delete lpEditorState.estadoAnterior;
@@ -1969,30 +2101,6 @@ function esconderLoading() {
         }
     }
 
-    // ===== MODAL OP =====
-    function linhasOrcamentoComPF() {
-        return (lpEditorState.orcamento || []).filter(function (o) {
-            return String(o.pf || '').trim() && String(o.ne || '').trim() && o.ne !== '—';
-        });
-    }
-
-    function renderizarTabelaModalOP() {
-        var tbody = qs('tbodyModalOP');
-        if (!tbody || !lpEditorState) return;
-        var linhas = linhasOrcamentoComPF();
-        tbody.innerHTML = linhas.map(function (o, idx) {
-            var val = Number(o.valor || 0);
-            var vp = o.valorPago != null && o.valorPago !== '' ? o.valorPago : val;
-            return '<tr data-orc-idx="' + idx + '" data-ne="' + escapeAttr(o.ne) + '" data-tcid="' + escapeAttr(o.tcId) + '">' +
-                '<td>' + escapeHTML(o.ne) + '</td>' +
-                '<td style="text-align:right;">' + formatarMoeda(val) + '</td>' +
-                '<td><input type="text" class="inp-op-ne" data-field="op" value="' + escapeAttr(o.op || '') + '" placeholder="Nº OP"></td>' +
-                '<td><input type="number" step="0.01" min="0" class="inp-op-ne" data-field="valorPago" value="' + escapeAttr(String(vp)) + '"></td>' +
-                '<td><input type="date" class="inp-op-ne" data-field="dataPagamento" value="' + escapeAttr(o.dataPagamento || '') + '"></td>' +
-                '</tr>';
-        }).join('');
-    }
-
     function escapeAttr(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
@@ -2002,18 +2110,223 @@ function esconderLoading() {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    // ===== MODAL INFORMAR LF =====
+    function obterNeItemOrcamento(ne) {
+        return (lpEditorState.orcamento || []).find(function (o) { return o.ne === ne; });
+    }
+
+    function abrirModalInformarLF(ne) {
+        if (!lpEditorState) return;
+        if (lpSomenteLeitura || !lpPodeEditarLote(lpEditorState.estado)) return;
+        var neItem = obterNeItemOrcamento(ne);
+        if (!neItem) return;
+        modalLfNe = ne;
+        var tit = qs('modalLFTitulo');
+        var sub = qs('modalLFSubtitulo');
+        if (tit) tit.textContent = 'Informar LF — NE ' + ne;
+        if (sub) sub.textContent = 'Valor consolidado da NE: ' + moeda(neItem.valor);
+        renderizarTabelaModalLF();
+        var modal = qs('modalLPLF');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function fecharModalLF() {
+        var modal = qs('modalLPLF');
+        if (modal) modal.style.display = 'none';
+        modalLfNe = null;
+    }
+
+    function renderizarTabelaModalLF() {
+        var tbody = qs('tbodyModalLF');
+        if (!tbody || !modalLfNe) return;
+        var neItem = obterNeItemOrcamento(modalLfNe);
+        if (!neItem) return;
+        var lfs = Array.isArray(neItem.lfs) ? neItem.lfs : [];
+        if (!lfs.length) lfs = [{ id: gerarIdInternoLP('lf'), lf: '', vinc: '', pf: '' }];
+        tbody.innerHTML = lfs.map(function (lf, idx) {
+            return '<tr data-lf-idx="' + idx + '" data-lf-id="' + escapeAttr(lf.id || '') + '">' +
+                '<td><input type="text" class="inp-modal-lf" data-field="lf" value="' + escapeAttr(lf.lf || '') + '" placeholder="2026LF000123"></td>' +
+                '<td><input type="text" class="inp-modal-lf" data-field="vinc" value="' + escapeAttr(lf.vinc || '') + '"></td>' +
+                '<td><input type="text" class="inp-modal-lf" data-field="pf" value="' + escapeAttr(lf.pf || '') + '"></td>' +
+                '<td><button type="button" class="btn-default btn-small btn-rem-lf" title="Remover">×</button></td>' +
+                '</tr>';
+        }).join('');
+        tbody.querySelectorAll('.inp-modal-lf[data-field="lf"]').forEach(function (inp) {
+            inp.addEventListener('blur', function () {
+                var norm = normalizarLF(inp.value);
+                if (norm !== inp.value) inp.value = norm;
+                if (!norm) return;
+                var reg = buscarPFporLF(norm);
+                if (!reg) return;
+                var tr = inp.closest('tr');
+                var pfInp = tr ? tr.querySelector('[data-field="pf"]') : null;
+                var vincInp = tr ? tr.querySelector('[data-field="vinc"]') : null;
+                if (pfInp && !pfInp.value && reg.pf) pfInp.value = reg.pf;
+                if (vincInp && !vincInp.value && reg.vinculacao) vincInp.value = reg.vinculacao;
+            });
+        });
+        tbody.querySelectorAll('.btn-rem-lf').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tr = btn.closest('tr');
+                if (tbody.querySelectorAll('tr').length <= 1) {
+                    tr.querySelectorAll('.inp-modal-lf').forEach(function (i) { i.value = ''; });
+                    return;
+                }
+                if (tr) tr.remove();
+            });
+        });
+    }
+
+    function adicionarLinhaModalLF() {
+        var tbody = qs('tbodyModalLF');
+        if (!tbody) return;
+        var idx = tbody.querySelectorAll('tr').length;
+        var tr = document.createElement('tr');
+        tr.dataset.lfIdx = String(idx);
+        tr.dataset.lfId = gerarIdInternoLP('lf');
+        tr.innerHTML =
+            '<td><input type="text" class="inp-modal-lf" data-field="lf" placeholder="2026LF000123"></td>' +
+            '<td><input type="text" class="inp-modal-lf" data-field="vinc"></td>' +
+            '<td><input type="text" class="inp-modal-lf" data-field="pf"></td>' +
+            '<td><button type="button" class="btn-default btn-small btn-rem-lf" title="Remover">×</button></td>';
+        tbody.appendChild(tr);
+        tr.querySelector('.btn-rem-lf').addEventListener('click', function () {
+            if (tbody.querySelectorAll('tr').length <= 1) {
+                tr.querySelectorAll('.inp-modal-lf').forEach(function (i) { i.value = ''; });
+                return;
+            }
+            tr.remove();
+        });
+        tr.querySelector('.inp-modal-lf[data-field="lf"]').addEventListener('blur', function () {
+            var norm = normalizarLF(this.value);
+            if (norm !== this.value) this.value = norm;
+        });
+    }
+
+    function sincronizarLFDoModal() {
+        if (!modalLfNe || !lpEditorState) return false;
+        var neItem = obterNeItemOrcamento(modalLfNe);
+        if (!neItem) return false;
+        var tbody = qs('tbodyModalLF');
+        if (!tbody) return false;
+        var LE = window.LiquidacaoEstado;
+        var lfs = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var lf = '', vinc = '', pf = '';
+            tr.querySelectorAll('.inp-modal-lf').forEach(function (inp) {
+                if (inp.dataset.field === 'lf') lf = inp.value.trim();
+                if (inp.dataset.field === 'vinc') vinc = inp.value.trim();
+                if (inp.dataset.field === 'pf') pf = inp.value.trim();
+            });
+            if (!lf && !vinc && !pf) return;
+            var id = tr.dataset.lfId || gerarIdInternoLP('lf');
+            lfs.push(LE ? LE.normalizarLfItem(lf, vinc, pf, id) : { id: id, lf: lf, vinc: vinc, pf: pf });
+        });
+        neItem.lfs = lfs;
+        return true;
+    }
+
+    async function confirmarModalLF() {
+        if (!sincronizarLFDoModal()) return;
+        if (String(lpEditorState.np || '').trim()) recalcularEstadoEditorLP();
+        fecharModalLF();
+        renderizarAbaB();
+        aplicarBadgeEstadoEditor();
+        atualizarBotoesEditor();
+        await propagarLFParaTitulos(lpEditorState);
+    }
+
+    // ===== MODAL OP =====
+    function atualizarResumoModalOP() {
+        if (!lpEditorState) return;
+        atualizarFinanceiroLP();
+        var liq = lpEditorState.valorLiquido || 0;
+        var soma = 0;
+        modalOpsDraft.forEach(function (o) { soma += Number(o.valor) || 0; });
+        var diff = Math.max(0, liq - soma);
+        var elLiq = qs('modalOPLiquido');
+        var elSoma = qs('modalOPSoma');
+        var elDiff = qs('modalOPDiff');
+        var elWrap = qs('modalOPDiffWrap');
+        if (elLiq) elLiq.textContent = moeda(liq);
+        if (elSoma) elSoma.textContent = moeda(soma);
+        if (elDiff) elDiff.textContent = moeda(diff);
+        if (elWrap) elWrap.style.display = diff > 0.005 ? '' : 'none';
+    }
+
+    function renderizarTabelaModalOP() {
+        var tbody = qs('tbodyModalOP');
+        if (!tbody) return;
+        tbody.innerHTML = modalOpsDraft.map(function (o, idx) {
+            return '<tr data-op-idx="' + idx + '" data-op-id="' + escapeAttr(o.id || '') + '">' +
+                '<td><input type="text" class="inp-modal-op" data-field="op" value="' + escapeAttr(o.op || '') + '" placeholder="Nº OP"></td>' +
+                '<td><input type="text" class="inp-modal-op" data-field="ob" value="' + escapeAttr(o.ob || '') + '" placeholder="Nº OB"></td>' +
+                '<td><input type="date" class="inp-modal-op" data-field="dataPagamento" value="' + escapeAttr(o.dataPagamento || '') + '"></td>' +
+                '<td><input type="number" step="0.01" min="0" class="inp-modal-op inp-op-valor" data-field="valor" value="' + escapeAttr(String(o.valor != null ? o.valor : '')) + '" style="text-align:right;width:100%;"></td>' +
+                '<td><button type="button" class="btn-default btn-small btn-rem-op" title="Remover">×</button></td>' +
+                '</tr>';
+        }).join('');
+        tbody.querySelectorAll('.inp-modal-op').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                sincronizarOpsDraftDoModal(false);
+                atualizarResumoModalOP();
+            });
+        });
+        tbody.querySelectorAll('.btn-rem-op').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tr = btn.closest('tr');
+                var idx = parseInt(tr.dataset.opIdx, 10);
+                modalOpsDraft.splice(idx, 1);
+                renderizarTabelaModalOP();
+                atualizarResumoModalOP();
+            });
+        });
+        atualizarResumoModalOP();
+    }
+
+    function sincronizarOpsDraftDoModal(validar) {
+        var tbody = qs('tbodyModalOP');
+        if (!tbody) return [];
+        var out = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var item = { id: tr.dataset.opId || gerarIdInternoLP('op'), op: '', ob: '', dataPagamento: '', valor: 0 };
+            tr.querySelectorAll('.inp-modal-op').forEach(function (inp) {
+                if (inp.dataset.field === 'op') item.op = inp.value.trim();
+                if (inp.dataset.field === 'ob') item.ob = inp.value.trim();
+                if (inp.dataset.field === 'dataPagamento') item.dataPagamento = inp.value;
+                if (inp.dataset.field === 'valor') item.valor = parseFloat(inp.value);
+            });
+            if (!item.op && !item.ob && !item.dataPagamento && !item.valor) return;
+            out.push(item);
+        });
+        if (validar !== false) modalOpsDraft = out;
+        return out;
+    }
+
     function abrirModalOP(correcao) {
         if (!lpEditorState) return;
         if (!tem('liquidacao_informar_op')) {
             alert('Sem permissão para informar OP.');
             return;
         }
-        var linhas = linhasOrcamentoComPF();
-        if (!linhas.length) {
-            alert('Nenhuma NE com PF preenchida para informar OP.');
+        if (!loteTemLfComPF()) {
+            alert('Informe LF/PF (ao menos uma LF com PF) antes de registrar OP.');
             return;
         }
         modoCorrecaoOP = !!correcao;
+        atualizarFinanceiroLP();
+        modalOpsDraft = JSON.parse(JSON.stringify(lpEditorState.ops || []));
+        if (!modalOpsDraft.length) {
+            var restante = lpEditorState.valorLiquidoAPagar != null
+                ? lpEditorState.valorLiquidoAPagar
+                : lpEditorState.valorLiquido;
+            modalOpsDraft.push({
+                id: gerarIdInternoLP('op'),
+                op: '', ob: '',
+                dataPagamento: new Date().toISOString().slice(0, 10),
+                valor: restante > 0 ? restante : lpEditorState.valorLiquido
+            });
+        }
         var tit = qs('modalOPTitulo');
         var grpMot = qs('grpModalLPmotivoOP');
         var motEl = qs('modalLPmotivoOP');
@@ -2029,26 +2342,22 @@ function esconderLoading() {
         var modal = qs('modalLPOP');
         if (modal) modal.style.display = 'none';
         modoCorrecaoOP = false;
+        modalOpsDraft = [];
     }
 
-    function sincronizarOPDoModal() {
-        var tbody = qs('tbodyModalOP');
-        if (!tbody || !lpEditorState) return false;
-        var linhasPF = linhasOrcamentoComPF();
-        var trs = tbody.querySelectorAll('tr');
-        for (var i = 0; i < trs.length; i++) {
-            var tr = trs[i];
-            var ne = tr.dataset.ne;
-            var tcId = tr.dataset.tcid;
-            var entry = lpEditorState.orcamento.find(function (o) {
-                return o.ne === ne && o.tcId === tcId;
-            });
-            if (!entry) continue;
-            tr.querySelectorAll('.inp-op-ne').forEach(function (inp) {
-                entry[inp.dataset.field] = inp.value;
-            });
-        }
-        return true;
+    function adicionarLinhaModalOP() {
+        sincronizarOpsDraftDoModal(false);
+        atualizarFinanceiroLP();
+        var restante = Math.max(0, (lpEditorState.valorLiquido || 0) - modalOpsDraft.reduce(function (s, o) {
+            return s + (Number(o.valor) || 0);
+        }, 0));
+        modalOpsDraft.push({
+            id: gerarIdInternoLP('op'),
+            op: '', ob: '',
+            dataPagamento: new Date().toISOString().slice(0, 10),
+            valor: restante
+        });
+        renderizarTabelaModalOP();
     }
 
     async function confirmarOP() {
@@ -2060,36 +2369,33 @@ function esconderLoading() {
             alert('Sem permissão para informar OP.');
             return;
         }
-        if (!sincronizarOPDoModal()) return;
-
+        var ops = sincronizarOpsDraftDoModal(true);
         var motEl = qs('modalLPmotivoOP');
         var motivo = motEl ? motEl.value.trim() : '';
         if (modoCorrecaoOP && !motivo) { alert('Informe o motivo da correção.'); return; }
 
-        var linhasPF = linhasOrcamentoComPF();
-        var algumaOP = false;
-        for (var i = 0; i < linhasPF.length; i++) {
-            var o = linhasPF[i];
-            var temOp = String(o.op || '').trim();
-            var temData = String(o.dataPagamento || '').trim();
-            if (temOp || temData || (o.valorPago != null && o.valorPago !== '')) {
-                if (!temOp || !temData) {
-                    alert('Para a NE ' + o.ne + ', informe OP e data de pagamento.');
-                    return;
-                }
-                var vp = parseFloat(o.valorPago);
-                if (isNaN(vp) || vp <= 0) {
-                    alert('Valor pago inválido para NE ' + o.ne + '.');
-                    return;
-                }
-                if (vp > Number(o.valor || 0) + 0.01) {
-                    alert('Valor pago não pode exceder o valor da NE ' + o.ne + '.');
-                    return;
-                }
-                algumaOP = true;
+        if (!ops.length) { alert('Informe ao menos uma OP.'); return; }
+
+        var soma = 0;
+        for (var i = 0; i < ops.length; i++) {
+            var o = ops[i];
+            if (!String(o.op || '').trim() || !String(o.ob || '').trim() || !String(o.dataPagamento || '').trim()) {
+                alert('Cada OP exige número de OP, OB e data de pagamento.');
+                return;
+            }
+            var v = Number(o.valor);
+            if (isNaN(v) || v <= 0) {
+                alert('Valor inválido na OP ' + (o.op || (i + 1)) + '.');
+                return;
+            }
+            soma += v;
+        }
+        var liq = lpEditorState.valorLiquido || 0;
+        if (soma > liq + 0.01) {
+            if (!confirm('A soma das OPs (' + moeda(soma) + ') excede o valor líquido (' + moeda(liq) + '). Deseja continuar mesmo assim?')) {
+                return;
             }
         }
-        if (!algumaOP) { alert('Informe ao menos uma OP com valor e data.'); return; }
 
         if (!lpEditorState.id) {
             alert('Salve a liquidação antes de informar OP.');
@@ -2098,10 +2404,13 @@ function esconderLoading() {
 
         mostrarLoading();
         try {
+            atualizarFinanceiroLP();
             var result = await window.LiquidacaoOp.executarInformarOP({
                 lpId: lpEditorState.id,
                 tcsIds: (lpEditorState.tcsIds || []).slice(),
                 orcamento: lpEditorState.orcamento,
+                ops: ops,
+                valorLiquido: lpEditorState.valorLiquido,
                 np: lpEditorState.np,
                 dataLiquidacao: lpEditorState.dataLiquidacao,
                 historicoAtual: lpEditorState.historico || [],
@@ -2109,13 +2418,18 @@ function esconderLoading() {
                 correcao: modoCorrecaoOP,
                 motivoCorrecao: motivo,
             });
-            lpEditorState.orcamento = result.orcamento || lpEditorState.orcamento;
+            lpEditorState.ops = result.ops || ops;
             lpEditorState.estado = result.estado;
             lpEditorState.historico = result.historico;
+            lpEditorState.valorLiquido = result.valorLiquido;
+            lpEditorState.valorLiquidoPago = result.valorLiquidoPago;
+            lpEditorState.valorLiquidoAPagar = result.valorLiquidoAPagar;
             fecharModalOP();
             aplicarBadgeEstadoEditor();
             atualizarBotoesEditor();
+            atualizarKPIs();
             renderizarAbaB();
+            if (lpAbaAtiva === 'D') renderizarAbaD();
             alert(modoCorrecaoOP ? 'OP corrigida.' : 'OP informada.');
         } catch (err) {
             alert('Erro ao informar OP: ' + (err.message || err));
@@ -2148,7 +2462,13 @@ function esconderLoading() {
             if (!snap.exists) { alert('Liquidação não encontrada.'); return; }
             var lp0 = Object.assign({ id: snap.id }, snap.data());
             if (!lp0.orcamento || !lp0.orcamento.length) {
-                lp0.orcamento = gerarOrcamentoParaIds(idsTitulosParaPdfLP(lp0), []);
+                var gen0 = gerarOrcamentoConsolidado(idsTitulosParaPdfLP(lp0), [], lp0.ops || []);
+                lp0.orcamento = gen0.orcamento;
+                if (!lp0.ops || !lp0.ops.length) lp0.ops = gen0.ops;
+            } else if (window.LiquidacaoEstado) {
+                var mig0 = window.LiquidacaoEstado.migrarOrcamentoLegado(lp0.orcamento, lp0.ops || []);
+                lp0.orcamento = mig0.orcamento;
+                if (!lp0.ops || !lp0.ops.length) lp0.ops = mig0.ops;
             }
             var emailUsr = (auth.currentUser && auth.currentUser.email) || 'usuário';
             var meta = {
@@ -2206,7 +2526,13 @@ function esconderLoading() {
                     if (!snap.exists) { falhas.push('LP ' + ids[i] + ': não encontrada.'); continue; }
                     var lp0 = Object.assign({ id: snap.id }, snap.data());
                     if (!lp0.orcamento || !lp0.orcamento.length) {
-                        lp0.orcamento = gerarOrcamentoParaIds(idsTitulosParaPdfLP(lp0), []);
+                        var genB = gerarOrcamentoConsolidado(idsTitulosParaPdfLP(lp0), [], lp0.ops || []);
+                        lp0.orcamento = genB.orcamento;
+                        if (!lp0.ops || !lp0.ops.length) lp0.ops = genB.ops;
+                    } else if (window.LiquidacaoEstado) {
+                        var migB = window.LiquidacaoEstado.migrarOrcamentoLegado(lp0.orcamento, lp0.ops || []);
+                        lp0.orcamento = migB.orcamento;
+                        if (!lp0.ops || !lp0.ops.length) lp0.ops = migB.ops;
                     }
                     if (!idsTitulosParaPdfLP(lp0).length) {
                         falhas.push((lp0.codigo || ids[i]) + ': sem TCs no lote.');
@@ -2477,7 +2803,11 @@ function esconderLoading() {
             var liq      = bruto - impostosTt;
             var ateste   = atesteMinimo(ids);
             var venc     = ateste ? addDias(ateste, 30) : null;
-            var orc      = lp.orcamento || gerarOrcamentoParaIds(ids, []);
+            var genPdf = gerarOrcamentoConsolidado(ids, lp.orcamento || [], lp.ops || []);
+            var orc      = genPdf.orcamento;
+            var opsPdf   = (lp.ops && lp.ops.length) ? lp.ops : genPdf.ops;
+            var LEpdf    = window.LiquidacaoEstado;
+            var totPago  = LEpdf ? LEpdf.somaOps(opsPdf) : 0;
             var m        = function (v) { return moeda(v).replace('\u00a0', ' '); };
 
             tituloSecao('IDENTIFICAÇÃO DA LIQUIDAÇÃO');
@@ -2521,7 +2851,10 @@ function esconderLoading() {
             ]);
             tabela(
                 ['Nota de Empenho', 'ND', 'Sub', 'FR', 'VINC', 'Valor usado', 'C. de Custos', 'UG Benf.', 'LF', 'PF'],
-                orc.map(function (o) { return [o.ne, o.nd, o.sub, o.fr, o.vinc || '-', m(o.valor), o.cc, o.ug, o.lf || '-', o.pf || '-']; }),
+                orc.map(function (o) {
+                    var agg = LEpdf ? LEpdf.agregarLfs(o.lfs) : {};
+                    return [o.ne, o.nd, o.sub, o.fr, agg.vinc || '-', m(o.valor), o.cc, o.ug, agg.lf || '-', agg.pf || '-'];
+                }),
                 [12, 6, 4, 10, 6, 12, 10, 6, 15, 15]
             );
             rodapeTotal('Valor total das NE (consolidado)', m(bruto));
@@ -2595,7 +2928,19 @@ function esconderLoading() {
                 { label: 'Valor total dos TCs',  valor: m(bruto) },
                 { label: 'Total das deduções',   valor: m(impostosTt) },
                 { label: 'Valor líquido (OB)',   valor: m(liq) },
+                { label: 'Líquido pago (OPs)',   valor: m(totPago) },
+                { label: 'Líquido a pagar',      valor: m(Math.max(0, liq - totPago)) },
             ]);
+            if (opsPdf && opsPdf.length) {
+                tituloSecao('ORDENS DE PAGAMENTO (OP)');
+                tabela(
+                    ['OP', 'OB', 'Data pagamento', 'Valor'],
+                    opsPdf.map(function (o) {
+                        return [o.op || '-', o.ob || '-', toDateBrPdf(o.dataPagamento), m(Number(o.valor) || 0)];
+                    }),
+                    [30, 30, 22, 22]
+                );
+            }
 
             // DETA CUSTOS — agrupa NE × Sub × CC × UG
             var grupos = [];
@@ -2671,37 +3016,54 @@ function esconderLoading() {
     // Para cada linha que já possui LF preenchida, busca na coleção LFxPF e preenche PF e VINC.
     async function buscarLFsParaLP() {
         if (!lpEditorState) return;
+        var LE = window.LiquidacaoEstado;
         var pfEncontradas = 0;
-        var lfsAnalisadas = 0;
+        var lfsAdicionadas = 0;
+        var nesAnalisadas = 0;
 
-        lpEditorState.orcamento.forEach(function (o) {
-            var lfNorm = normalizarLF(o.lf);
-            if (!lfNorm) return;
-            lfsAnalisadas++;
-            var reg = buscarPFporLF(lfNorm);
-            if (!reg) return;
-            if (reg.pf)         { o.pf   = reg.pf;         pfEncontradas++; }
-            if (reg.vinculacao) { o.vinc  = reg.vinculacao; }
+        (lpEditorState.orcamento || []).forEach(function (neItem) {
+            if (!neItem || !neItem.ne || neItem.ne === '—') return;
+            nesAnalisadas++;
+            if (!Array.isArray(neItem.lfs)) neItem.lfs = [];
+
+            var existentes = neItem.lfs.map(function (x) { return String(x.lf || '').trim().toUpperCase(); }).filter(Boolean);
+            neItem.lfs.forEach(function (lfItem) {
+                var lfNorm = normalizarLF(lfItem.lf);
+                if (!lfNorm) return;
+                if (lfNorm !== lfItem.lf) lfItem.lf = lfNorm;
+                var reg = buscarPFporLF(lfNorm);
+                if (!reg) return;
+                if (reg.pf && !lfItem.pf) { lfItem.pf = reg.pf; pfEncontradas++; }
+                if (reg.vinculacao && !lfItem.vinc) lfItem.vinc = reg.vinculacao;
+            });
+
+            var sugeridas = window.LfPfLookup
+                ? window.LfPfLookup.buscarLfsPorNe(baseLfPfLP, neItem.ne)
+                : [];
+            sugeridas.forEach(function (reg) {
+                var lfNorm = normalizarLF(reg.lf);
+                if (!lfNorm || existentes.indexOf(lfNorm.toUpperCase()) >= 0) return;
+                neItem.lfs.push(LE
+                    ? LE.normalizarLfItem(lfNorm, reg.vinculacao || '', reg.pf || '')
+                    : { id: gerarIdInternoLP('lf'), lf: lfNorm, vinc: reg.vinculacao || '', pf: reg.pf || '' });
+                existentes.push(lfNorm.toUpperCase());
+                lfsAdicionadas++;
+                if (reg.pf) pfEncontradas++;
+            });
         });
 
-        var novoStatus = lpEditorState.estado;
-        if (String(lpEditorState.np || '').trim()) {
-            recalcularEstadoEditorLP();
-            novoStatus = lpEditorState.estado;
-        }
-        var badgeEl = document.getElementById('lpBadgeEstado');
-        if (badgeEl) badgeEl.innerHTML = badgeEstado(novoStatus);
-
+        if (String(lpEditorState.np || '').trim()) recalcularEstadoEditorLP();
+        aplicarBadgeEstadoEditor();
         renderizarAbaB();
         await propagarLFParaTitulos(lpEditorState);
 
         var msg;
-        if (lfsAnalisadas === 0) {
-            msg = 'Nenhuma LF preenchida nas linhas de orçamento. Preencha ao menos uma LF para buscar na coleção.';
-        } else if (pfEncontradas === 0) {
-            msg = lfsAnalisadas + ' LF(s) analisada(s). Nenhuma PF encontrada na coleção LFxPF (financeiro ainda não processou).';
+        if (nesAnalisadas === 0) {
+            msg = 'Nenhuma NE válida no orçamento.';
+        } else if (lfsAdicionadas === 0 && pfEncontradas === 0) {
+            msg = nesAnalisadas + ' NE(s) analisada(s). Nenhuma LF/PF nova encontrada na coleção LFxPF.';
         } else {
-            msg = pfEncontradas + ' PF(s) preenchida(s) de ' + lfsAnalisadas + ' LF(s) analisada(s).';
+            msg = lfsAdicionadas + ' LF(s) adicionada(s), ' + pfEncontradas + ' PF(s) preenchida(s).';
         }
         alert(msg);
     }
@@ -2729,7 +3091,13 @@ function esconderLoading() {
 
         qs('modalOPCancelar')  && qs('modalOPCancelar').addEventListener('click', fecharModalOP);
         qs('modalOPConfirmar') && qs('modalOPConfirmar').addEventListener('click', confirmarOP);
+        qs('btnModalOPAdicionar') && qs('btnModalOPAdicionar').addEventListener('click', adicionarLinhaModalOP);
         qs('modalLPOP')        && qs('modalLPOP').addEventListener('click', function (e) { if (e.target.id === 'modalLPOP') fecharModalOP(); });
+
+        qs('modalLFCancelar')  && qs('modalLFCancelar').addEventListener('click', fecharModalLF);
+        qs('modalLFConfirmar') && qs('modalLFConfirmar').addEventListener('click', confirmarModalLF);
+        qs('btnModalLFAdicionar') && qs('btnModalLFAdicionar').addEventListener('click', adicionarLinhaModalLF);
+        qs('modalLPLF')        && qs('modalLPLF').addEventListener('click', function (e) { if (e.target.id === 'modalLPLF') fecharModalLF(); });
 
         qs('modalLPMotivoCancelar') && qs('modalLPMotivoCancelar').addEventListener('click', function () { fecharModalMotivoLP(false); });
         qs('modalLPMotivoConfirmar') && qs('modalLPMotivoConfirmar').addEventListener('click', function () { fecharModalMotivoLP(true); });
@@ -2766,7 +3134,11 @@ function esconderLoading() {
             if (e.key !== 'Escape') return;
             var mTC = qs('modalLPAdicionarTC');
             var mNP = qs('modalLPNP');
+            var mLF = qs('modalLPLF');
+            var mOP = qs('modalLPOP');
             if (mTC && mTC.style.display !== 'none') fecharModalTC();
+            else if (mLF && mLF.style.display !== 'none') fecharModalLF();
+            else if (mOP && mOP.style.display !== 'none') fecharModalOP();
             else if (mNP && mNP.style.display !== 'none') fecharModalNP();
         });
     }

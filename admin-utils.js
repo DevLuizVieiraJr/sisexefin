@@ -4,6 +4,46 @@
 (function() {
     'use strict';
 
+    /**
+     * Gera o ID técnico (slug) a partir de um nome de exibição.
+     * "Operador EXEFIN" → "operador_exefin"
+     */
+    window.slugPerfilId = function(nome) {
+        if (!nome) return '';
+        return String(nome)
+            .trim()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+    };
+
+    /**
+     * Converte um ID técnico em texto legível como fallback de exibição.
+     * "operador_exefin" → "Operador Exefin"
+     */
+    window.humanizarIdPerfil = function(id) {
+        if (!id) return '';
+        return String(id)
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    };
+
+    /**
+     * Retorna o nome de exibição do perfil:
+     * usa nomeExibicao se disponível, caso contrário humaniza o id.
+     * @param {{ id: string, nomeExibicao?: string }|string} perfil
+     */
+    window.labelPerfil = function(perfil) {
+        if (typeof perfil === 'string') return window.humanizarIdPerfil(perfil);
+        if (!perfil) return '';
+        return (perfil.nomeExibicao && perfil.nomeExibicao.trim())
+            ? perfil.nomeExibicao.trim()
+            : window.humanizarIdPerfil(perfil.id);
+    };
+
+
     window.aplicarMascaraTelefone = function(input) {
         if (!input || input.value === undefined) return;
         let v = String(input.value || '').replace(/\D/g, '');

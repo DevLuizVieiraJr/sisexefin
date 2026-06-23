@@ -174,6 +174,12 @@
                             Valor líquido (OB) <span class="lp-kpi-val lp-kpi-liquido" id="lpKpiLiquido">R$ 0,00</span>
                         </div>
                         <div class="lp-kpi">
+                            Líquido pago <span class="lp-kpi-val lp-kpi-pago" id="lpKpiLiquidoPago">R$ 0,00</span>
+                        </div>
+                        <div class="lp-kpi">
+                            Líquido a pagar <span class="lp-kpi-val lp-kpi-apagar" id="lpKpiLiquidoAPagar">R$ 0,00</span>
+                        </div>
+                        <div class="lp-kpi">
                             Ateste (+ antigo) <span class="lp-kpi-val" id="lpKpiAteste">—</span>
                         </div>
                         <div class="lp-kpi">
@@ -299,17 +305,16 @@
                 <div id="lpPainelB" class="lp-painel" role="tabpanel" aria-labelledby="lpTabBtnB">
                     <div class="lp-hint lp-hint-siafi">
                         <i class="fas fa-info-circle" aria-hidden="true"></i>
-                        <strong>Ação no SIAFI:</strong> Registre os empenhos abaixo na transação correspondente.
-                        Preencha os campos <strong>VINC</strong>, <strong>LF</strong> e <strong>PF</strong> conforme o lançamento no sistema.
-                        A LF pode ser digitada em formato completo (<code>2026LF000123</code>) ou apenas a sequência (<code>123</code>).
-                        O campo PF é preenchido automaticamente ao informar a LF.
+                        <strong>Ação no SIAFI:</strong> Registre os empenhos consolidados por NE na transação correspondente.
+                        Use o botão <strong>Informar LF</strong> em cada NE para cadastrar uma ou mais LF (com VINC e PF).
+                        A busca LFxPF sugere LF/PF com base na coleção financeira.
                     </div>
                     <div class="lp-toolbar" id="lpOrcamentoToolbar" style="display:none;">
                         <button type="button" id="btnBuscarLFs" class="btn-primary btn-small">
                             <i class="fas fa-search" aria-hidden="true"></i> Buscar LFs (LFxPF)
                         </button>
                         <span style="font-size:12px; color:#666;">
-                            Consulta a coleção LFxPF e preenche LF/PF para as NEs deste lote automaticamente.
+                            Consulta a coleção LFxPF e adiciona LF/PF sugeridas às NEs sem sobrescrever as já informadas.
                         </span>
                     </div>
                     <div class="lp-section-meta" id="lpOrcamentoMeta"></div>
@@ -495,6 +500,30 @@
                                     <span class="lp-resumo-label">Valor líquido (OB)</span>
                                     <span class="lp-resumo-valor lp-valor-liquido" id="lpRbLiquido">R$ 0,00</span>
                                 </div>
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Líquido pago (OPs)</span>
+                                    <span class="lp-resumo-valor lp-valor-pago" id="lpRbLiquidoPago">R$ 0,00</span>
+                                </div>
+                                <div class="lp-resumo-item">
+                                    <span class="lp-resumo-label">Líquido a pagar</span>
+                                    <span class="lp-resumo-valor lp-valor-apagar" id="lpRbLiquidoAPagar">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="lp-resumo-bloco" id="lpOpsResumoBloco" style="display:none; margin-top:12px;">
+                            <div class="lp-resumo-bloco-titulo">OPs informadas</div>
+                            <div class="lp-table-wrapper">
+                                <table class="tabela-gov" style="font-size:12px;">
+                                    <thead>
+                                        <tr>
+                                            <th>OP</th>
+                                            <th>OB</th>
+                                            <th>Data pagamento</th>
+                                            <th style="text-align:right;">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyOpsResumo"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -633,25 +662,75 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: INFORMAR OP ==================== -->
-    <div id="modalLPOP" class="modal-overlay" style="display:none;"
-        role="dialog" aria-modal="true" aria-labelledby="modalOPTitulo">
-        <div class="modal-content" style="text-align:left; max-width:720px;">
-            <h3 id="modalOPTitulo" style="margin-bottom:12px;">Informar OP (SIAFI)</h3>
-            <p style="font-size:13px; color:#555; margin:0 0 12px 0;">Informe OP, valor pago e data por NE com PF preenchida.</p>
+    <!-- ==================== MODAL: INFORMAR LF ==================== -->
+    <div id="modalLPLF" class="modal-overlay" style="display:none;"
+        role="dialog" aria-modal="true" aria-labelledby="modalLFTitulo">
+        <div class="modal-content" style="text-align:left; max-width:760px;">
+            <h3 id="modalLFTitulo" style="margin-bottom:8px;">Informar LF</h3>
+            <p id="modalLFSubtitulo" style="font-size:13px; color:#555; margin:0 0 12px 0;"></p>
             <div style="overflow-x:auto; max-height:360px;">
                 <table class="tabela-gov" style="width:100%; font-size:12px;">
                     <thead>
                         <tr>
-                            <th>NE</th>
-                            <th>Valor NE</th>
+                            <th>LF</th>
+                            <th>VINC</th>
+                            <th>PF</th>
+                            <th style="width:48px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyModalLF"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:10px;">
+                <button type="button" id="btnModalLFAdicionar" class="btn-default btn-small">
+                    <i class="fas fa-plus" aria-hidden="true"></i> Adicionar LF
+                </button>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" id="modalLFCancelar" class="btn-default">Cancelar</button>
+                <button type="button" id="modalLFConfirmar" class="btn-primary">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: INFORMAR OP ==================== -->
+    <div id="modalLPOP" class="modal-overlay" style="display:none;"
+        role="dialog" aria-modal="true" aria-labelledby="modalOPTitulo">
+        <div class="modal-content" style="text-align:left; max-width:760px;">
+            <h3 id="modalOPTitulo" style="margin-bottom:12px;">Informar OP (SIAFI)</h3>
+            <div class="lp-op-resumo-financeiro" id="lpOpResumoFinanceiro">
+                <div class="lp-op-resumo-item">
+                    <span>Valor líquido</span>
+                    <strong id="modalOPLiquido">R$ 0,00</strong>
+                </div>
+                <div class="lp-op-resumo-item">
+                    <span>Soma OPs</span>
+                    <strong id="modalOPSoma">R$ 0,00</strong>
+                </div>
+                <div class="lp-op-resumo-item lp-op-resumo-diff" id="modalOPDiffWrap">
+                    <span>Diferença a pagar</span>
+                    <strong id="modalOPDiff">R$ 0,00</strong>
+                </div>
+            </div>
+            <p style="font-size:13px; color:#555; margin:12px 0;">Informe OP, OB (1 por OP), data e valor. Cada OP exige OB.</p>
+            <div style="overflow-x:auto; max-height:360px;">
+                <table class="tabela-gov" style="width:100%; font-size:12px;">
+                    <thead>
+                        <tr>
                             <th>OP</th>
-                            <th>Valor pago</th>
+                            <th>OB</th>
                             <th>Data pagamento</th>
+                            <th style="text-align:right;">Valor</th>
+                            <th style="width:48px;"></th>
                         </tr>
                     </thead>
                     <tbody id="tbodyModalOP"></tbody>
                 </table>
+            </div>
+            <div style="margin-top:10px;">
+                <button type="button" id="btnModalOPAdicionar" class="btn-default btn-small">
+                    <i class="fas fa-plus" aria-hidden="true"></i> Adicionar OP
+                </button>
             </div>
             <div class="form-group" id="grpModalLPmotivoOP" style="display:none; margin-top:12px;">
                 <label for="modalLPmotivoOP">Motivo (correção):</label>
@@ -706,6 +785,7 @@
     <script src="script.js"></script>
     <script src="script-ano-documento.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script-lfpf.js"></script>
     <script src="script-liquidacao-np.js"></script>
     <script src="script-liquidacao-estado.js"></script>
     <script src="script-liquidacao-op.js"></script>

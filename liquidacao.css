@@ -484,3 +484,50 @@
     background: #1a3a28 !important;
     border-color: #2ecc71 !important;
 }
+
+/* ===================== Modais LF / OP e totais financeiros ===================== */
+.lp-kpi-pago { color: #1e8449; }
+.lp-kpi-apagar { color: #d35400; }
+.lp-valor-pago { color: #1e8449 !important; }
+.lp-valor-apagar { color: #d35400 !important; }
+.lp-op-resumo-financeiro {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #f4f8fb;
+    border: 1px solid #d0dbe6;
+    border-radius: 4px;
+}
+.lp-op-resumo-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: #555;
+    min-width: 120px;
+}
+.lp-op-resumo-item strong { font-size: 14px; color: #1a2f4a; }
+.lp-op-resumo-diff strong { color: #d35400; }
+.lp-btn-informar-lf {
+    font-size: 11px;
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+.lp-detalhe-tcs-toggle {
+    cursor: pointer;
+    color: #337ab7;
+    font-size: 11px;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 0;
+}
+.lp-detalhe-tcs-row td {
+    background: #fafcfd;
+    font-size: 11px;
+    color: #555;
+}
+[data-theme="dark"] .lp-op-resumo-financeiro { background: #1a1f2a; border-color: #2e3648; }
+[data-theme="dark"] .lp-op-resumo-item strong { color: #eef1f6; }
+[data-theme="dark"] .lp-detalhe-tcs-row td { background: #1e2430; color: #b0bfce; }

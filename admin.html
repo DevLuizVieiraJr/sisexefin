@@ -176,7 +176,17 @@
                         <h2>Cadastro de Perfil</h2>
                     </div>
                     <form id="formPerfilAdmin">
-                        <div class="form-group"><label for="adminNomePerfil">Nome do Perfil:</label><input type="text" id="adminNomePerfil" placeholder="ex: operador_leitura" required autocomplete="off"></div>
+                        <div class="form-row admin-perfil-identidade">
+                            <div class="form-group flex-1">
+                                <label for="adminNomeExibicaoPerfil">Nome de exibição</label>
+                                <input type="text" id="adminNomeExibicaoPerfil" placeholder="ex: Operador EXEFIN" required autocomplete="off" maxlength="80">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="adminCodigoPerfil">Código técnico (gerado automaticamente)</label>
+                                <input type="text" id="adminCodigoPerfil" class="input-readonly" readonly tabindex="-1" aria-label="Código técnico do perfil">
+                            </div>
+                        </div>
+                        <input type="hidden" id="adminNomePerfil">
                         <fieldset class="gov-fieldset">
                             <legend>Matriz de Permissões (Módulo × Ação)</legend>
                             <div class="matriz-permissoes-wrap">

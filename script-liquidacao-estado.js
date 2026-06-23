@@ -1,6 +1,5 @@
 // ==========================================
-// Estados LP — cálculo unificado (NP-first)
-// Depende de: nenhum (IIFE global LiquidacaoEstado)
+// Estados LP — cálculo unificado (NE consolidada, multi-LF, OPs)
 // ==========================================
 (function (global) {
     'use strict';
@@ -27,20 +26,176 @@
         return n && n !== '—' && n !== '-';
     }
 
+    function gerarIdInterno(prefixo) {
+        return prefixo + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function orcamentoEhLegado(orcamento) {
+        return (orcamento || []).some(function (o) {
+            return o && o.tcId != null && String(o.tcId).trim() !== '';
+        });
+    }
+
+    function normalizarLfItem(lf, vinc, pf, id) {
+        return {
+            id: id || gerarIdInterno('lf'),
+            lf: String(lf || '').trim(),
+            vinc: String(vinc || '').trim(),
+            pf: String(pf || '').trim()
+        };
+    }
+
+    /**
+     * Converte orçamento plano (tcId × NE) para NE consolidada com lfs[].
+     * Extrai ops[] legadas de linhas com op/valorPago.
+     */
+    function migrarOrcamentoLegado(orcamento, opsExistentes) {
+        orcamento = orcamento || [];
+        opsExistentes = opsExistentes || [];
+        if (!orcamentoEhLegado(orcamento)) {
+            return {
+                orcamento: (orcamento || []).map(function (ne) {
+                    var item = Object.assign({}, ne);
+                    item.lfs = Array.isArray(item.lfs) ? item.lfs.slice() : [];
+                    if (!item.lfs.length && (item.lf || item.pf || item.vinc)) {
+                        item.lfs = [normalizarLfItem(item.lf, item.vinc, item.pf)];
+                    }
+                    item.detalheTCs = Array.isArray(item.detalheTCs) ? item.detalheTCs : [];
+                    delete item.tcId;
+                    delete item.lf;
+                    delete item.pf;
+                    delete item.vinc;
+                    delete item.op;
+                    delete item.valorPago;
+                    delete item.dataPagamento;
+                    return item;
+                }),
+                ops: opsExistentes.slice()
+            };
+        }
+
+        var mapaNE = Object.create(null);
+        var opsMap = Object.create(null);
+        var opsOut = opsExistentes.slice();
+
+        orcamento.forEach(function (linha) {
+            var ne = String(linha.ne || '').trim();
+            if (!neValida(ne)) return;
+
+            if (!mapaNE[ne]) {
+                mapaNE[ne] = {
+                    ne: ne,
+                    nd: linha.nd || '—',
+                    sub: linha.sub || '—',
+                    fr: linha.fr || '—',
+                    cc: linha.cc || '—',
+                    ug: linha.ug || '—',
+                    valor: 0,
+                    detalheTCs: [],
+                    lfs: []
+                };
+            }
+            var item = mapaNE[ne];
+            var tcId = linha.tcId || '';
+            var val = Number(linha.valor || 0);
+            var proc = linha.proc || tcId;
+            var existente = item.detalheTCs.find(function (d) { return d.tcId === tcId; });
+            if (!existente && tcId) {
+                item.detalheTCs.push({ tcId: tcId, proc: proc, valor: val });
+                item.valor += val;
+            } else if (existente) {
+                existente.valor = val;
+            }
+
+            if (linha.lf || linha.pf || linha.vinc) {
+                var dup = item.lfs.some(function (x) {
+                    return x.lf === String(linha.lf || '').trim() && x.pf === String(linha.pf || '').trim();
+                });
+                if (!dup) item.lfs.push(normalizarLfItem(linha.lf, linha.vinc, linha.pf));
+            }
+
+            var opKey = String(linha.op || '').trim();
+            if (opKey && linha.dataPagamento) {
+                var vOp = parseFloat(linha.valorPago);
+                if (!isNaN(vOp) && vOp > 0 && !opsMap[opKey]) {
+                    opsMap[opKey] = true;
+                    opsOut.push({
+                        id: gerarIdInterno('op'),
+                        op: opKey,
+                        ob: '',
+                        dataPagamento: String(linha.dataPagamento || '').trim(),
+                        valor: vOp
+                    });
+                }
+            }
+        });
+
+        return { orcamento: Object.keys(mapaNE).map(function (k) { return mapaNE[k]; }), ops: opsOut };
+    }
+
     function linhasValidas(orcamento) {
         return (orcamento || []).filter(function (o) { return neValida(o.ne); });
     }
 
-    function contarNEDistintas(orcamento) {
-        var set = Object.create(null);
-        linhasValidas(orcamento).forEach(function (o) {
-            set[String(o.ne).trim()] = true;
+    function todasLFsDoOrcamento(orcamento) {
+        var out = [];
+        linhasValidas(orcamento).forEach(function (ne) {
+            (ne.lfs || []).forEach(function (lf) { out.push(lf); });
         });
-        return Object.keys(set).length;
+        return out;
     }
 
-    function linhaOPCompleta(o) {
-        return !!(String(o.op || '').trim() && String(o.dataPagamento || '').trim());
+    function neTemLF(neItem) {
+        return Array.isArray(neItem.lfs) && neItem.lfs.length > 0;
+    }
+
+    function agregarLfs(lfs) {
+        lfs = lfs || [];
+        return {
+            lf: lfs.map(function (x) { return x.lf; }).filter(Boolean).join(', '),
+            pf: lfs.map(function (x) { return x.pf; }).filter(Boolean).join(', '),
+            vinc: lfs.map(function (x) { return x.vinc; }).filter(Boolean).join(', ')
+        };
+    }
+
+    function somaOps(ops) {
+        return (ops || []).reduce(function (s, o) {
+            return s + (Number(o.valor) || 0);
+        }, 0);
+    }
+
+    function calcularTotaisFinanceiros(valorLiquido, ops) {
+        var liq = Number(valorLiquido) || 0;
+        var pago = somaOps(ops);
+        return {
+            valorLiquido: liq,
+            valorLiquidoPago: pago,
+            valorLiquidoAPagar: Math.max(0, liq - pago)
+        };
+    }
+
+    function calcularEstadoPosOP(valorLiquido, ops) {
+        var pago = somaOps(ops);
+        if (pago <= 0) return null;
+        var liq = Number(valorLiquido) || 0;
+        if (liq > 0 && pago >= liq - 0.005) return 'pago';
+        return 'pagoParcialmente';
+    }
+
+    function calcularEstadoPosPF(orcamento) {
+        var nes = linhasValidas(orcamento);
+        if (!nes.length) return 'liquidado';
+
+        var allNesHaveLF = nes.every(neTemLF);
+        if (!allNesHaveLF) return 'liquidado';
+
+        var allLfs = todasLFsDoOrcamento(orcamento);
+        if (!allLfs.length) return 'liquidado';
+
+        var comPF = allLfs.filter(function (lf) { return String(lf.pf || '').trim(); });
+        if (!comPF.length) return 'aguardandoFinanceiro';
+        if (comPF.length === allLfs.length) return 'paraPagamento';
+        return 'paraPagamentoParcial';
     }
 
     function normalizarEstadoLegado(estado) {
@@ -49,18 +204,8 @@
         return e;
     }
 
-    function calcularEstadoPosOP(linhas) {
-        var comPF = linhas.filter(function (o) { return String(o.pf || '').trim(); });
-        if (!comPF.length) return null;
-        var comOP = comPF.filter(linhaOPCompleta);
-        if (!comOP.length) return null;
-        if (comOP.length === comPF.length) return 'pago';
-        return 'pagoParcialmente';
-    }
-
     /**
-     * Calcula liquidacoes.estado a partir de np, orcamento e estado atual.
-     * @param {object} lp - { np, orcamento, estado, tcsIds }
+     * @param {object} lp - { np, orcamento, ops, valorLiquido, estado, tcsIds }
      */
     function calcularEstadoLP(lp) {
         lp = lp || {};
@@ -69,46 +214,45 @@
         var np = String(lp.np || '').trim();
         if (!np) return 'rascunho';
 
-        var linhas = linhasValidas(lp.orcamento);
-        if (!linhas.length) return 'liquidado';
+        var orc = linhasValidas(lp.orcamento);
+        if (!orc.length) return 'liquidado';
 
-        var total = linhas.length;
-        var comLF = linhas.filter(function (o) { return String(o.lf || '').trim(); });
-        var comPF = linhas.filter(function (o) { return String(o.pf || '').trim(); });
-
-        var estadoOP = calcularEstadoPosOP(linhas);
+        var estadoOP = calcularEstadoPosOP(lp.valorLiquido, lp.ops);
         if (estadoOP) return estadoOP;
 
-        if (!comLF.length || comLF.length < total) return 'liquidado';
-
-        if (comPF.length === total) return 'paraPagamento';
-
-        var nesDistintas = contarNEDistintas(linhas);
-        if (nesDistintas >= 2 && comPF.length > 0) return 'paraPagamentoParcial';
-
-        return 'aguardandoFinanceiro';
+        return calcularEstadoPosPF(lp.orcamento);
     }
 
-    /** Status TC a partir das linhas de orçamento de um TC (pós-NP). */
-    function calcularStatusTCOrcamento(orcTC) {
-        var linhas = linhasValidas(orcTC);
-        if (!linhas.length) return 'Liquidado';
+    /** NEs do orçamento consolidado em que o TC participa */
+    function orcamentoParaTC(orcamento, tcId) {
+        return linhasValidas(orcamento).filter(function (ne) {
+            if (Array.isArray(ne.detalheTCs) && ne.detalheTCs.length) {
+                return ne.detalheTCs.some(function (d) { return d.tcId === tcId; });
+            }
+            return false;
+        });
+    }
 
-        var total = linhas.length;
-        var comLF = linhas.filter(function (o) { return String(o.lf || '').trim(); });
-        var comPF = linhas.filter(function (o) { return String(o.pf || '').trim(); });
+    /**
+     * Status TC a partir das NEs do TC no orçamento consolidado + contexto LP (OP).
+     */
+    function calcularStatusTCOrcamento(orcTC, lpContext) {
+        lpContext = lpContext || {};
+        var ops = lpContext.ops || [];
+        var valorLiquido = lpContext.valorLiquido;
 
-        var estadoOP = calcularEstadoPosOP(linhas);
-        if (estadoOP === 'pago') return 'Pago';
-        if (estadoOP === 'pagoParcialmente') return 'Pago Parcialmente';
+        if (ops.length && somaOps(ops) > 0) {
+            var estOP = calcularEstadoPosOP(valorLiquido, ops);
+            if (estOP === 'pago') return 'Pago';
+            if (estOP === 'pagoParcialmente') return 'Pago Parcialmente';
+        }
 
-        if (!comLF.length || comLF.length < total) return 'Liquidado';
-        if (comPF.length === total) return 'Para Pagamento';
-
-        var nesDistintas = contarNEDistintas(linhas);
-        if (nesDistintas >= 2 && comPF.length > 0) return 'Para Pagamento parcial';
-
-        return 'Aguardando Financeiro';
+        if (!orcTC || !orcTC.length) return 'Liquidado';
+        return calcularEstadoPosPF(orcTC) === 'liquidado' ? 'Liquidado'
+            : calcularEstadoPosPF(orcTC) === 'aguardandoFinanceiro' ? 'Aguardando Financeiro'
+            : calcularEstadoPosPF(orcTC) === 'paraPagamento' ? 'Para Pagamento'
+            : calcularEstadoPosPF(orcTC) === 'paraPagamentoParcial' ? 'Para Pagamento parcial'
+            : 'Liquidado';
     }
 
     function statusTCFromEstadoLP(estado) {
@@ -158,17 +302,16 @@
 
     function migrarEstadoDocumento(doc) {
         doc = doc || {};
+        var mig = migrarOrcamentoLegado(doc.orcamento, doc.ops);
         var legado = String(doc.estado || '').trim();
         if (legado === 'cancelado') return 'cancelado';
-        if (LEGADO_PARA_NOVO[legado]) {
-            if (LEGADO_PARA_NOVO[legado] === 'liquidado' && !String(doc.np || '').trim()) {
-                return 'rascunho';
-            }
-        }
+        var bruto = Number(doc.valorLiquido);
         return calcularEstadoLP({
             np: doc.np,
-            orcamento: doc.orcamento,
-            estado: legado === 'cancelado' ? 'cancelado' : 'rascunho',
+            orcamento: mig.orcamento,
+            ops: mig.ops,
+            valorLiquido: bruto,
+            estado: legado,
             tcsIds: doc.tcsIds
         });
     }
@@ -179,17 +322,18 @@
             if (ESTADOS_LP[i].valor === e) return ESTADOS_LP[i].label;
         }
         if (estado === 'fechado') return 'Liquidado';
-        if (estado === 'aguardandoFinanceiroSemLF' || estado === 'aguardandoFinanceiroComLF') {
-            return 'Aguardando Financeiro';
-        }
         return estado || '—';
     }
 
     global.LiquidacaoEstado = {
         ESTADOS_LP: ESTADOS_LP,
         LEGADO_PARA_NOVO: LEGADO_PARA_NOVO,
+        gerarIdInterno: gerarIdInterno,
+        orcamentoEhLegado: orcamentoEhLegado,
+        migrarOrcamentoLegado: migrarOrcamentoLegado,
         calcularEstadoLP: calcularEstadoLP,
         calcularStatusTCOrcamento: calcularStatusTCOrcamento,
+        orcamentoParaTC: orcamentoParaTC,
         statusTCFromEstadoLP: statusTCFromEstadoLP,
         lpEstadoComNP: lpEstadoComNP,
         lpEstadoLiquidado: lpEstadoLiquidado,
@@ -201,6 +345,11 @@
         migrarEstadoDocumento: migrarEstadoDocumento,
         labelEstado: labelEstado,
         linhasValidas: linhasValidas,
-        linhaOPCompleta: linhaOPCompleta
+        todasLFsDoOrcamento: todasLFsDoOrcamento,
+        neTemLF: neTemLF,
+        agregarLfs: agregarLfs,
+        somaOps: somaOps,
+        calcularTotaisFinanceiros: calcularTotaisFinanceiros,
+        normalizarLfItem: normalizarLfItem
     };
 })(window);

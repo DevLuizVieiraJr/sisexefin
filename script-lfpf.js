@@ -399,3 +399,41 @@
     window.atualizarTabelaLfPf = atualizarTabelaLfPf;
     window.abrirFormularioLfPf = abrirFormularioLfPf;
 })();
+
+// Lookup reutilizável (Liquidação e outros módulos)
+(function (global) {
+    'use strict';
+
+    function normNe(ne) {
+        return String(ne || '').trim().toUpperCase().replace(/\s/g, '');
+    }
+
+    function buscarPorLf(baseRegistros, lfNorm) {
+        if (!lfNorm) return null;
+        var upper = String(lfNorm).trim().toUpperCase();
+        return (baseRegistros || []).find(function (r) {
+            return r && r.ativo !== false && String(r.lf || '').toUpperCase() === upper;
+        }) || null;
+    }
+
+    function buscarLfsPorNe(baseRegistros, neNorm) {
+        var want = normNe(neNorm);
+        if (!want) return [];
+        var out = [];
+        (baseRegistros || []).forEach(function (r) {
+            if (!r || r.ativo === false) return;
+            var emps = Array.isArray(r.empenhosVinculados) ? r.empenhosVinculados : [];
+            var match = emps.some(function (e) {
+                return normNe(e.numNE || e.numEmpenho || e.ne) === want;
+            });
+            if (match) out.push(r);
+        });
+        return out;
+    }
+
+    global.LfPfLookup = {
+        normNe: normNe,
+        buscarPorLf: buscarPorLf,
+        buscarLfsPorNe: buscarLfsPorNe
+    };
+})(window);
